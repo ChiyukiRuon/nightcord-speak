@@ -340,6 +340,19 @@ pub struct UiSettings {
     /// it does not recognize as "follow the system".
     #[serde(default)]
     pub language: Option<String>,
+
+    /// Which theme the front-end draws in: `"nightcord"`, `"black"`, `"white"`
+    /// or `"system"`.
+    ///
+    /// `None` means the default, which is Nightcord — *not* "follow the system",
+    /// unlike `language` above. Following the system is a choice worth naming
+    /// (`"system"`) precisely because the default is not it.
+    ///
+    /// A free string for the same reason as `language`: a value this build does
+    /// not know costs that one preference rather than making the file
+    /// malformed, and it survives in the file for a build that does know it.
+    #[serde(default)]
+    pub theme: Option<String>,
 }
 
 /// Reads and writes [`Settings`] in one directory.
@@ -497,6 +510,7 @@ mod tests {
             shortcuts: ShortcutSettings::default(),
             ui: UiSettings {
                 language: Some("en".into()),
+                theme: Some("black".into()),
             },
         };
 
@@ -688,6 +702,32 @@ mod tests {
 
         let loaded = store.load().unwrap();
         assert_eq!(loaded.ui.language.as_deref(), Some("fr"));
+    }
+
+    #[test]
+    fn a_file_written_before_the_theme_existed_gets_none() {
+        // `None` is the *default theme*, not "follow the system" — the
+        // front-end maps it to Nightcord. A file that predates the key must
+        // therefore land on the default rather than on the system pair.
+        let dir = TempDir::new("notheme");
+        let store = dir.store();
+        fs::write(store.path(), br#"{"version":1,"ui":{"language":"en"}}"#).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.ui.theme, None);
+        assert_eq!(loaded.ui.language.as_deref(), Some("en"));
+    }
+
+    #[test]
+    fn an_unknown_theme_is_kept_rather_than_rejected() {
+        // Same contract as `language`: the front-end falls back to the default
+        // for a value it does not know, and the value survives the round trip.
+        let dir = TempDir::new("unknowntheme");
+        let store = dir.store();
+        fs::write(store.path(), br#"{"version":1,"ui":{"theme":"solarized"}}"#).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.ui.theme.as_deref(), Some("solarized"));
     }
 
     #[test]
