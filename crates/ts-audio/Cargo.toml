@@ -1,0 +1,16 @@
+[package]
+name = "ts-audio"
+description = "Capture, encode, mix and play back voice. Owns every PCM sample in the client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-model.workspace = true
+ts-protocol.workspace = true
+
+audiopus.workspace = true
+cpal.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

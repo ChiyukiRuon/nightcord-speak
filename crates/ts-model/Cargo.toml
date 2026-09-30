@@ -1,0 +1,14 @@
+[package]
+name = "ts-model"
+description = "Protocol-agnostic domain model shared by every Nightcord Speak front-end."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

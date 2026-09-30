@@ -1,0 +1,29 @@
+# --- Rust ------------------------------------------------------------------
+/target
+**/*.rs.bk
+*.pdb
+
+# --- Flutter / Dart (apps/client, added once the SDK is available) ----------
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# --- IDE -------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+
+# --- OS --------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local runtime state ---------------------------------------------------
+# Never commit identities, logs or captured server lists.
+*.identity
+/run/
+/logs/

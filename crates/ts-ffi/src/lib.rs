@@ -1,0 +1,575 @@
+//! # ts-ffi
+//!
+//! The C ABI Flutter talks to (§45–§47).
+//!
+//! ```text
+//! Dart ──dart:ffi──▶ these functions ──command channel──▶ worker ──▶ Rust core
+//!   ▲                                                       │
+//!   └──────────── nightcord_poll_events() ◀─────────────────┘
+//! ```
+//!
+//! Three rules hold across the boundary:
+//!
+//! * **Handles, never pointers to Rust objects.** `nightcord_create` returns an
+//!   opaque `void*`; everything else addresses a `u32` session id, so no Rust
+//!   object graph is exposed and nothing is shared by lifetime (§47).
+//! * **JSON in, JSON out.** No Rust type is mirrored in C. The shapes are the
+//!   same `serde` encodings `ts-model` and `ts-events` already produce, so there
+//!   is exactly one definition of each.
+//! * **Nothing blocks.** Every command returns immediately; results arrive
+//!   through `nightcord_poll_events`. `connect` takes seconds and must not run
+//!   on Dart's UI thread.
+//!
+//! Every `char*` this module returns is heap-allocated and must be handed back
+//! to [`nightcord_free_string`]. Every `char*` it accepts is borrowed for the
+//! duration of the call only.
+
+mod audio;
+mod client;
+mod command;
+mod event;
+mod string;
+
+use std::ffi::c_char;
+
+use ts_core::ConnectRequest;
+use ts_model::{
+    ChannelId, ClientError, ClientId, MessageTarget, ProtocolError, SessionId, VoiceActivationMode,
+};
+
+use crate::audio::AudioDirection;
+use crate::client::NightcordClient;
+use crate::command::Command;
+use crate::string::{free_c_string, from_c_str, into_c_string};
+
+/// Reports a request that could not even be understood.
+///
+/// Uses the same `CommandResult` shape as a worker failure, so the UI has one
+/// error path rather than two.
+fn reject(client: &NightcordClient, command: &str, message: impl Into<String>) {
+    client.report_failure(command, ClientError::Protocol(ProtocolError::new(message)));
+}
+
+/// Parses one JSON argument, or reports why not.
+fn parse_json<T: serde::de::DeserializeOwned>(
+    client: &NightcordClient,
+    command: &str,
+    text: &str,
+) -> Option<T> {
+    match serde_json::from_str(text) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            reject(client, command, format!("malformed request: {error}"));
+            None
+        }
+    }
+}
+
+/// Maps the ABI's spelling of a voice mode onto the domain enum.
+fn parse_mode(text: &str) -> Option<VoiceActivationMode> {
+    match text {
+        "push_to_talk" => Some(VoiceActivationMode::PushToTalk),
+        "voice_activation" => Some(VoiceActivationMode::VoiceActivation),
+        "continuous" => Some(VoiceActivationMode::Continuous),
+        "muted" => Some(VoiceActivationMode::Muted),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+/// Starts the client core.
+///
+/// Returns null if the core cannot start, which in practice means the platform
+/// gave no application data directory for identities. The caller must treat
+/// null as fatal rather than passing it to anything else.
+#[unsafe(no_mangle)]
+pub extern "C" fn nightcord_create() -> *mut NightcordClient {
+    match NightcordClient::new() {
+        Ok(client) => Box::into_raw(Box::new(client)),
+        Err(error) => {
+            tracing::error!(%error, "could not start the core");
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Stops the core and frees it.
+///
+/// Sessions are disconnected first, so the server does not keep holding a
+/// client for this identity.
+///
+/// # Safety
+///
+/// `handle` must be null, or a pointer returned by [`nightcord_create`] that
+/// has not already been destroyed. Destroying twice, or destroying anything
+/// else, is undefined behaviour.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_destroy(handle: *mut NightcordClient) {
+    if handle.is_null() {
+        return;
+    }
+    // Safety: the caller guarantees a live pointer from `nightcord_create`.
+    drop(unsafe { Box::from_raw(handle) });
+}
+
+/// The library version, as a static string the caller must **not** free.
+///
+/// Dart checks this against what it was built against, so a stale DLL next to
+/// the executable is reported rather than failing later in a confusing way.
+#[unsafe(no_mangle)]
+pub extern "C" fn nightcord_version() -> *const c_char {
+    // A `'static` literal that already carries its own NUL: no allocation, and
+    // no ownership question for the caller.
+    concat!("nightcord ", env!("CARGO_PKG_VERSION"), "\0")
+        .as_ptr()
+        .cast()
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+/// Opens a connection. `request_json` is a serialised `ConnectRequest`.
+///
+/// The new session's id arrives as a `command_result` whose `session` field is
+/// the handle everything else is addressed by.
+///
+/// # Safety
+///
+/// `handle` must be live, and `request_json` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_connect(
+    handle: *mut NightcordClient,
+    request_json: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(request_json) }) else {
+        reject(client, "connect", "no request provided");
+        return;
+    };
+    if let Some(request) = parse_json::<ConnectRequest>(client, "connect", &text) {
+        client.send(Command::Connect(Box::new(request)));
+    }
+}
+
+/// Closes a connection.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_disconnect(handle: *mut NightcordClient, session: u32) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::Disconnect {
+        session: SessionId::new(session),
+    });
+}
+
+/// Moves us into a channel.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_join_channel(
+    handle: *mut NightcordClient,
+    session: u32,
+    channel_id: u64,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::JoinChannel {
+        session: SessionId::new(session),
+        channel_id: ChannelId::new(channel_id),
+    });
+}
+
+/// Returns to the server's default channel.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_leave_channel(handle: *mut NightcordClient, session: u32) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::LeaveChannel {
+        session: SessionId::new(session),
+    });
+}
+
+/// Sends a chat message.
+///
+/// `target_json` is a serialised `MessageTarget`, e.g. `{"kind":"server"}` or
+/// `{"kind":"channel","id":5}`.
+///
+/// # Safety
+///
+/// `handle` must be live, and both strings NUL-terminated UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_send_message(
+    handle: *mut NightcordClient,
+    session: u32,
+    target_json: *const c_char,
+    text: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(target_text) = (unsafe { from_c_str(target_json) }) else {
+        reject(client, "send_message", "no target provided");
+        return;
+    };
+    // A missing body is a legitimate empty message rather than an error.
+    let body = (unsafe { from_c_str(text) }).unwrap_or_default();
+
+    if let Some(target) = parse_json::<MessageTarget>(client, "send_message", &target_text) {
+        client.send(Command::SendMessage {
+            session: SessionId::new(session),
+            target,
+            text: body,
+        });
+    }
+}
+
+/// Moves another client into a channel.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_move_client(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+    channel_id: u64,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::MoveClient {
+        session: SessionId::new(session),
+        client_id: ClientId::new(client_id),
+        channel_id: ChannelId::new(channel_id),
+    });
+}
+
+/// Asks for the machine's audio devices.
+///
+/// The list arrives as a `command_result` named `audio_devices`, whose `data`
+/// holds `{"direction": "input"|"output", "devices": [...]}`.
+///
+/// # Safety
+///
+/// `handle` must be live, and `direction` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_audio_devices(
+    handle: *mut NightcordClient,
+    direction: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(direction) }) else {
+        reject(client, "audio_devices", "no direction provided");
+        return;
+    };
+
+    match AudioDirection::parse(&text) {
+        Some(direction) => {
+            client.send(Command::ListDevices { direction });
+        }
+        None => reject(
+            client,
+            "audio_devices",
+            format!("`{text}` is not a direction; expected `input` or `output`"),
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Voice
+// ---------------------------------------------------------------------------
+
+/// Opens audio devices and binds voice to a session.
+///
+/// Either device id may be null or empty, which selects the system default. A
+/// saved id that no longer exists also falls back to the default rather than
+/// failing — an unplugged headset should not leave the user silent.
+///
+/// # Safety
+///
+/// `handle` must be live; the id strings, when non-null, must be NUL-terminated
+/// UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_start(
+    handle: *mut NightcordClient,
+    session: u32,
+    input_device: *const c_char,
+    output_device: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+
+    let input = (unsafe { from_c_str(input_device) }).filter(|id| !id.is_empty());
+    let output = (unsafe { from_c_str(output_device) }).filter(|id| !id.is_empty());
+
+    client.send(Command::VoiceStart {
+        session: SessionId::new(session),
+        input,
+        output,
+    });
+}
+
+/// Closes the devices and stops transmitting.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_stop(handle: *mut NightcordClient) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceStop);
+}
+
+/// Changes how transmission is triggered.
+///
+/// `mode` is one of `push_to_talk`, `voice_activation`, `continuous`, `muted`.
+///
+/// # Safety
+///
+/// `handle` must be live, and `mode` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_set_mode(
+    handle: *mut NightcordClient,
+    mode: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(mode) }) else {
+        reject(client, "voice_set_mode", "no mode provided");
+        return;
+    };
+
+    match parse_mode(&text) {
+        Some(mode) => {
+            client.send(Command::VoiceSetMode { mode });
+        }
+        None => reject(
+            client,
+            "voice_set_mode",
+            format!("`{text}` is not a voice mode"),
+        ),
+    }
+}
+
+/// Mutes or unmutes the microphone.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_set_input_muted(
+    handle: *mut NightcordClient,
+    muted: bool,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceSetInputMuted { muted });
+}
+
+/// Mutes or unmutes the speakers.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_set_output_muted(
+    handle: *mut NightcordClient,
+    muted: bool,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceSetOutputMuted { muted });
+}
+
+/// Push-to-talk key down or up (§30).
+///
+/// Called on every key press, so it produces no `command_result`: only the
+/// resulting `VoiceStateChanged` matters.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_push_to_talk(handle: *mut NightcordClient, held: bool) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoicePushToTalk { held });
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+/// Drains queued events as a JSON array.
+///
+/// The caller **owns** the result and must pass it to
+/// [`nightcord_free_string`]. An empty queue yields `[]` rather than null, so
+/// the caller never has to special-case "nothing happened".
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_poll_events(handle: *mut NightcordClient) -> *mut c_char {
+    match unsafe { handle.as_ref() } {
+        Some(client) => into_c_string(client.poll_events()),
+        // A null handle gets an empty batch rather than a crash: a UI that has
+        // already torn the client down should not have to stop polling first.
+        None => into_c_string("[]"),
+    }
+}
+
+/// Frees a string returned by this library.
+///
+/// # Safety
+///
+/// `text` must be null, or a pointer returned by one of this module's
+/// `char*`-returning functions that has not already been freed. Passing a
+/// static string such as [`nightcord_version`]'s is undefined behaviour.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_free_string(text: *mut c_char) {
+    // Safety: the caller guarantees provenance.
+    unsafe { free_c_string(text) };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_mode_the_ui_can_send_parses() {
+        // These strings are the contract with Dart; renaming one silently would
+        // disable the corresponding button.
+        assert_eq!(
+            parse_mode("push_to_talk"),
+            Some(VoiceActivationMode::PushToTalk)
+        );
+        assert_eq!(
+            parse_mode("voice_activation"),
+            Some(VoiceActivationMode::VoiceActivation)
+        );
+        assert_eq!(
+            parse_mode("continuous"),
+            Some(VoiceActivationMode::Continuous)
+        );
+        assert_eq!(parse_mode("muted"), Some(VoiceActivationMode::Muted));
+    }
+
+    #[test]
+    fn an_unknown_mode_is_rejected_rather_than_defaulted() {
+        // Defaulting would silently switch a push-to-talk user to
+        // voice-activated, transmitting their room without them pressing
+        // anything.
+        assert_eq!(parse_mode("PushToTalk"), None);
+        assert_eq!(parse_mode(""), None);
+        assert_eq!(parse_mode("always"), None);
+    }
+
+    #[test]
+    fn the_mode_names_match_the_serialised_form() {
+        // Dart parses `VoiceStateChanged` from the same vocabulary, so the two
+        // must not drift apart.
+        for (text, mode) in [
+            ("push_to_talk", VoiceActivationMode::PushToTalk),
+            ("voice_activation", VoiceActivationMode::VoiceActivation),
+            ("continuous", VoiceActivationMode::Continuous),
+            ("muted", VoiceActivationMode::Muted),
+        ] {
+            let json = serde_json::to_value(mode).unwrap();
+            assert_eq!(json.as_str(), Some(text), "{mode:?} serialises as {json}");
+        }
+    }
+
+    #[test]
+    fn creating_and_destroying_a_client_is_safe() {
+        let handle = nightcord_create();
+        assert!(
+            !handle.is_null(),
+            "the core should start on a desktop platform"
+        );
+        // Safety: `handle` came from `nightcord_create` and is destroyed once.
+        unsafe { nightcord_destroy(handle) };
+    }
+
+    #[test]
+    fn destroying_null_is_harmless() {
+        // Safety: null is explicitly allowed.
+        unsafe { nightcord_destroy(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn polling_a_null_handle_yields_an_empty_batch() {
+        // Safety: a null handle is explicitly allowed here.
+        let raw = unsafe { nightcord_poll_events(std::ptr::null_mut()) };
+        assert!(!raw.is_null());
+
+        // Safety: `raw` came from `nightcord_poll_events`.
+        let text = unsafe { from_c_str(raw) }.expect("a string");
+        assert_eq!(text, "[]");
+
+        // Safety: freed exactly once.
+        unsafe { nightcord_free_string(raw) };
+    }
+
+    #[test]
+    fn a_round_trip_through_the_abi_produces_an_event_batch() {
+        let handle = nightcord_create();
+        assert!(!handle.is_null());
+
+        // Safety: `handle` is live for this block, and the string outlives the
+        // call.
+        unsafe {
+            let raw = nightcord_poll_events(handle);
+            let text = from_c_str(raw).expect("a string");
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&text).is_ok(),
+                "not JSON: {text}"
+            );
+            nightcord_free_string(raw);
+
+            nightcord_destroy(handle);
+        }
+    }
+
+    #[test]
+    fn a_malformed_request_is_reported_rather_than_dropped() {
+        // The UI must learn that its request was understood badly, not sit
+        // waiting for a result that will never come.
+        let client = NightcordClient::new().expect("start the core");
+        reject(&client, "connect", "malformed request");
+
+        let batch: serde_json::Value =
+            serde_json::from_str(&client.poll_events()).expect("valid JSON");
+        assert_eq!(batch[0]["kind"], "command_result");
+        assert_eq!(batch[0]["command"], "connect");
+        assert_eq!(batch[0]["outcome"]["status"], "failed");
+    }
+}

@@ -1,0 +1,17 @@
+# Repository-wide build settings.
+
+[env]
+# CMake 4 removed compatibility with `cmake_minimum_required(VERSION < 3.5)`,
+# and the Opus 1.3 source bundled by audiopus_sys still declares an older
+# minimum. Without this, building the audio stack fails with:
+#
+#   CMake Error at CMakeLists.txt:1 (cmake_minimum_required):
+#     Compatibility with CMake < 3.5 has been removed from CMake.
+#
+# Harmless on CMake 3.x, which ignores it.
+#
+# Note: this only covers the CMake version problem. `CMAKE_GENERATOR` is *not*
+# set here on purpose — the right generator depends on which Visual Studio
+# instance has the C++ toolset installed, which differs per machine and between
+# developers and CI. See AGENTS.md §3.2 ("环境前提").
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"

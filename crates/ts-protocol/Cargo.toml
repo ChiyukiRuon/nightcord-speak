@@ -1,0 +1,23 @@
+[package]
+name = "ts-protocol"
+description = "The abstraction every TeamSpeak protocol backend implements."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+# Exposes `ts_protocol::testing`, an in-memory backend. Enabled by dependents
+# that need it; never enabled for a release build.
+testing = []
+
+[dependencies]
+ts-identity.workspace = true
+ts-model.workspace = true
+
+async-trait.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

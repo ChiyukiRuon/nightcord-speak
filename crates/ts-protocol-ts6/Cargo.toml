@@ -1,0 +1,14 @@
+[package]
+name = "ts-protocol-ts6"
+description = "TeamSpeak 6 backend: the shared base protocol plus what TS6 adds."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-events.workspace = true
+ts-identity.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+ts-protocol-tsclient.workspace = true

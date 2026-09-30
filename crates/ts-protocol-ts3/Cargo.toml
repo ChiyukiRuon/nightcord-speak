@@ -1,0 +1,14 @@
+[package]
+name = "ts-protocol-ts3"
+description = "TeamSpeak 3 backend: the boundary that owns what is TS3-specific."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-events.workspace = true
+ts-identity.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+ts-protocol-tsclient.workspace = true

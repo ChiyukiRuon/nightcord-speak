@@ -1,0 +1,23 @@
+[package]
+name = "ts-core"
+description = "Top-level facade: session management, identity and protocol selection."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-events.workspace = true
+ts-identity.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+ts-protocol-ts3.workspace = true
+ts-protocol-ts6.workspace = true
+ts-session.workspace = true
+
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

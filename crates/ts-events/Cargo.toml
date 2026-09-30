@@ -1,0 +1,16 @@
+[package]
+name = "ts-events"
+description = "Events published by the client core and consumed by front-ends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-model.workspace = true
+
+serde.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

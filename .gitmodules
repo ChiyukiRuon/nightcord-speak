@@ -1,0 +1,4 @@
+[submodule "vendor/tsclientlib"]
+	path = vendor/tsclientlib
+	url = https://github.com/ChiyukiRuon/tsclientlib.git
+	branch = nightcord

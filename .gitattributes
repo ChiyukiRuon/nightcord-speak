@@ -1,0 +1,18 @@
+# Normalise line endings so the Windows, Linux and macOS builds agree.
+* text=auto eol=lf
+
+# Windows-only project files keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.opus binary
+
+# Lockfiles are generated but must stay byte-identical across machines.
+Cargo.lock text eol=lf

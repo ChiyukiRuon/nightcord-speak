@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Formatting, lints and tests run once, on Linux. They do not depend on the
+  # target platform, so running them three times would only slow the queue down.
+  check:
+    name: Format, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The TS3 backend will not build without these: tsclientlib carries
+          # tsdeclarations as a nested submodule, and tsproto-structs includes
+          # files from it at compile time.
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Not `cargo fmt --all`: that also formats local path dependencies, which
+      # would reformat the vendored tsclientlib. See scripts/fmt.sh.
+      - name: Check formatting
+        run: scripts/fmt.sh --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+  # A release build per desktop target, so a platform-specific break is caught
+  # here rather than at packaging time (§62).
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --workspace --release
+
+  # Not yet covered: `flutter analyze` and `flutter test` for apps/client.
+  # The Dart tests load the real Rust shared library, so that job needs a
+  # `cargo build` and the DLL on the loader path first — see the "CI 缺 Flutter
+  # job" entry in AGENTS.md §7 for what it has to do.
+  #
+  # Android and iOS enter the build matrix at the same point, since they are
+  # only reachable through Flutter.

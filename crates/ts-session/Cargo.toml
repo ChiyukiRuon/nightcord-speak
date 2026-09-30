@@ -1,0 +1,21 @@
+[package]
+name = "ts-session"
+description = "Session and SessionManager: several servers connected at once."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-events.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+# Enables the in-memory backend so sessions can be exercised without a server.
+ts-protocol = { workspace = true, features = ["testing"] }

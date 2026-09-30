@@ -1,0 +1,10 @@
+edition = "2024"
+max_width = 100
+use_field_init_shorthand = true
+use_try_shorthand = true
+
+# Note: `cargo fmt --all` also formats local path dependencies, which would
+# reformat the vendored tsclientlib to our style and then fail `--check` against
+# its own `.rustfmt.toml`. rustfmt's `ignore` option cannot help — it is
+# nightly-only and does not apply to explicitly-passed files — so formatting is
+# scoped with `-p` instead. See `scripts/fmt.sh`.

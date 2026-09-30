@@ -1,0 +1,253 @@
+// The front-end's view of one server, accumulated from events.
+//
+// Pure Dart with no Flutter dependency, so the accumulation rules can be tested
+// directly. This is the same design as the CLI's `view.rs`: the core publishes
+// changes and the front-end holds the current picture (§18), rather than the
+// core handing out a ready-made tree.
+
+import '../models/domain.dart';
+import '../models/events.dart';
+
+/// Identifies a chat thread.
+///
+/// Server chat, one channel, or a private conversation. A string rather than a
+/// sealed type because it is only ever a map key.
+abstract final class ConversationKey {
+  /// The server-wide thread.
+  static const String server = 'server';
+
+  /// A channel's thread.
+  static String channel(int id) => 'channel:$id';
+
+  /// A private thread with one client.
+  static String client(int id) => 'client:$id';
+
+  /// The thread a message belongs to.
+  static String of(Message message) => switch (message.target) {
+    ServerTarget() => server,
+    ChannelTarget(:final channelId) => channel(channelId),
+    ClientTarget(:final clientId) => client(clientId),
+  };
+}
+
+/// One channel with the depth it sits at, ready to render as a flat list.
+class TreeRow {
+  const TreeRow({required this.depth, required this.channel, required this.hasChildren});
+
+  /// Zero for a root channel.
+  final int depth;
+  final Channel channel;
+
+  /// Whether sub-channels exist beneath this one.
+  ///
+  /// The widget uses it to decide between a collapsible category header and a
+  /// plain channel row.
+  final bool hasChildren;
+}
+
+/// Everything the UI needs to render one server.
+class ServerView {
+  ServerView({required this.session});
+
+  /// The handle this view is for.
+  final int session;
+
+  Server? server;
+  ServerInfo? info;
+  ConnectionState connection = ConnectionState.disconnected;
+
+  final Map<int, Channel> channels = {};
+  final Map<int, Client> clients = {};
+
+  /// Messages by [ConversationKey].
+  final Map<String, List<Message>> conversations = {};
+
+  int? ownClientId;
+  int? ownChannelId;
+  Permissions permissions = const Permissions();
+  Capabilities capabilities = const Capabilities();
+
+  /// Our own voice configuration, as the core reports it.
+  ///
+  /// Driven by `voice_state_changed` events rather than by the buttons: the
+  /// core owns the state, and a toggle that failed should not leave the UI
+  /// claiming otherwise.
+  VoiceState voice = const VoiceState();
+
+  /// Clients that have gone offline, newest first.
+  ///
+  /// Kept separately because TeamSpeak only reports clients that are
+  /// *connected*: a user who disconnects vanishes rather than moving to an
+  /// "offline" channel, but the reference design shows them, so the last known
+  /// name is retained.
+  final List<Client> offline = [];
+
+  /// Whether the session is usable right now.
+  bool get isConnected => connection == ConnectionState.connected;
+
+  /// Our own client record, once the server has identified us.
+  Client? get ownClient => ownClientId == null ? null : clients[ownClientId];
+
+  /// The channel we are in.
+  Channel? get ownChannel => ownChannelId == null ? null : channels[ownChannelId];
+
+  /// The channels we can see, as a flat list in tree order.
+  ///
+  /// Roots first, then their descendants, recursively. A channel whose parent is
+  /// missing is treated as a root rather than dropped — a server can send a
+  /// child before its parent.
+  ///
+  /// [isCollapsed] hides a channel's descendants while keeping the channel
+  /// itself, which is what the sidebar's disclosure triangles need. It is a
+  /// parameter rather than view state because collapsing is purely how the tree
+  /// is being displayed, not something about the server.
+  List<TreeRow> tree({bool Function(Channel channel)? isCollapsed}) {
+    final children = <int?, List<Channel>>{};
+    for (final channel in channels.values) {
+      // A dangling parent is treated as no parent, so the channel stays visible.
+      final parent = (channel.parentId != null && channels.containsKey(channel.parentId))
+          ? channel.parentId
+          : null;
+      children.putIfAbsent(parent, () => []).add(channel);
+    }
+
+    // The server's ordering key, with the id as a tie-break so the order is
+    // stable when two channels share one.
+    for (final siblings in children.values) {
+      siblings.sort((a, b) {
+        final byOrder = a.order.compareTo(b.order);
+        return byOrder != 0 ? byOrder : a.id.compareTo(b.id);
+      });
+    }
+
+    final rows = <TreeRow>[];
+    void visit(int? parent, int depth) {
+      for (final channel in children[parent] ?? const <Channel>[]) {
+        final hasChildren = (children[channel.id] ?? const <Channel>[]).isNotEmpty;
+        rows.add(TreeRow(depth: depth, channel: channel, hasChildren: hasChildren));
+
+        if (hasChildren && (isCollapsed?.call(channel) ?? false)) continue;
+        visit(channel.id, depth + 1);
+      }
+    }
+
+    visit(null, 0);
+    return rows;
+  }
+
+  /// The clients in one channel, ordered by name.
+  List<Client> clientsIn(int channelId) {
+    final members = clients.values.where((c) => c.channelId == channelId).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return members;
+  }
+
+  /// The messages in one thread, oldest first.
+  List<Message> messagesIn(String conversation) =>
+      conversations[conversation] ?? const <Message>[];
+
+  /// The thread the UI should be showing: the channel we are in.
+  String get activeConversation =>
+      ownChannelId == null ? ConversationKey.server : ConversationKey.channel(ownChannelId!);
+
+  /// Applies one event.
+  ///
+  /// Idempotent for every variant: replaying the same event twice leaves the
+  /// view unchanged, which matters because a reconnect re-sends the whole tree.
+  void apply(ClientEvent event) {
+    switch (event) {
+      case ConnectedEvent(:final server, :final info):
+        this.server = server;
+        this.info = info;
+        // A `connected` event *is* the connected state. Deriving it here rather
+        // than relying on a separate `connection_state_changed` matters: the
+        // switcher showed every live server as 「未连接」, and the composer
+        // stayed disabled, because nothing else ever set this.
+        connection = ConnectionState.connected;
+
+      case ServerInfoChangedEvent(:final info):
+        this.info = info;
+
+      case ConnectionStateChangedEvent(:final state):
+        connection = state;
+
+      case DisconnectedEvent():
+        connection = ConnectionState.disconnected;
+
+      case ChannelCreatedEvent(:final channel) || ChannelUpdatedEvent(:final channel):
+        channels[channel.id] = channel;
+
+      case ChannelRemovedEvent(:final channelId):
+        channels.remove(channelId);
+
+      case ClientJoinedEvent(:final client) || ClientUpdatedEvent(:final client):
+        clients[client.id] = client;
+        // Back online, so they are no longer in the offline list. Matched on
+        // the stable id: TeamSpeak assigns a *new* client id on every
+        // reconnect, so matching on that would leave the old entry behind
+        // forever, and showing one person twice.
+        offline.removeWhere((c) => _sameUser(c, client));
+
+      case ClientLeftEvent(:final clientId):
+        if (ownClientId == clientId) {
+          ownClientId = null;
+          ownChannelId = null;
+        }
+        final gone = clients.remove(clientId);
+        if (gone != null) {
+          offline.insert(0, gone);
+        }
+
+      case ClientMovedEvent(:final clientId, :final channelId):
+        final client = clients[clientId];
+        if (client != null) {
+          clients[clientId] = client.movedTo(channelId);
+        }
+        if (ownClientId == clientId) {
+          ownChannelId = channelId;
+        }
+
+      case OwnClientIdentifiedEvent(:final clientId, :final channelId):
+        ownClientId = clientId;
+        ownChannelId = channelId;
+        final client = clients[clientId];
+        if (client != null) {
+          clients[clientId] = client.movedTo(channelId);
+        }
+
+      case MessageReceivedEvent(:final message):
+        conversations.putIfAbsent(ConversationKey.of(message), () => []).add(message);
+
+      case PermissionsChangedEvent(:final permissions):
+        this.permissions = permissions;
+
+      case CapabilitiesChangedEvent(:final capabilities):
+        this.capabilities = capabilities;
+
+      case VoiceStateChangedEvent(:final state):
+        voice = state;
+
+      // Not part of the rendered state.
+      case ReconnectScheduledEvent():
+      case PokedEvent():
+      case SpeakingEvent():
+      case ErrorEvent():
+      case UnknownEvent():
+        break;
+    }
+  }
+
+  /// Whether two records describe the same person.
+  ///
+  /// [`Client.uniqueId`] survives reconnects while [`Client.id`] does not, so it
+  /// is the only reliable match. Without one on either side there is nothing
+  /// stable to compare, and the ids are the best available answer.
+  static bool _sameUser(Client a, Client b) {
+    final left = a.uniqueId;
+    final right = b.uniqueId;
+    if (left != null && left.isNotEmpty && right != null && right.isNotEmpty) {
+      return left == right;
+    }
+    return a.id == b.id;
+  }
+}

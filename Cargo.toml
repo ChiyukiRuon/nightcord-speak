@@ -1,0 +1,83 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/cli"]
+# Third-party protocol crates live in their own workspace under vendor/ and are
+# pulled in by path. They must not become members of ours.
+exclude = ["vendor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+# --- internal crates -------------------------------------------------------
+ts-audio = { path = "crates/ts-audio" }
+ts-core = { path = "crates/ts-core" }
+ts-events = { path = "crates/ts-events" }
+ts-ffi = { path = "crates/ts-ffi" }
+ts-identity = { path = "crates/ts-identity" }
+ts-model = { path = "crates/ts-model" }
+ts-protocol = { path = "crates/ts-protocol" }
+ts-protocol-ts3 = { path = "crates/ts-protocol-ts3" }
+ts-protocol-ts6 = { path = "crates/ts-protocol-ts6" }
+ts-protocol-tsclient = { path = "crates/ts-protocol-tsclient" }
+ts-session = { path = "crates/ts-session" }
+
+# --- external --------------------------------------------------------------
+async-trait = "0.1"
+# Same versions tsclientlib's `audio` feature pulls in, so only one copy of each
+# native binding is built.
+audiopus = "0.3.0-rc.0"
+cpal = "0.18"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- protocol backends -----------------------------------------------------
+# crates.io only ever published tsclientlib 0.2.0 (2021), far behind upstream,
+# so the vendored fork is used instead. It is a git submodule rather than a
+# Cargo git dependency because Cargo does not fetch submodules, and
+# `tsproto-structs` cannot build without `declarations/` (the nested
+# Moepchi/tsdeclarations submodule).
+#
+# The version is pinned by the submodule's recorded commit. To move it:
+#   cd vendor/tsclientlib && git fetch && git checkout <rev>
+#   cd ../.. && git add vendor/tsclientlib
+#
+# `audio` is required even though `ts-audio` owns the audio pipeline: it is what
+# exposes `StreamItem::Audio` and `Connection::send_audio`, i.e. the packet
+# transport, framing and voice encryption. Without it a client cannot send or
+# receive voice at all.
+#
+# Enabling it makes audiopus build libopus from source, which needs cmake — see
+# AGENTS.md §3.2 ("环境前提") and §3.3 ("语音构建踩过的两个坑").
+tsclientlib = { path = "vendor/tsclientlib/tsclientlib", default-features = false, features = [
+    "default-tls",
+    "audio",
+] }
+tsproto-packets = { path = "vendor/tsclientlib/utils/tsproto-packets" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# `audiopus_sys` builds libopus through CMake, and `cmake-rs` selects CMake's
+# `Debug` configuration whenever cargo's opt-level is 0. MSVC's Debug
+# configuration links the *debug* CRT (/MDd) while Rust always links the release
+# CRT, so a dev-profile build fails at link time with:
+#
+#   libaudiopus_sys.rlib(opus_encoder.obj) :
+#     error LNK2001: unresolved external symbol __imp__CrtDbgReportW
+#
+# Building this one package with optimisation moves cmake-rs to
+# RelWithDebInfo, which uses the release CRT. Scoped to the one package that
+# has the problem, so the rest of the workspace keeps a normal dev profile.
+[profile.dev.package.audiopus_sys]
+opt-level = 1

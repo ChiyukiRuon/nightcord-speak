@@ -1,0 +1,366 @@
+// The message list and the composer.
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../models/domain.dart';
+import '../../providers/providers.dart';
+import '../../state/server_view.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/avatar.dart';
+
+/// The right-hand column of the window.
+class ChatPanel extends ConsumerStatefulWidget {
+  /// Renders `view`.
+  const ChatPanel({required this.view, super.key});
+
+  /// The server to draw.
+  final ServerView view;
+
+  @override
+  ConsumerState<ChatPanel> createState() => _ChatPanelState();
+}
+
+class _ChatPanelState extends ConsumerState<ChatPanel> {
+  final _composer = TextEditingController();
+  final _scroll = ScrollController();
+
+  /// How many messages the last frame drew, so a new one can scroll into view.
+  int _lastCount = 0;
+
+  @override
+  void dispose() {
+    _composer.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  ServerView get _view => widget.view;
+
+  @override
+  Widget build(BuildContext context) {
+    final conversation = _view.activeConversation;
+    final messages = _view.messagesIn(conversation);
+
+    if (messages.length != _lastCount) {
+      _lastCount = messages.length;
+      // After the frame, so the new extent is known and the scroll lands at the
+      // true bottom rather than the previous one.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ChatHeader(view: _view),
+        const Divider(height: 1, color: AppColors.divider),
+        Expanded(
+          child: messages.isEmpty
+              ? const _EmptyChannel()
+              : ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  itemCount: messages.length,
+                  itemBuilder: (_, index) => _MessageTile(message: messages[index]),
+                ),
+        ),
+        _Composer(controller: _composer, onSend: _send, enabled: _canSend),
+      ],
+    );
+  }
+
+  /// Whether a message can be sent right now.
+  bool get _canSend =>
+      _view.isConnected &&
+      _view.ownChannelId != null &&
+      _view.permissions.canSendChannelMessage;
+
+  void _send() {
+    final text = _composer.text.trim();
+    if (text.isEmpty || !_canSend) return;
+
+    final channel = _view.ownChannelId;
+    if (channel == null) return;
+
+    // Echoed back by the server, so nothing is added locally: a message that
+    // failed to send should not appear to have succeeded.
+    ref.read(rustClientProvider).sendMessage(_view.session, ChannelTarget(channel), text);
+    _composer.clear();
+  }
+
+  void _scrollToBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+}
+
+/// The channel name and topic.
+class _ChatHeader extends StatelessWidget {
+  const _ChatHeader({required this.view});
+
+  final ServerView view;
+
+  @override
+  Widget build(BuildContext context) {
+    final channel = view.ownChannel;
+
+    return Container(
+      color: AppColors.header,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      child: Row(
+        children: [
+          const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          Text(
+            channel?.name ?? '未加入频道',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          if (channel?.topic != null && channel!.topic!.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            const SizedBox(height: 16, child: VerticalDivider(width: 1)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                channel.topic!,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (view.info != null)
+            Text(
+              '${view.info!.clientsOnline} 在线',
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the channel has no messages.
+class _EmptyChannel extends StatelessWidget {
+  /// Builds the placeholder.
+  const _EmptyChannel();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.forum_outlined, size: 40, color: AppColors.textMuted),
+          SizedBox(height: 12),
+          Text('还没有消息', style: TextStyle(color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// One message.
+class _MessageTile extends StatelessWidget {
+  const _MessageTile({required this.message});
+
+  final Message message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Avatar(name: message.senderName, size: 38),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        message.senderName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatTimestamp(message.sentAt),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                    if (message.isPrivate) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.lock_outline, size: 12, color: AppColors.idle),
+                    ],
+                  ],
+                ),
+                if (message.content.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  SelectableText(
+                    message.content,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ],
+                for (final attachment in message.attachments)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _AttachmentCard(attachment: attachment),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A shared file.
+///
+/// File transfer is the second phase (§39), so nothing the core sends carries
+/// an attachment yet. The card is here so the layout is already right, and the
+/// download control is visibly disabled with a reason rather than silently
+/// doing nothing.
+class _AttachmentCard extends StatelessWidget {
+  const _AttachmentCard({required this.attachment});
+
+  final Attachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final available = attachment.isAvailable;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      decoration: BoxDecoration(
+        color: AppColors.composer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.chatBackground,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              attachment.kindLabel,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attachment.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${attachment.readableSize}${attachment.mimeType == null ? '' : ' · ${attachment.mimeType}'}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: available ? null : null,
+            tooltip: available ? '下载' : '文件传输将在下个阶段支持',
+            icon: const Icon(Icons.download, size: 20),
+            color: AppColors.textSecondary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The message box.
+class _Composer extends StatelessWidget {
+  const _Composer({
+    required this.controller,
+    required this.onSend,
+    required this.enabled,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSend;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              maxLines: 5,
+              minLines: 1,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => onSend(),
+              decoration: InputDecoration(
+                hintText: enabled ? '发送消息' : '加入频道后才能发言',
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.alternate_email, size: 18, color: AppColors.textMuted),
+                    SizedBox(width: 14),
+                    Icon(Icons.text_fields, size: 18, color: AppColors.textMuted),
+                    SizedBox(width: 14),
+                    Icon(Icons.tag_faces_outlined, size: 18, color: AppColors.textMuted),
+                    SizedBox(width: 14),
+                    Icon(Icons.attach_file, size: 18, color: AppColors.textMuted),
+                    SizedBox(width: 12),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A message timestamp, in the form a person reads.
+///
+/// "今天 5:04" rather than a full date for anything recent, because that is
+/// what someone scrolling a live conversation needs.
+String formatTimestamp(DateTime when, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final clock = '${when.hour}:${when.minute.toString().padLeft(2, '0')}';
+
+  final today = DateTime(reference.year, reference.month, reference.day);
+  final that = DateTime(when.year, when.month, when.day);
+  final days = today.difference(that).inDays;
+
+  if (days == 0) return '今天 $clock';
+  if (days == 1) return '昨天 $clock';
+  if (when.year == reference.year) return '${when.month}月${when.day}日 $clock';
+  return '${when.year}/${when.month}/${when.day}';
+}

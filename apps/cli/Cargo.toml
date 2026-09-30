@@ -1,0 +1,22 @@
+[package]
+name = "nightcord-cli"
+description = "Headless Nightcord Speak client (Milestone 0.1)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-audio.workspace = true
+ts-core.workspace = true
+ts-events.workspace = true
+ts-identity.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+ts-session.workspace = true
+
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+tokio = { workspace = true, features = ["signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
