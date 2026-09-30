@@ -36,6 +36,15 @@ pub struct TransmitPolicy {
     gate: VoiceGate,
     mode: VoiceActivationMode,
     input_muted: bool,
+    /// Whether the speakers are muted — deafened.
+    ///
+    /// Deafening closes the transmit gate too, because the server refuses voice
+    /// from a deafened client: `can_send_audio` is false while
+    /// `client_output_muted` is set, so every frame sent through that window
+    /// came back as `VoiceError::NotConnected` — an error the user could do
+    /// nothing about, caused by a button they had just pressed on purpose.
+    /// TeamSpeak's own deafen stops the microphone as well.
+    output_muted: bool,
     /// Whether the push-to-talk key is currently held.
     ptt_held: bool,
     /// Whether the previous frame was transmitted.
@@ -53,6 +62,7 @@ impl TransmitPolicy {
             gate: VoiceGate::new(settings),
             mode,
             input_muted: false,
+            output_muted: false,
             ptt_held: false,
             transmitted_last: false,
             resume: false,
@@ -65,7 +75,7 @@ impl TransmitPolicy {
     pub fn should_transmit(&mut self, level: f32, frame_ms: u32) -> bool {
         let previous = self.transmitted_last;
 
-        let wants = if self.input_muted {
+        let wants = if self.input_muted || self.output_muted {
             false
         } else {
             match self.mode {
@@ -129,6 +139,17 @@ impl TransmitPolicy {
         if self.input_muted != muted {
             self.gate.reset();
             self.input_muted = muted;
+        }
+    }
+
+    /// Deafens or undeafens, which closes the transmit gate with the speakers.
+    ///
+    /// Deafening closes the transmit gate with it: see the note on
+    /// `TransmitPolicy::output_muted` for why the two travel together.
+    pub fn set_output_muted(&mut self, muted: bool) {
+        if self.output_muted != muted {
+            self.gate.reset();
+            self.output_muted = muted;
         }
     }
 
@@ -426,6 +447,7 @@ impl VoiceEngine {
     /// reads the same switch.
     pub fn set_output_muted(&mut self, muted: bool) {
         self.output_muted.store(muted, Ordering::Relaxed);
+        self.policy.set_output_muted(muted);
     }
 
     /// Whether the speakers are muted.
@@ -692,6 +714,55 @@ mod tests {
         policy.set_push_to_talk(true);
         for _ in 0..10 {
             assert!(!policy.should_transmit(LOUD, FRAME_MS));
+        }
+    }
+
+    #[test]
+    fn deafening_beats_every_mode() {
+        // Regression: deafening muted the speakers and nothing else. The server
+        // refuses voice from a deafened client — `can_send_audio` is false while
+        // `client_output_muted` is set — so every frame encoded while deafened
+        // came back refused, and the refusal reached the UI as "voice error: not
+        // connected": an error nobody can act on, produced by a button they
+        // pressed on purpose. TeamSpeak's own deafen stops the microphone too.
+        for mode in [
+            VoiceActivationMode::PushToTalk,
+            VoiceActivationMode::Continuous,
+            VoiceActivationMode::VoiceActivation,
+        ] {
+            let mut policy = policy(mode);
+            policy.set_push_to_talk(true);
+
+            // Drive the mode until it is actually transmitting: voice
+            // activation needs its attack to elapse before the gate opens.
+            let mut open = false;
+            for _ in 0..40 {
+                if policy.should_transmit(LOUD, FRAME_MS) {
+                    open = true;
+                    break;
+                }
+            }
+            assert!(open, "{mode:?} never opened its gate");
+
+            policy.set_output_muted(true);
+            for _ in 0..40 {
+                assert!(
+                    !policy.should_transmit(LOUD, FRAME_MS),
+                    "{mode:?} transmitted while deafened"
+                );
+            }
+
+            // Undeafening restarts the gate like muting the microphone does, so
+            // voice activation has to attack again before it transmits.
+            policy.set_output_muted(false);
+            let mut reopened = false;
+            for _ in 0..40 {
+                if policy.should_transmit(LOUD, FRAME_MS) {
+                    reopened = true;
+                    break;
+                }
+            }
+            assert!(reopened, "{mode:?} stayed silent after undeafening");
         }
     }
 
