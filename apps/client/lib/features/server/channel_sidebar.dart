@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design/components/app_avatar.dart';
 import '../../design/components/app_badge.dart';
+import '../../design/components/app_logo.dart';
 import '../../design/components/app_section_title.dart';
 import '../../design/components/app_unread_dot.dart';
 import '../../design/theme/app_theme.dart';
@@ -176,8 +177,8 @@ class _ServerHeader extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // §16's large size, and §5's primary for the brand mark.
-              Icon(Icons.bubble_chart, color: tokens.primary, size: 24),
+              // §16's large size; the mark takes the theme's primary itself.
+              const AppLogo(size: 24),
               SizedBox(width: tokens.space2),
               Expanded(
                 child: Text(

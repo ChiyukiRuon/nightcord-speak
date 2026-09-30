@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
+import 'package:nightcord_client/design/components/app_logo.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
 import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/features/connect/connect_page.dart';
@@ -314,6 +315,33 @@ void main() {
 
     expect(transport.calls, contains('disconnect:1'));
     expect(container.read(sessionsProvider), isEmpty);
+  });
+
+  testWidgets('the brand mark is on the screens that carry it', (tester) async {
+    // One on the connect page's title row, one in the server header. What this
+    // guards is the wiring — that the mark is drawn rather than the old
+    // `Icons.bubble_chart` having been left behind somewhere.
+    await tester.pumpWidget(_app(_container(), const ConnectPage()));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppLogo), findsOneWidget);
+    expect(find.byIcon(Icons.bubble_chart), findsNothing);
+
+    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppLogo), findsOneWidget);
+    expect(find.byIcon(Icons.bubble_chart), findsNothing);
+  });
+
+  testWidgets('the mark draws at every size it is put at', (tester) async {
+    // Including 16, where the two eyes are barely a pixel across. How it
+    // *looks* at each size is not asserted here — the painter is geometry, and
+    // judging it means looking at it, which is what `scripts/make-app-icon.py`
+    // exists to make possible.
+    for (final size in [16.0, 24.0, 32.0, 256.0]) {
+      await tester.pumpWidget(_app(_container(), Center(child: AppLogo(size: size))));
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'failed to draw at ${size}px');
+    }
   });
 
   testWidgets('a session that has been forgotten', (tester) async {

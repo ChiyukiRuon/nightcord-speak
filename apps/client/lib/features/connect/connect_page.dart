@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_logo.dart';
 import '../../design/components/app_section_title.dart';
 import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -187,8 +188,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
               children: [
                 Row(
                   children: [
-                    // §16's page-level size, in §5's primary.
-                    Icon(Icons.bubble_chart, color: tokens.primary, size: 32),
+                    // §16's page-level size. The mark takes §5's primary
+                    // from the theme, so it follows all three of them.
+                    const AppLogo(size: 32),
                     SizedBox(width: tokens.space3),
                     Text(
                       'Nightcord Speak',

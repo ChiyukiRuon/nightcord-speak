@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 36.9 36.9">
+  <!-- 月牙（外圆 minus 内切圆，evenodd 挖空） -->
+  <path fill="#FFFFFF" fill-rule="evenodd" d="
+    M 18.45 0
+    A 18.45 18.45 0 1 0 18.45 36.9
+    A 18.45 18.45 0 1 0 18.45 0
+    Z
+    M 22.86 4.63
+    A 13.82 13.82 0 1 1 22.86 32.27
+    A 13.82 13.82 0 1 1 22.86 4.63
+    Z"/>
+  <!-- 两个圆点 -->
+  <circle fill="#FFFFFF" cx="17.84" cy="18.42" r="2.2"/>
+  <circle fill="#FFFFFF" cx="27.88" cy="18.42" r="2.2"/>
+</svg>

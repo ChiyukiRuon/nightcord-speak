@@ -89,8 +89,25 @@ apps/client/lib/design/          # AGENTS.md「三层 UI」的层 1，六端共�
 │   └── design_tokens.dart       # ThemeExtension：widget 唯一该读的那层
 └── components/                  # 有第二个使用者的公共件
     ├── app_avatar.dart  app_badge.dart  app_banner.dart
-    ├── app_section_title.dart  app_unread_dot.dart
+    ├── app_logo.dart  app_section_title.dart  app_unread_dot.dart
 ```
+
+### 品牌标记是画出来的，不是加载进来的
+
+`AppLogo` 用 `CustomPainter` 画那个「月牙 + 两只眼」——源文件
+`apps/client/assets/nightcord-logo.svg` 只有三个圆，而画布本来就会画圆和
+even-odd 路径。为此引一个矢量图库、加一道构建步骤、再多一份要保持同步的
+生成文件，都不值当；换成位图则要为每个尺寸导一份，而没导过的尺寸一定会糊。
+
+`AppLogo` 默认取当前主题的 `primary`，所以三套主题下它都是对的——Nightcord
+是那个紫，Black 是近白，White 是近黑。
+
+Windows 的 `.ico` 由 `scripts/make-app-icon.py` 从**同一组数字**生成
+（7 个尺寸，8 倍超采样后缩到目标尺寸——16px 下那两只眼睛不到一个像素，
+需要这点余量）。之所以是个脚本而不是一次性生成的二进制：committed 二进制
+如果没人能重新生成，也就没人敢动它。颜色用的是 Nightcord 的 `#8C82C2`
+而不是 SVG 里的纯白——纯白标记在透明底上遇到浅色任务栏会整个消失，而应用
+现在有浅色主题了；中间调的紫在明暗两边都看得见。
 
 `lib/theme/app_theme.dart` 与 `lib/widgets/avatar.dart` 已删除（内容拆进上面）。
 
