@@ -1,6 +1,8 @@
 // The message list and the composer.
 
-import 'package:flutter/material.dart';
+// `ConnectionState` is hidden because `material.dart` exports a different one
+// (a `FutureBuilder`'s), and this file means the session's.
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/domain.dart';
@@ -64,7 +66,12 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                   itemBuilder: (_, index) => _MessageTile(message: messages[index]),
                 ),
         ),
-        _Composer(controller: _composer, onSend: _send, enabled: _canSend),
+        _Composer(
+          controller: _composer,
+          onSend: _send,
+          enabled: _canSend,
+          hint: _hint,
+        ),
       ],
     );
   }
@@ -74,6 +81,22 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
       _view.isConnected &&
       _view.ownChannelId != null &&
       _view.permissions.canSendChannelMessage;
+
+  /// What the input box says about itself.
+  ///
+  /// Why it is disabled matters. While reconnecting the user *is* in a channel,
+  /// so the old blanket 「加入频道后才能发言」 blamed the one thing that was not
+  /// wrong — and the input stayed disabled with nothing on screen explaining it.
+  String get _hint {
+    if (_canSend) return '发送消息';
+
+    return switch (_view.connection) {
+      ConnectionState.reconnecting => '正在重连…',
+      ConnectionState.connecting => '正在连接…',
+      ConnectionState.disconnected || ConnectionState.failed => '连接已断开',
+      _ => '加入频道后才能发言',
+    };
+  }
 
   void _send() {
     final text = _composer.text.trim();
@@ -302,11 +325,15 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.onSend,
     required this.enabled,
+    required this.hint,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
   final bool enabled;
+
+  /// Shown when the box is empty. Says why it is disabled when it is.
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +351,7 @@ class _Composer extends StatelessWidget {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
               decoration: InputDecoration(
-                hintText: enabled ? '发送消息' : '加入频道后才能发言',
+                hintText: hint,
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [

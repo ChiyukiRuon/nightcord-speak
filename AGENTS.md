@@ -179,8 +179,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 264 个
-cd apps/client && flutter analyze && flutter test                  # 42 个
+cargo test  --workspace --all-features                             # 270 个
+cd apps/client && flutter analyze && flutter test                  # 49 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -259,7 +259,7 @@ cd apps/client && flutter analyze && flutter test                  # 42 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 logging 已完成，其余未开始 |
+| M0.6     | Production Client               | 🚧 logging / 重连 已完成，其余未开始 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -276,9 +276,9 @@ cd apps/client && flutter analyze && flutter test                  # 42 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **14,026 行**，12 crates + CLI |
-| Dart | **4,676 行**，23 文件          |
-| 测试 | **264 Rust + 42 Dart**，全绿   |
+| Rust | **14,483 行**，12 crates + CLI |
+| Dart | **4,971 行**，24 文件          |
+| 测试 | **270 Rust + 49 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -326,11 +326,29 @@ cd apps/client && flutter analyze && flutter test                  # 42 个
 | 未知 level / 空消息 / 中文  | ✅ 按 info 记或不记，均不 panic                                             |
 | CLI 行为不变                | ✅ 仍写 stderr；`RUST_LOG` 生效，`NIGHTCORD_LOG` 优先级更高                  |
 
+**重连（M0.6 第二项）**
+
+| 项 | 结果 |
+| --- | --- |
+| fork 补丁 `ReconnectMode::External` | ✅ 已推送 `c5cc287`，本仓库 pin 已更新，编译通过 |
+| 正常路径未受影响 | ✅ 真实服务器连接 / 服务器信息 / 能力集 / 干净断开，与补丁前一致 |
+| actor 的 `Reconnecting → Connected` bug | ✅ 已修（`refresh` 不再拿一次性 `ready` 当状态开关） |
+| §35 退避表 | ✅ 6 个单测：1/2/4/8/16→30 封顶、首次编号为 1、不可重试错误不消耗预算、恢复后重新计数 |
+| Dart 侧断线保留上下文与倒计时 | ✅ 7 个测试 |
+| **重连循环本身** | ❌ **未跑通过一次真实掉线** —— 见 §5.4 |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
 - TS3 成功换频道（测试服务器只有一个频道）。
 - Android / iOS / Web：完全未动。
+- **重连循环没有跑通过一次真实掉线**。原计划用本机 TCP 中继制造掉线，但在这台机器上
+  做不到：`nightcord-cli.exe` 连不上任何本机监听（3ms 内被 RST；同一时刻、同一次调用里
+  一个普通 Rust 探针却能连上），而放在项目目录之外的二进制又连不出去。这是环境的
+  按进程网络策略，不是代码问题——但它意味着「库报掉线 → 退避重试 → 恢复」这条路径
+  目前只有编译期与单元级的保证。
+  要真正确认：连上之后停掉 TS3 服务器（或拔网线），看提示条出现、倒计时走秒、日志里
+  出现 attempt 序列，再把服务器起回来确认自动恢复、频道树与聊天记录都还在且无重复。
 
 ---
 
@@ -365,7 +383,9 @@ cd apps/client && flutter analyze && flutter test                  # 42 个
 
 - [x] **logging**（最先做）——见 [`docs/logging.md`](docs/logging.md)。落盘、轮转、
       「UI 可见 ⇒ 必落日志」的不变式、设置里的入口，都已实测。
-- [ ] 重连（`ReconnectPolicy` 已在 `ts-model` 就位，未接）
+- [x] **重连** —— actor 成为唯一的策略所有者，fork 加了 `ReconnectMode::External`
+      把库的内部重试关掉，§35 的退避表落在 actor。见 [`docs/reconnect.md`](docs/reconnect.md)。
+      **欠一次真实掉线的端到端验证**，原因见 §5.4。
 - [ ] 设置界面 —— **已有落点**：`lib/features/settings/settings_dialog.dart`，
       目前是音频与日志两节，其余项往这里加
 - [ ] 书签 / 服务器列表
@@ -414,6 +434,7 @@ cd apps/client && flutter analyze && flutter test                  # 42 个
 | `docs/ts6.md`              | TS6：实测结论、共享适配层、`stream` 归 Phase 8             |
 | `docs/audio.md`            | 音频管线、线程模型、收发格式差异、已知取舍                 |
 | `docs/logging.md`          | 日志：位置、轮转、环境变量、「UI 可见即落日志」的不变式     |
+| `docs/reconnect.md`        | 重连：职责边界、fork 补丁、退避表、为什么首连失败不重试     |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

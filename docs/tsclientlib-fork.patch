@@ -1,3 +1,164 @@
+diff --git a/tsclientlib/src/lib.rs b/tsclientlib/src/lib.rs
+index 24ea029..a4ec0fa 100644
+--- a/tsclientlib/src/lib.rs
++++ b/tsclientlib/src/lib.rs
+@@ -305,6 +305,12 @@ pub struct Connection {
+ 	span: Span,
+ 	options: ConnectOptions,
+ 	stream_items: VecDeque<Result<StreamItem>>,
++	/// Set once the connection is over and no further attempts will be made.
++	///
++	/// Checked *after* `stream_items` is drained, so the last item — the
++	/// [`StreamItem::DisconnectedTemporarily`] that tells an
++	/// [`ReconnectMode::External`] caller why the stream is about to end — is still delivered.
++	finished: bool,
+ }
+ 
+ struct ConnectedConnection {
+@@ -435,6 +441,7 @@ impl Connection {
+ 			log_packets: false,
+ 			log_udp_packets: false,
+ 			server_type: ServerType::default(),
++			reconnect_mode: ReconnectMode::default(),
+ 			default_token: Cow::Borrowed(""),
+ 		}
+ 	}
+@@ -1278,6 +1285,11 @@ impl Connection {
+ 		if let Some(item) = self.stream_items.pop_front() {
+ 			return Poll::Ready(Some(item));
+ 		}
++		// Checked after the queue is drained: the item explaining *why* we are finishing has to
++		// get out before the stream goes quiet.
++		if self.finished {
++			return Poll::Ready(None);
++		}
+ 		match &mut self.state {
+ 			ConnectionState::Connecting(fut, reconnect) => match fut.poll_unpin(cx) {
+ 				Poll::Pending => Poll::Pending,
+@@ -1288,7 +1300,10 @@ impl Connection {
+ 					Poll::Ready(Some(Ok(StreamItem::IdentityLevelIncreasing(level))))
+ 				}
+ 				Poll::Ready(Err(e)) => {
+-					if *reconnect {
++					// The mode is checked here as well as at the two places that *start* a
++					// reconnect, so "External never retries internally" holds on its own rather
++					// than depending on those call sites staying correct.
++					if *reconnect && self.options.reconnect_mode == ReconnectMode::Automatic {
+ 						if let Error::ConnectFailed { errors, .. } = &e {
+ 							for e in errors {
+ 								if let Error::Connect(client::Error::TsProto(
+@@ -1362,6 +1377,20 @@ impl Connection {
+ 						}
+ 
+ 						if let client::Error::TsProto(tsproto::Error::Timeout(reason)) = e {
++							if self.options.reconnect_mode == ReconnectMode::External {
++								// The caller owns reconnect policy. Report the drop and let the
++								// stream end, so exactly one backoff schedule is in play — its
++								// own, with its own attempt counter and user-visible state.
++								info!(
++									timeout = reason,
++									"Connection lost, leaving the retry to the caller"
++								);
++								self.finished = true;
++								return Poll::Ready(Some(Ok(StreamItem::DisconnectedTemporarily(
++									TemporaryDisconnectReason::Timeout(reason),
++								))));
++							}
++
+ 							// Reconnect on timeout
+ 							warn!(timeout = reason, "Connection failed, reconnecting");
+ 							let fut = Self::connect(self.options.clone(), true);
+@@ -1413,12 +1442,20 @@ impl Connection {
+ 								&mut self.options,
+ 								cmd,
+ 							) {
+-								warn!("Server shut down, reconnecting");
+-								let fut = Self::connect(self.options.clone(), true);
+-								self.state = ConnectionState::Connecting(
+-									Box::pin(fut.in_current_span()),
+-									true,
+-								);
++								if self.options.reconnect_mode == ReconnectMode::External {
++									// As above: report and finish, rather than schedule our own
++									// retry. A restarting server is a drop the caller will
++									// usually want to back off from on its own terms.
++									info!("Server shut down, leaving the retry to the caller");
++									self.finished = true;
++								} else {
++									warn!("Server shut down, reconnecting");
++									let fut = Self::connect(self.options.clone(), true);
++									self.state = ConnectionState::Connecting(
++										Box::pin(fut.in_current_span()),
++										true,
++									);
++								}
+ 								if prev_can_send {
+ 									self.stream_items.push_back(Ok(StreamItem::AudioChange(
+ 										AudioEvent::CanSendAudio(false),
+@@ -1974,10 +2011,33 @@ pub struct ConnectOptions {
+ 	log_packets: bool,
+ 	log_udp_packets: bool,
+ 	server_type: ServerType,
++	/// Whether the library reconnects on its own. See [`ReconnectMode`].
++	reconnect_mode: ReconnectMode,
+ 	/// Privilege key / token passed as `client_default_token` in `clientinit`.
+ 	default_token: Cow<'static, str>,
+ }
+ 
++/// What the library should do when an established connection drops.
++///
++/// The default matches upstream behaviour, so this is additive. `External` exists so an
++/// application that owns its own reconnect policy — with its own schedule, attempt counter and
++/// user-visible state — can keep **exactly one** backoff in play. Two of them fighting over the
++/// same connection is worse than either alone.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub enum ReconnectMode {
++	/// Reconnect inside the library, waiting a fixed ten seconds between attempts.
++	///
++	/// This is upstream's behaviour and the default.
++	#[default]
++	Automatic,
++	/// Report the drop and end the event stream, leaving the decision to the caller.
++	///
++	/// The caller sees [`StreamItem::DisconnectedTemporarily`] and then the end of the stream,
++	/// which is everything it needs to rebuild the connection on its own terms — including a
++	/// different delay, or giving up after a budget of attempts.
++	External,
++}
++
+ impl ConnectOptions {
+ 	/// Start creating the configuration of a new connection.
+ 	///
+@@ -2047,6 +2107,7 @@ impl ConnectOptions {
+ 			span: span.exit(),
+ 			options: self,
+ 			stream_items,
++			finished: false,
+ 		})
+ 	}
+ 
+@@ -2198,6 +2259,21 @@ impl ConnectOptions {
+ 		self
+ 	}
+ 
++	/// Choose whether the library reconnects on its own.
++	///
++	/// Defaults to [`ReconnectMode::Automatic`], which is upstream's behaviour and is unchanged.
++	/// Pass [`ReconnectMode::External`] when the application owns its own reconnect policy: the
++	/// library will then report a dropped connection and end the stream instead of retrying.
++	///
++	/// This does not affect the very first connection. A failure to connect at all is always
++	/// reported to the caller, which is what lets it tell "wrong password" apart from "server is
++	/// not up yet".
++	#[inline]
++	pub fn reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
++		self.reconnect_mode = reconnect_mode;
++		self
++	}
++
+ 	/// Connect to the server in a muted state.
+ 	///
+ 	/// # Example
 diff --git a/tsclientlib/src/resolver.rs b/tsclientlib/src/resolver.rs
 index 9a6025f..a3b4f6f 100644
 --- a/tsclientlib/src/resolver.rs

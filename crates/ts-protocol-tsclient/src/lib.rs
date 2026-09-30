@@ -55,7 +55,7 @@ use ts_protocol::{
 };
 
 use actor::{Command, Context};
-use tsclientlib::ServerType;
+use tsclientlib::{ReconnectMode, ServerType};
 
 /// How long to wait for the handshake before giving up.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -150,32 +150,10 @@ impl TsClient {
         // its events cannot interleave with the new one.
         self.close().await?;
 
-        let identity = identity::decode(&config.identity)?;
         let target = config.target.clone();
 
-        // Fully qualified: `Connection` is also the name of the trait this type
-        // implements.
-        let mut options = tsclientlib::Connection::build(target.to_string())
-            .identity(identity)
-            .name(config.nickname.clone());
-        if let Some(password) = &config.server_password {
-            options = options.password(password.clone());
-        }
-        if let Some(password) = &config.channel_password {
-            options = options.channel_password(password.clone());
-        }
-        if let Some(token) = &config.privilege_key {
-            options = options.default_token(token.clone());
-        }
-        if let Some(channel) = &config.default_channel {
-            options = options.channel(channel.clone());
-        }
-        options = options.server_type(server_type(config.dialect));
-
         // Resolution happens here; the handshake itself happens in the actor.
-        let connection = options
-            .connect()
-            .map_err(|error| target_error(&target, error))?;
+        let connection = open_connection(&config)?;
 
         let context = Arc::new(Context::new(
             self.inner.session,
@@ -196,6 +174,10 @@ impl TsClient {
             command_rx,
             context.clone(),
             ready_tx,
+            // The config is moved rather than dropped: rebuilding a dropped
+            // connection needs the same identity, nickname and passwords, and
+            // this is the last place that has them all (§36).
+            actor::Reconnect::new(config),
         ));
 
         {
@@ -497,6 +479,53 @@ fn server_type(dialect: Dialect) -> ServerType {
         Dialect::TeamSpeak => ServerType::Teamspeak,
         Dialect::TeaSpeak => ServerType::Teaspeak,
     }
+}
+
+/// Opens a connection from a config, starting nothing else.
+///
+/// Shared by the first attempt and by every reconnect, so the two cannot drift:
+/// a rebuild that forgot the channel password, or the privilege key, would land
+/// the user somewhere else without saying so.
+///
+/// # Errors
+///
+/// [`ClientError::Identity`] if the stored identity cannot be decoded, plus
+/// whatever the transport reports for failing to resolve or open the socket.
+pub(crate) fn open_connection(
+    config: &ConnectionConfig,
+) -> Result<tsclientlib::Connection, ClientError> {
+    let identity = identity::decode(&config.identity)?;
+
+    // Fully qualified: `Connection` is also the name of the trait this type
+    // implements.
+    let mut options = tsclientlib::Connection::build(config.target.to_string())
+        .identity(identity)
+        .name(config.nickname.clone())
+        // Nightcord owns reconnect policy, so the library reports a dropped
+        // connection and ends its stream rather than waiting ten seconds and
+        // trying again on a schedule of its own. Two backoffs on one connection
+        // would fight, and only one of them can show the user what is happening.
+        // See [`docs/reconnect.md`](../../../docs/reconnect.md).
+        .reconnect_mode(ReconnectMode::External);
+    if let Some(password) = &config.server_password {
+        options = options.password(password.clone());
+    }
+    if let Some(password) = &config.channel_password {
+        options = options.channel_password(password.clone());
+    }
+    if let Some(token) = &config.privilege_key {
+        options = options.default_token(token.clone());
+    }
+    if let Some(channel) = &config.default_channel {
+        options = options.channel(channel.clone());
+    }
+
+    options
+        .server_type(server_type(config.dialect))
+        .connect()
+        // Attached here rather than by each caller, so a reconnect reports the
+        // same target the first attempt did.
+        .map_err(|error| target_error(&config.target, error))
 }
 
 fn not_connected() -> ClientError {

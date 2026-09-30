@@ -300,6 +300,106 @@ void main() {
     });
   });
 
+  group('reconnect', () {
+    /// A view that was connected, with something on screen to lose.
+    ServerView connectedView() {
+      final target = view();
+      applyAll(target, [
+        const ConnectedEvent(
+          server: Server(id: 1, name: 'Test', address: 'example.com', protocol: ProtocolKind.ts3),
+          info: ServerInfo(name: 'Test'),
+        ),
+        ChannelCreatedEvent(channel(1, 'Lobby')),
+        ClientJoinedEvent(client(10, 'Alice', 1)),
+        MessageReceivedEvent(message(1, 'hello', MessageTarget.server)),
+      ]);
+      return target;
+    }
+
+    test('a scheduled retry is recorded with its attempt and delay', () {
+      final target = connectedView();
+      target.apply(const ReconnectScheduledEvent(attempt: 3, delayMs: 4000));
+
+      expect(target.reconnect?.attempt, 3);
+      expect(target.reconnect?.delayMs, 4000);
+      expect(target.reconnect?.secondsLeft, 4);
+    });
+
+    test('a drop keeps the tree, the people and the conversation', () {
+      // The reason a reconnect is not a crash: the core is putting the same
+      // session back, and clearing the screen would throw away the context the
+      // user was in the middle of.
+      final target = connectedView();
+
+      applyAll(target, [
+        const ConnectionStateChangedEvent(ConnectionState.reconnecting),
+        const ReconnectScheduledEvent(attempt: 1, delayMs: 1000),
+      ]);
+
+      expect(target.isConnected, isFalse);
+      expect(target.tree(), hasLength(1));
+      expect(target.clients, hasLength(1));
+      expect(target.messagesIn(ConversationKey.server), hasLength(1));
+      expect(target.info?.name, 'Test');
+    });
+
+    test('the connection coming back clears the retry', () {
+      // Otherwise the banner would keep counting down to an attempt that has
+      // already happened.
+      final target = connectedView();
+      applyAll(target, [
+        const ConnectionStateChangedEvent(ConnectionState.reconnecting),
+        const ReconnectScheduledEvent(attempt: 2, delayMs: 2000),
+        const ConnectionStateChangedEvent(ConnectionState.connected),
+      ]);
+
+      expect(target.reconnect, isNull);
+      expect(target.isConnected, isTrue);
+    });
+
+    test('a later attempt replaces the one before it', () {
+      final target = connectedView();
+      applyAll(target, [
+        const ReconnectScheduledEvent(attempt: 1, delayMs: 1000),
+        const ReconnectScheduledEvent(attempt: 2, delayMs: 2000),
+      ]);
+
+      expect(target.reconnect?.attempt, 2);
+      expect(target.reconnect?.delayMs, 2000);
+    });
+
+    test('an ending session clears the retry', () {
+      final target = connectedView();
+      applyAll(target, [
+        const ReconnectScheduledEvent(attempt: 1, delayMs: 1000),
+        const DisconnectedEvent(),
+      ]);
+
+      expect(target.reconnect, isNull);
+      expect(target.connection, ConnectionState.disconnected);
+    });
+
+    test('a drop with no scheduled retry yet shows nothing to count down', () {
+      // The core reports `reconnecting` the moment it notices, and only says
+      // how long it will wait once it has decided. A banner that invented a
+      // number in between would be counting down to a moment nobody chose.
+      final target = connectedView();
+      target.apply(const ConnectionStateChangedEvent(ConnectionState.reconnecting));
+
+      expect(target.connection, ConnectionState.reconnecting);
+      expect(target.reconnect, isNull);
+    });
+
+    test('the countdown never goes negative', () {
+      // The event can be read after its deadline has passed — a slow frame, or
+      // a retry that is already being attempted.
+      final target = connectedView();
+      target.apply(const ReconnectScheduledEvent(attempt: 1, delayMs: 0));
+
+      expect(target.reconnect?.secondsLeft, 0);
+    });
+  });
+
   group('messages', () {
     test('a channel message lands in that channel thread', () {
       final target = view();

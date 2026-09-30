@@ -109,19 +109,46 @@ submodule 当前 pin 在 `df38c87`。本地的临时补丁已丢弃——改动�
 
 ---
 
-## 状态：已完结
+## 第二处改动：把重连控制权交给外层（`c5cc287`）
+
+做 M0.6 的重连时发现：库自己会重连（连接超时、服务器重启），但延迟是**写死的 10 秒**，
+而连不上时（ECONNREFUSED、DNS 失败）它直接放弃。外层要实现 §35 的
+1s/2s/4s/8s/16s→30s，就必须能**关掉**库的内部重试，否则两套退避会互相抢控制权。
+
+所以第二个补丁**不是**把 10 秒换成 1/2/4/8，而是加一个开关：
+
+```rust
+pub enum ReconnectMode { Automatic, External }
+```
+
+`Automatic` 是默认，上游行为不变；`External` 时库报告掉线并结束事件流，
+由调用方决定何时、以什么节奏重建。
+
+细节与理由见 [`docs/reconnect.md`](reconnect.md)。改动记录在
+[`tsclientlib-fork.patch`](tsclientlib-fork.patch)（现在包含两处改动）。
+
+---
+
+## 状态
 
 不再需要环境变量，也不再有本地补丁。已实测：
 **不带 `ALLOW_PRIVATE_TARGETS`、不带 `BLOCK_PRIVATE_TARGETS`**，
 直接连上 `192.168.31.128:9987`。
+
+分支上现在有两个我们自己的 commit，都只动 `nightcord`：
+
+| commit | 内容 |
+| --- | --- |
+| `df38c87` | 局域网默认放行（`resolver.rs`） |
+| `c5cc287` | `ReconnectMode::External`（`lib.rs`） |
 
 上溯关系：
 
 ```text
 Moepchi/tsclientlib : webspeak3   (2e77949)
         │
-        └── ChiyukiRuon/tsclientlib : nightcord   (df38c87)  ← 本仓库 pin 在这里
+        └── ChiyukiRuon/tsclientlib : nightcord   (c5cc287)  ← 本仓库 pin 在这里
 ```
 
 `webspeak3` 在 fork 里保持原样未动，所以以后从上游拉更新仍是一次快进。
-局域网改动只存在于 `nightcord` 分支，不会混进上游分支。
+两处改动都只存在于 `nightcord` 分支，不会混进上游分支。

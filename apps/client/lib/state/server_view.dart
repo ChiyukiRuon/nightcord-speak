@@ -30,6 +30,33 @@ abstract final class ConversationKey {
   };
 }
 
+/// A retry the core has scheduled, while a dropped session recovers.
+///
+/// Only ever set between `reconnect_scheduled` and the connection coming back.
+class ReconnectProgress {
+  /// Records a scheduled retry.
+  ReconnectProgress({required this.attempt, required this.delayMs})
+    : due = DateTime.now().add(Duration(milliseconds: delayMs));
+
+  /// 1 for the first retry.
+  final int attempt;
+
+  /// How long the core said it would wait.
+  final int delayMs;
+
+  /// When that wait is up.
+  ///
+  /// Kept as a deadline rather than as the raw delay because the banner counts
+  /// down, and "4 秒后" is wrong one second after it is drawn.
+  final DateTime due;
+
+  /// Whole seconds left, never negative.
+  int get secondsLeft {
+    final left = due.difference(DateTime.now()).inMilliseconds;
+    return left <= 0 ? 0 : (left / 1000).ceil();
+  }
+}
+
 /// One channel with the depth it sits at, ready to render as a flat list.
 class TreeRow {
   const TreeRow({required this.depth, required this.channel, required this.hasChildren});
@@ -55,6 +82,14 @@ class ServerView {
   Server? server;
   ServerInfo? info;
   ConnectionState connection = ConnectionState.disconnected;
+
+  /// The retry the core has scheduled, while a dropped session recovers.
+  ///
+  /// Null whenever none is pending. The banner keys off [connection] to decide
+  /// whether to appear at all and uses this only to say how long is left — a
+  /// session that is reconnecting but has not yet been given a delay still has
+  /// something worth saying.
+  ReconnectProgress? reconnect;
 
   final Map<int, Channel> channels = {};
   final Map<int, Client> clients = {};
@@ -164,15 +199,29 @@ class ServerView {
         // switcher showed every live server as 「未连接」, and the composer
         // stayed disabled, because nothing else ever set this.
         connection = ConnectionState.connected;
+        // Whatever was being retried has arrived, and the countdown that was
+        // running for it is about a moment that has passed.
+        reconnect = null;
 
       case ServerInfoChangedEvent(:final info):
         this.info = info;
 
       case ConnectionStateChangedEvent(:final state):
         connection = state;
+        // A scheduled retry only means anything while the session is actually
+        // recovering. Any other state supersedes it — including the next attempt
+        // starting, which would otherwise leave the previous delay on screen.
+        if (state != ConnectionState.reconnecting) reconnect = null;
 
       case DisconnectedEvent():
         connection = ConnectionState.disconnected;
+        reconnect = null;
+
+      case ReconnectScheduledEvent(:final attempt, :final delayMs):
+        // Kept rather than ignored: this is the only thing that knows *when* the
+        // next attempt is, and a banner that cannot count down is not worth the
+        // space it takes.
+        reconnect = ReconnectProgress(attempt: attempt, delayMs: delayMs);
 
       case ChannelCreatedEvent(:final channel) || ChannelUpdatedEvent(:final channel):
         channels[channel.id] = channel;
@@ -228,7 +277,6 @@ class ServerView {
         voice = state;
 
       // Not part of the rendered state.
-      case ReconnectScheduledEvent():
       case PokedEvent():
       case SpeakingEvent():
       case ErrorEvent():

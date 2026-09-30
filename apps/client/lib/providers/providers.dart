@@ -111,6 +111,20 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     );
   }
 
+  /// Asks the core to close a session, and stops showing it.
+  ///
+  /// Optimistic: the view goes as soon as the user asks, rather than when the
+  /// core confirms, because sitting on a dead session while a command round
+  /// trips is exactly the wait they were trying to end. A failure still arrives
+  /// as a command result and is reported like any other.
+  ///
+  /// The one caller is the reconnect banner's 「断开」: retrying forever is the
+  /// right default for a dropped connection, but only if the user can stop it.
+  void disconnect(int session) {
+    ref.read(rustClientProvider).disconnect(session);
+    forget(session);
+  }
+
   /// Forgets a session, as after a clean disconnect.
   void forget(int session) {
     final next = {...state}..remove(session);

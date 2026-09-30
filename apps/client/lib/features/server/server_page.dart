@@ -3,14 +3,18 @@
 // Mirrors the reference layout: a channel sidebar on the left, the message list
 // on the right, and the voice controls pinned to the bottom of the sidebar.
 
-import 'package:flutter/material.dart';
+// `ConnectionState` is hidden because `material.dart` exports a different one
+// (a `FutureBuilder`'s), and this file means the session's.
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
 import '../voice/voice_bar.dart';
 import 'channel_sidebar.dart';
 import 'chat_panel.dart';
+import 'reconnect_banner.dart';
 
 /// One connected server.
 class ServerPage extends ConsumerWidget {
@@ -24,8 +28,8 @@ class ServerPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final view = ref.watch(sessionsProvider)[session];
 
-    // The store drops a session the moment it is disconnected, so this is a
-    // normal transition rather than an error.
+    // Reached only when the session was deliberately forgotten — losing a
+    // connection keeps the view, precisely so a reconnect can fill it back in.
     if (view == null) {
       return const Scaffold(
         body: Center(child: Text('会话已结束', style: TextStyle(color: AppColors.textSecondary))),
@@ -37,15 +41,23 @@ class ServerPage extends ConsumerWidget {
     // version left the bar unpainted here while this one does not — and the
     // Scaffold is also the idiomatic place for chrome that spans the window.
     return Scaffold(
-      // NOTE: in this environment the bottom of the window is clipped — see
-      // docs/client.md. The bar is correct; the window is a third too small.
       bottomNavigationBar: VoiceBar(session: session),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          SizedBox(width: 288, child: ChannelSidebar(view: view)),
-          const VerticalDivider(width: 1, color: AppColors.divider),
-          Expanded(child: ChatPanel(view: view)),
+          // Above the content rather than over it: a strip that covered the
+          // first channel row would be read once and then be in the way.
+          if (view.connection == ConnectionState.reconnecting)
+            ReconnectBanner(session: session),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 288, child: ChannelSidebar(view: view)),
+                const VerticalDivider(width: 1, color: AppColors.divider),
+                Expanded(child: ChatPanel(view: view)),
+              ],
+            ),
+          ),
         ],
       ),
     );

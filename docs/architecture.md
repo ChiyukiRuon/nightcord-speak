@@ -44,6 +44,11 @@ wire 处理放在 `ts-protocol-tsclient`，上面两个 crate 各自只声明「
 `ts-identity` 只依赖 `ts-model`；它把身份当作「生命周期与存储」问题，不碰密码学，
 所以不依赖任何协议库。
 
+**重连策略归 actor，不归 `tsclientlib`。** 库自带的内部重连延迟写死、且只在连接超时时
+生效，外层要按 §35 的退避表接管就必须能关掉它（fork 的 `ReconnectMode::External`）。
+两层各有一套退避会互相抢控制权——只有一层能告诉用户「还有几秒」。
+细节见 [`docs/reconnect.md`](reconnect.md)。
+
 **`ts-identity` 为什么连应用数据目录一起管**：`app_data_root()` 是全项目唯一知道
 「本应用的每用户目录在哪」的地方（Windows 的 `%APPDATA%`、macOS 的
 `Application Support`、Linux 的 XDG 各家不同）。身份是最先需要它的使用者，日志随后，
