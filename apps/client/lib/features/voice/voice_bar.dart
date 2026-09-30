@@ -59,6 +59,25 @@ class VoiceBar extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
+          // Sits between the name and the microphone on purpose: it ends the
+          // session, so it should not be the thing next to the button pressed
+          // twenty times an hour. The same call the reconnect banner's 「断开」
+          // makes — there is one definition of what disconnecting does.
+          //
+          // No confirmation. `disconnect` also forgets the session, so the
+          // channel tree and the conversation go with it, and that is a heavier
+          // consequence than the one click suggests. It is left unguarded to
+          // match the banner, which has asked for no confirmation since it was
+          // written; a dialog here is a one-line change if it turns out to be
+          // too easy to hit.
+          _VoiceButton(
+            icon: Icons.link_off,
+            tooltip: l10n.voiceDisconnect,
+            // Nothing to disconnect from while the core is still retrying —
+            // and the banner already offers it for that case.
+            enabled: online,
+            onPressed: () => ref.read(sessionsProvider.notifier).disconnect(session),
+          ),
           _VoiceButton(
             icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
             tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,

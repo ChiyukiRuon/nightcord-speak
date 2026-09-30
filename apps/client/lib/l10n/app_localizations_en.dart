@@ -370,6 +370,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceUnmuteMic => 'Unmute microphone';
 
   @override
+  String get voiceDisconnect => 'Disconnect from the server';
+
+  @override
   String get voiceMuteMic => 'Mute microphone';
 
   @override

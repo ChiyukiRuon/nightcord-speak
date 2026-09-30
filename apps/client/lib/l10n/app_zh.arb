@@ -117,6 +117,7 @@
   "bannerDisconnect": "断开",
 
   "voiceUnmuteMic": "取消静音",
+  "voiceDisconnect": "断开连接",
   "voiceMuteMic": "静音麦克风",
   "voiceUndeafen": "取消耳聋",
   "voiceDeafen": "耳聋（关闭扬声器）",

@@ -41,8 +41,18 @@ import 'package:nightcord_client/state/server_view.dart';
 class _SilentTransport implements ClientTransport {
   final StreamController<FfiEvent> _events = StreamController<FfiEvent>.broadcast();
 
+  /// The commands this transport was asked to perform.
+  ///
+  /// Only [disconnect] is recorded: it is the one command a page in this file
+  /// *initiates*, as opposed to the ones fired on open that nothing asserts
+  /// about. Everything else still falls through to `noSuchMethod`.
+  final List<String> calls = [];
+
   @override
   Stream<FfiEvent> get events => _events.stream;
+
+  @override
+  void disconnect(int session) => calls.add('disconnect:$session');
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -177,10 +187,13 @@ ServerView _view() {
   return view;
 }
 
-ProviderContainer _container({ServerView? view, bool notices = false}) =>
-    ProviderContainer.test(
+ProviderContainer _container({
+  ServerView? view,
+  bool notices = false,
+  _SilentTransport? transport,
+}) => ProviderContainer.test(
       overrides: [
-        clientTransportProvider.overrideWithValue(_SilentTransport()),
+        clientTransportProvider.overrideWithValue(transport ?? _SilentTransport()),
         activeSessionProvider.overrideWith(() => _FixedActive()),
         settingsProvider.overrideWith(() => _FixedSettings()),
         audioDevicesProvider.overrideWith(() => _FixedDevices()),
@@ -251,6 +264,28 @@ void main() {
     // timer, so settling would wait for every one of them to go.
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the voice bar disconnects the session', (tester) async {
+    // The button sits in the bottom bar, right of one's own name. It ends the
+    // connection *and* forgets the session, so what it calls matters: it is the
+    // same `SessionsNotifier.disconnect` the reconnect banner uses, and this
+    // checks the tap reaches it rather than only that the icon is drawn.
+    final transport = _SilentTransport();
+    final container = _container(view: _view(), transport: transport);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // By icon rather than by tooltip: the tooltip is translated, the glyph is
+    // not.
+    expect(find.byIcon(Icons.link_off), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.link_off));
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('disconnect:1'));
+    expect(container.read(sessionsProvider), isEmpty);
   });
 
   testWidgets('a session that has been forgotten', (tester) async {

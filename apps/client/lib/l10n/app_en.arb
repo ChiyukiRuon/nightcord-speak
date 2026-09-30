@@ -508,6 +508,10 @@
   },
 
   "voiceUnmuteMic": "Unmute microphone",
+  "voiceDisconnect": "Disconnect from the server",
+  "@voiceDisconnect": {
+    "description": "Tooltip of the button that closes the current server connection"
+  },
   "@voiceUnmuteMic": {
     "description": "Tooltip of the microphone button while muted"
   },

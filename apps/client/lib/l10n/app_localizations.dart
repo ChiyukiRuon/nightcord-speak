@@ -746,6 +746,12 @@ abstract class AppLocalizations {
   /// **'Unmute microphone'**
   String get voiceUnmuteMic;
 
+  /// Tooltip of the button that closes the current server connection
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect from the server'**
+  String get voiceDisconnect;
+
   /// Tooltip of the microphone button while open
   ///
   /// In en, this message translates to:

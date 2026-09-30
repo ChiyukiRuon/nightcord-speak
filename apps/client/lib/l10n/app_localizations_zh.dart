@@ -358,6 +358,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceUnmuteMic => '取消静音';
 
   @override
+  String get voiceDisconnect => '断开连接';
+
+  @override
   String get voiceMuteMic => '静音麦克风';
 
   @override
