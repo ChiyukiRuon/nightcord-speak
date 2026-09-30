@@ -76,16 +76,41 @@ flutter:
   # analyze.
   generate: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # --- UI fonts (docs/UI字体规范.md) -----------------------------------------
+  #
+  # **These files are not in the repository.** They are ~20 MB of binary that
+  # never changes, so `scripts/fetch-fonts.sh` downloads them and
+  # `assets/fonts/` is gitignored. A build without them fails on a missing
+  # asset — deliberately, because the alternative is every screen quietly
+  # rendering in whatever the platform calls its default font, which is the
+  # inconsistency `docs/UI字体规范.md` exists to remove. Run the script once
+  # after cloning; `AGENTS.md` §3.2 lists it with the other prerequisites.
+  #
+  # Both are **variable** fonts: one file carries every weight, so neither
+  # declares `weight:` here. A weight is selected with
+  # `TextStyle.fontVariations` — see `AppTypography`, which sets it (and
+  # `fontWeight` beside it) for every style in the scale.
+  #
+  # Only the two families the app's locales need are bundled (`en` and `zh` —
+  # see `l10n.yaml`); §9 of the specification is explicit that a language the
+  # app does not ship should not be paid for in bundle size. Text in other
+  # languages still renders through Flutter's per-glyph system fallback, the
+  # same mechanism §8 relies on for emoji.
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Variable.ttf
 
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Variable.ttf
 
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
+  # The fonts' own licence. OFL §1 requires it to travel with the font, and it
+  # is fetched alongside them because it is not in the repository either. An
+  # asset rather than a font family: it is a text file, and declaring it as a
+  # face would have Flutter try to parse it as one.
+  assets:
+    - assets/fonts/OFL.txt
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a

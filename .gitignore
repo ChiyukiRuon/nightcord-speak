@@ -11,6 +11,12 @@ build/
 .flutter-plugins-dependencies
 pubspec.lock
 
+# The UI fonts (~20 MB of Noto Sans CJK). `pubspec.yaml` declares them, so a
+# build without them fails; `scripts/fetch-fonts.sh` puts them there. They are
+# not committed because they are large, immutable, and one HTTP request away —
+# see that script's header and `docs/UI字体规范.md`.
+apps/client/assets/fonts/
+
 # --- IDE -------------------------------------------------------------------
 .idea/
 .vscode/
