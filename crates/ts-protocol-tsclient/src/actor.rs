@@ -33,7 +33,7 @@ use ts_identity::IdentityStore;
 use ts_model::{
     ChannelId, ClientError, ClientId, ConnectionState, Message, MessageId, MessageTarget,
     NetworkError, PermissionError, Permissions, ProtocolError, ReconnectPolicy, Server, ServerInfo,
-    ServerState, SessionId, VoiceError, VoiceState,
+    ServerState, SessionId, Speaking, VoiceError, VoiceState,
 };
 
 use tsclientlib::events::Event as BookEvent;
@@ -54,6 +54,14 @@ use crate::{convert, diff};
 /// mono — see `ts-audio`'s `format` module, which owns the matching constants
 /// for the capture side.
 const AUDIO_FRAME_SAMPLES: usize = 1920;
+
+/// How long one of those frames lasts, and therefore how often the jitter
+/// buffer may be drained.
+///
+/// It is a clock, not a batch size: the far end plays at 48 kHz and can consume
+/// exactly 50 frames a second. Draining faster produces frames nothing can
+/// play, and draining slower starves the speaker.
+const AUDIO_FRAME_MS: u64 = 20;
 
 /// Where a command's outcome is delivered.
 pub(crate) type Reply = oneshot::Sender<Result<(), ClientError>>;
@@ -317,6 +325,8 @@ impl std::fmt::Debug for Context {
 enum Outcome {
     Stream(Option<Result<StreamItem, tsclientlib::Error>>),
     Command(Command),
+    /// The audio clock ticked: one frame of playback is due.
+    AudioTick,
     /// The command channel closed, which means every handle was dropped.
     Closed,
 }
@@ -497,6 +507,21 @@ async fn serve(
     // without this the ending would be indistinguishable from a clean close.
     let mut dropped = false;
 
+    // The audio clock.
+    //
+    // `StreamItem::Audio` only *fills* the jitter buffer; draining it happens
+    // here, one frame per tick, because 48 kHz is the only rate the far end can
+    // play. Draining on the packet path — the same arm the packets arrive on —
+    // made the frame rate follow the *packet* rate instead: measured at 60 to
+    // 100 frames a second for a 50 fps talker, so a fifth to a half of every
+    // second was produced only to be thrown away by whatever was listening.
+    // `webspeak3`'s connector paces it exactly this way, for the same reason.
+    let mut ticker = tokio::time::interval(Duration::from_millis(AUDIO_FRAME_MS));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // The first tick fires immediately. Nothing has been buffered yet, so it
+    // would be a no-op anyway; consuming it keeps the cadence honest.
+    ticker.tick().await;
+
     loop {
         let mut stream = connection.events();
         let outcome = tokio::select! {
@@ -505,10 +530,21 @@ async fn serve(
                 Some(command) => Outcome::Command(command),
                 None => Outcome::Closed,
             },
+            _ = ticker.tick() => Outcome::AudioTick,
         };
         drop(stream);
 
         match outcome {
+            Outcome::AudioTick => {
+                // An empty buffer means nobody is talking: pumping anyway would
+                // push silence at the audio rate forever, which is bandwidth
+                // spent to say nothing and a stream the far end cannot tell
+                // from a quiet room. `tsclientlib` keeps a queue only while a
+                // talker is live, so this is exactly "somebody is talking".
+                if !audio.handler.get_queues().is_empty() {
+                    pump_audio(audio, context);
+                }
+            }
             Outcome::Stream(Some(Ok(StreamItem::DisconnectedTemporarily(reason)))) => {
                 // Handled here rather than in `handle_item`, because it decides
                 // what the *end* of the stream means. The session and its
@@ -688,11 +724,37 @@ fn handle_item(
             let Some(from) = sender_of(&packet) else {
                 return;
             };
-            if let Err(error) = audio.handler.handle_packet(from, packet) {
-                tracing::debug!(%error, "dropped an incoming voice packet");
-                return;
+            match audio.handler.handle_packet(from, packet) {
+                // Whoever started talking. The handler reports only the
+                // transition, which is the shape the front-ends want: speaking
+                // is not a property of a client — it flips several times a
+                // second — so it travels as an event and is never stored.
+                Ok(Some(started)) => context.publish(ClientEvent::Speaking(Speaking {
+                    client_id: ClientId::new(started.0),
+                    speaking: true,
+                })),
+                Ok(None) => {}
+                Err(error) => tracing::debug!(%error, "dropped an incoming voice packet"),
             }
-            pump_audio(audio, context);
+            // Deliberately no `pump_audio` here: this arm only fills the jitter
+            // buffer. Draining belongs to the audio clock — see `serve`.
+        }
+
+        StreamItem::AudioChange(change) => {
+            // The library derives both directions from the *server's* view of
+            // our own client, and it is the only thing in the process that
+            // knows: a mute we asked for, one the server applied on its own, a
+            // channel that took our talk power away. Dropping this is how
+            // "deafened, undeafened, still silent" stays invisible — the sink
+            // sees no packets either way, and the server never says why.
+            match change {
+                tsclientlib::AudioEvent::CanSendAudio(can) => {
+                    tracing::info!(can, "the server's view of our microphone changed");
+                }
+                tsclientlib::AudioEvent::CanReceiveAudio(can) => {
+                    tracing::info!(can, "the server's view of our speakers changed");
+                }
+            }
         }
 
         StreamItem::BookEvents(events) => {
@@ -739,9 +801,10 @@ fn sender_of(packet: &InAudioBuf) -> Option<tsclientlib::ClientId> {
 
 /// Mixes whatever is buffered and hands it to the sink.
 ///
-/// Called once per received packet, which is the natural frame rate: one packet
-/// carries one 20 ms frame, so mixing once per packet keeps the mixer in step
-/// with the audio it is consuming.
+/// Called once per audio-clock tick, never per packet: the stream fills the
+/// buffer and the clock drains it, and the two rates are independent — one
+/// packet per 20 ms is a property of the talker, not a promise the receiver can
+/// build on.
 fn pump_audio(audio: &mut Audio, context: &Arc<Context>) {
     let Some(sink) = context.audio_sink() else {
         return;
@@ -759,7 +822,14 @@ fn pump_audio(audio: &mut Audio, context: &Arc<Context>) {
     sink.push(&audio.mix);
 
     for client in stopped {
-        tracing::trace!(client = %client.0, "client stopped talking");
+        // The other half of the same signal, and the reason it is an event
+        // pair rather than a flag: a talking indicator has to go *out* as
+        // reliably as it comes on, or the tree keeps lighting up names that
+        // went quiet minutes ago.
+        context.publish(ClientEvent::Speaking(Speaking {
+            client_id: ClientId::new(client.0),
+            speaking: false,
+        }));
     }
 }
 
@@ -1013,11 +1083,44 @@ fn handle_command(
         Command::SetVoiceState { state, reply } => {
             // Told to the server, not just kept locally: it is what lets other
             // clients grey out the speaker instead of receiving silence.
+            //
+            // Logged because announcing a state has side effects at the
+            // server: one revision of the gateway sent a `clientupdate` at
+            // every voice start and stopped receiving audio, and a line here
+            // is what distinguishes "we told the server something" from "the
+            // audio just stopped".
+            tracing::debug!(
+                input_muted = state.input_muted,
+                output_muted = state.output_muted,
+                "announcing the voice state to the server"
+            );
             let part = {
                 let Ok(book) = connection.get_state() else {
                     let _ = reply.send(Err(not_connected()));
                     return;
                 };
+                // What the server last told us about our own client, beside
+                // what we are about to ask for.
+                //
+                // This is the only place the answer can appear. A `clientupdate`
+                // cannot carry `client_outputonly_muted` — the field is not in
+                // the message's attribute list — and `notifyclientupdated` does
+                // not mention it either, so the book learns it only from
+                // `ClientEnterView`, `ClientInfo` and `InitServer`. Reading it
+                // back here is what separates "the server cleared it and went
+                // on refusing anyway" from "the book never heard about it at
+                // all".
+                if let Some(own) = book.clients.get(&book.own_client) {
+                    tracing::info!(
+                        asked_input_muted = state.input_muted,
+                        asked_output_muted = state.output_muted,
+                        book_input_muted = own.input_muted,
+                        book_output_muted = own.output_muted,
+                        book_output_only_muted = own.output_only_muted,
+                        book_output_hardware = own.output_hardware_enabled,
+                        "what the server believes about our own client"
+                    );
+                }
                 book.client_update()
                     .set_input_muted(state.input_muted)
                     .set_output_muted(state.output_muted)
