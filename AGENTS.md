@@ -273,8 +273,8 @@ cd apps/client && flutter gen-l10n
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 355 个
-cd apps/client && flutter analyze && flutter test                  # 158 个
+cargo test  --workspace --all-features                             # 357 个
+cd apps/client && flutter analyze && flutter test                  # 191 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -392,9 +392,9 @@ cd apps/client && flutter analyze && flutter test                  # 158 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **21,065 行**，16 crates + CLI + gateway |
-| Dart | **14,082 行**，64 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **355 Rust + 158 Dart**，全绿  |
+| Rust | **21,105 行**，16 crates + CLI + gateway |
+| Dart | **14,963 行**，64 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **357 Rust + 191 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -627,12 +627,11 @@ cd apps/client && flutter analyze && flutter test                  # 158 个
 - [ ] **布局那一层**：配色规范 §19/§28 的 Server Rail + 独立成员栏、§29/§30 的
       移动端 Shell、§10 的自绘窗口标题栏。token 与组件已就位，改的是结构。
 - [ ] **§19 的侧栏宽度**：现状 288，规范给 240–280（代码里有注释）。
-- [ ] **§27 的动效**只用到一处（聊天滚到底），其余时长与曲线备好未用。
-- [ ] **§29 的完整无障碍走查**：目前只做到「颜色不是唯一信号」。
+- [ ] **§34 的动效**只用到一处（聊天滚到底），其余时长与曲线备好未用。
+- [ ] **§36 的完整无障碍走查**：目前只做到「颜色不是唯一信号」。
 - [ ] **繁中 / 日 / 韩字体**：现在只打包了 en + zh，其余靠逐字系统回退。
       加一种要三处一起改（字体文件、`pubspec.yaml`、`app_fonts.dart` 的分支），
       只加分支会指向一个不存在的家族而**静默**用上系统字体。
-- [ ] **浅色主题**：§30 要求重新设计而不是 `Color.lerp` 推导，尚未做。
 
 ### Phase 7 欠账（见 [`docs/gateway.md`](docs/gateway.md)）
 

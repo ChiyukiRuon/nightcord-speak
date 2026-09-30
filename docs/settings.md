@@ -64,7 +64,8 @@
     "push_to_talk": { "key": 458771, "ctrl": true, "shift": true, "alt": false, "meta": false }
   },
   "ui": {
-    "language": null
+    "language": null,
+    "theme":    null
   }
 }
 ```
@@ -77,6 +78,12 @@
 `settings.json` 是应用唯一的偏好文件，为前端的偏好另开存储会多出第二个真相。一个不认识的
 值（手改的 `"fr"`）按「跟随系统」处理而**不会**让整个文件算坏，值本身也保留。细节见
 [`docs/localization.md`](localization.md)。
+
+`ui.theme` 是 `"nightcord"` / `"black"` / `"white"` / `"system"`。这里 `null` 的含义
+**和 `language` 不一样**——它不是「跟随系统」，而是**默认主题 Nightcord**：一个写在
+这个键存在之前的文件应当表示「应用发什么就是什么」，而不是把今天的默认值冻进文件。
+「跟随系统」是一个要显式选的值（`"system"`），因为在系统深色时用 Black、浅色时用
+White 是一对主题而不是一种模式。三套主题见 [`docs/ui.md`](ui.md)。
 
 `input_device` / `output_device` 是 cpal 的 `"<host>:<device>"`，`null` 表示系统默认。
 想知道该填什么，`cargo run -p ts-audio --example list_devices`。
