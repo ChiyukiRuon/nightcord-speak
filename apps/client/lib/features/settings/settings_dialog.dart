@@ -9,6 +9,8 @@
 // values survive closing the dialog and restarting the app. Before that they
 // lived in this widget's state and were gone the moment it was dismissed.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,6 +19,7 @@ import '../../models/domain.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../models/voice_status.dart';
 import '../../util/reveal.dart';
 
 /// Settings, opened from the voice bar.
@@ -36,6 +39,16 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   late final TextEditingController _profile = TextEditingController();
   bool _started = false;
 
+  /// Asks the core for the meter reading, and — far more slowly — re-enumerates
+  /// the devices so a headset plugged in while this is open shows up.
+  ///
+  /// Two rates because they cost very different amounts: the status is a read of
+  /// numbers the engine already has, while enumeration is a synchronous
+  /// round-trip to the audio host that runs on the worker and stalls every other
+  /// command while it happens.
+  Timer? _statusTicker;
+  Timer? _devicesTicker;
+
   /// Where the sensitivity slider is while it is being dragged.
   ///
   /// Kept apart from the stored settings so a drag does not write the file once
@@ -53,6 +66,17 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     client.requestAudioDevices('input');
     client.requestAudioDevices('output');
 
+    // A dialog that is open is a dialog someone is looking at, so this is the
+    // only time either timer needs to run.
+    _statusTicker = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (mounted) ref.read(voiceStatusProvider.notifier).refresh();
+    });
+    _devicesTicker = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      client.requestAudioDevices('input');
+      client.requestAudioDevices('output');
+    });
+
     // The text fields are seeded once the core answers. They cannot be filled
     // from `build`, and cannot be filled before the answer arrives — see the
     // guard in `build` for why the form is not drawn until then.
@@ -67,6 +91,8 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
 
   @override
   void dispose() {
+    _statusTicker?.cancel();
+    _devicesTicker?.cancel();
     _nickname.dispose();
     _profile.dispose();
     super.dispose();
@@ -142,6 +168,8 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   _audio(settings, settings.audio.copyWith(mode: mode));
                 },
               ),
+              const SizedBox(height: 12),
+              _DeviceInUse(status: ref.watch(voiceStatusProvider)),
               const SizedBox(height: 16),
               _SensitivitySlider(
                 value: _dragging ?? settings.audio.activation.sensitivity,
@@ -157,6 +185,11 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   );
                 },
               ),
+              const SizedBox(height: 8),
+              _LevelMeter(
+                status: ref.watch(voiceStatusProvider),
+                threshold: settings.audio.activation.sensitivity,
+              ),
               const SizedBox(height: 12),
               // Said out loud because a device cannot be swapped under a running
               // stream: the core would have to tear it down and reopen it, which
@@ -168,13 +201,25 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
-                  onPressed: (_started || !connected) ? null : _startVoice,
-                  child: const Text('开始语音'),
-                ),
+              Row(
+                children: [
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+                    onPressed: (_started || !connected) ? null : _startVoice,
+                    child: const Text('开始语音'),
+                  ),
+                  const SizedBox(width: 12),
+                  // Only meaningful with an engine: it owns the output device,
+                  // and a second stream on the same speakers is not something
+                  // the OS allows anyway.
+                  OutlinedButton.icon(
+                    onPressed: (ref.watch(voiceStatusProvider)?.running ?? false)
+                        ? () => ref.read(voiceStatusProvider.notifier).testOutput()
+                        : null,
+                    icon: const Icon(Icons.volume_up_outlined, size: 18),
+                    label: const Text('测试扬声器'),
+                  ),
+                ],
               ),
 
               const Divider(height: 32),
@@ -273,6 +318,120 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     // can disagree.
     ref.read(rustClientProvider).voiceStart(widget.session);
     setState(() => _started = true);
+  }
+}
+
+/// What the engine actually has open, and whether it is what was asked for.
+///
+/// The line that answers "why can nobody hear me": a saved device that has been
+/// unplugged falls back to the system default silently, so without this a user
+/// can spend a long time talking into a microphone that is not the one they
+/// chose.
+class _DeviceInUse extends StatelessWidget {
+  const _DeviceInUse({required this.status});
+
+  final VoiceStatus? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = this.status;
+    final input = status?.input;
+
+    if (status == null || !status.running) {
+      return const Text(
+        '尚未开始语音。开始语音后，这里会显示实际在用的设备与麦克风电平。',
+        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '正在使用：${input?.displayName ?? "没有麦克风"}',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        if (input?.fellBack ?? false)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              '你选的麦克风不在了，正在使用系统默认。',
+              style: TextStyle(fontSize: 12, color: AppColors.idle),
+            ),
+          ),
+        if (!status.healthy)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              '设备在使用中断开了。重新开始语音可以恢复。',
+              style: TextStyle(fontSize: 12, color: AppColors.danger),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A bar that moves with the microphone, with the transmission threshold drawn
+/// on it.
+///
+/// The threshold line is the point: the sensitivity slider above it was
+/// previously adjusted blind, with only a percentage as feedback.
+class _LevelMeter extends StatelessWidget {
+  const _LevelMeter({required this.status, required this.threshold});
+
+  final VoiceStatus? status;
+  final double threshold;
+
+  @override
+  Widget build(BuildContext context) {
+    final running = status?.running ?? false;
+    final level = running ? (status?.level ?? 0.0) : 0.0;
+    final transmitting = running && (status?.transmitting ?? false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: AppColors.composer,
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+            // Clamped: a level can exceed the bar, and a FractionallySizedBox
+            // over 1.0 throws rather than clipping.
+            FractionallySizedBox(
+              widthFactor: level.clamp(0.0, 1.0),
+              child: Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  color: transmitting ? AppColors.live : AppColors.textSecondary,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: threshold.clamp(0.0, 1.0),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(width: 2, height: 16, color: AppColors.accent),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          running
+              ? (transmitting ? '正在传输' : '低于阈值，未传输')
+              : '麦克风电平（开始语音后显示）',
+          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+        ),
+      ],
+    );
   }
 }
 
@@ -437,12 +596,22 @@ class _DeviceDropdown extends StatelessWidget {
     // what actually happens.
     final known = devices.any((device) => device.id == value) ? value : null;
 
+    // `initialValue` is read once and `FormFieldState` never reacts to it
+    // changing, so a dropdown built while the list was still empty would show
+    // 「系统默认」 for the rest of the dialog's life — the items arriving would
+    // not correct the selection. Keying on the list rebuilds it when one does.
     return DropdownButtonFormField<String>(
+      key: ObjectKey(devices),
       initialValue: known,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
-        helperText: value != null && known == null ? '上次选的设备不在了，将使用系统默认' : null,
+        // Only once there is a list to have not found it in: an empty or
+        // failed enumeration is not evidence that anything is gone, and saying
+        // so would send someone looking for a device that is still plugged in.
+        helperText: value != null && known == null && devices.isNotEmpty
+            ? '上次选的设备不在了，将使用系统默认'
+            : null,
       ),
       items: [
         const DropdownMenuItem(value: null, child: Text('系统默认')),

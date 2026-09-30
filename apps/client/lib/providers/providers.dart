@@ -11,6 +11,7 @@ import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/bookmarks.dart';
 import '../models/settings.dart';
+import '../models/voice_status.dart';
 import '../state/notifications.dart';
 import '../state/server_view.dart';
 import '../util/system_notifications.dart';
@@ -158,6 +159,10 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 }
 
 /// The audio devices the core last reported, by direction.
+final voiceStatusProvider = NotifierProvider<VoiceStatusNotifier, VoiceStatus?>(
+  VoiceStatusNotifier.new,
+);
+
 final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(
   BookmarksNotifier.new,
 );
@@ -253,6 +258,37 @@ class SettingsNotifier extends Notifier<Settings?> {
     if (data == null) return;
 
     state = Settings.fromJson(data);
+  }
+}
+
+/// What the audio engine is doing, as of the last time it was asked.
+///
+/// Null until the first answer. Everything that draws a meter asks for a fresh
+/// one on its own timer — this only holds what came back, the same way
+/// `AudioDevicesNotifier` does.
+class VoiceStatusNotifier extends Notifier<VoiceStatus?> {
+  @override
+  VoiceStatus? build() {
+    ref.listen(eventStreamProvider, (_, next) {
+      final event = next.value;
+      if (event is CommandResultEvent) _collect(event.result);
+    });
+    return null;
+  }
+
+  /// Asks the core what the engine is doing.
+  void refresh() => ref.read(rustClientProvider).requestVoiceStatus();
+
+  /// Plays a test tone through the speakers.
+  void testOutput() => ref.read(rustClientProvider).testOutput();
+
+  void _collect(CommandResult result) {
+    if (result.command != 'voice_status' || !result.ok) return;
+
+    final data = result.data;
+    if (data == null) return;
+
+    state = VoiceStatus.fromJson(data);
   }
 }
 

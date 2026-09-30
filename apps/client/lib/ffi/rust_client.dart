@@ -246,6 +246,18 @@ class RustClient {
   /// Push-to-talk key down or up (§30).
   void setPushToTalk(bool held) => _bindings.voicePushToTalk(_handle, held);
 
+  /// Asks what the audio engine is doing.
+  ///
+  /// The answer arrives as a `voice_status` [CommandResult]. Pulled rather than
+  /// pushed on purpose: the engine produces a frame every 20 ms, and a status
+  /// event at that rate would fill the event queue the app also reads messages
+  /// and notifications from.
+  void requestVoiceStatus() => _bindings.voiceStatus(_handle);
+
+  /// Plays a short tone through the speakers, so the user can hear whether they
+  /// work.
+  void testOutput() => _bindings.voiceTestOutput(_handle);
+
   /// Asks for the preferences.
   ///
   /// The answer arrives as a `settings` [CommandResult] whose `data` is the

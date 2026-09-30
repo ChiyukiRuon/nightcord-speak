@@ -180,8 +180,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 298 个
-cd apps/client && flutter analyze && flutter test                  # 91 个
+cargo test  --workspace --all-features                             # 304 个
+cd apps/client && flutter analyze && flutter test                  # 98 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -260,7 +260,7 @@ cd apps/client && flutter analyze && flutter test                  # 91 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 logging / 重连 / 设置 / 书签 / 通知 已完成 |
+| M0.6     | Production Client               | 🚧 前五项已完成，剩快捷键 / 本地化 / 崩溃上报 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -277,9 +277,9 @@ cd apps/client && flutter analyze && flutter test                  # 91 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **16,057 行**，13 crates + CLI |
-| Dart | **7,757 行**，32 文件          |
-| 测试 | **298 Rust + 91 Dart**，全绿   |
+| Rust | **16,544 行**，13 crates + CLI |
+| Dart | **8,192 行**，34 文件          |
+| 测试 | **304 Rust + 98 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -376,6 +376,19 @@ cd apps/client && flutter analyze && flutter test                  # 91 个
 | 规则本身 | ✅ 18 条纯 Dart 测试：每个开关、正在看的线程、自己的消息、2 秒静默窗、重连重放、离场者名字 |
 | **未读点** | ⚠️ 只有单测——测试服务器只有一个频道，而 CLI 没有发私聊的参数，端到端制造不出「没在看的线程」 |
 
+**设备管理（M0.6 第六项）**
+
+| 项 | 结果 |
+| --- | --- |
+| 「正在使用」哪一个设备 | ✅ 实测截图：**「正在使用：麦克风（ROG CARNYX）」**——引擎报出实际打开的那个 |
+| 麦克风电平表 | ✅ 实测截图：播放声音时电平条有读数，且标着「低于阈值，未传输」 |
+| 阈值线 | ✅ 截图里可见（紫色竖线在 5% 处），滑块因此不再盲调 |
+| 测试扬声器按钮的状态 | ✅ 两张截图对比：没引擎时**灰**，开始语音后**可用** |
+| 未开始语音时不报错 | ✅ 实测：显示「尚未开始语音…」而不是错误 |
+| 电平在四种模式下都被记录 | ✅ 单测（PTT / 持续 / 静音三种会让闸门短路，是易错处） |
+| `voice_status` 无引擎时的回答 | ✅ 单测：回「都不可用」而不是失败 |
+| **设备被拔掉时的提示** | ⚠️ 只有代码路径——没有真的拔过设备 |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -432,7 +445,10 @@ cd apps/client && flutter analyze && flutter test                  # 91 个
 - [x] **通知** —— 浮层 + 未读点 + 系统通知（桌面 `local_notifier`）。判断规则是纯 Dart、
       可注入时钟，18 条测试。顺带把**私聊界面**做通了（点频道树里的人即可），
       否则私聊通知点了没地方去。见 [`docs/notifications.md`](docs/notifications.md)。
-- [ ] 设备管理（设置对话框里已有雏形）
+- [x] **设备管理** —— 电平表、实际在用哪个设备（含失效回退提示）、测试扬声器、
+      热插拔轮询，全部走一个新命令 `nightcord_voice_status`。顺带修掉两个真 bug：
+      `VoiceStateChanged` 从未被发布过、下拉的 `initialValue` 从不自我纠正。
+      见 [`docs/devices.md`](docs/devices.md)。
 - [ ] 快捷键（目前 PTT 用 `Focus`，非全局）
 - [ ] 本地化
 - [ ] 崩溃上报
@@ -480,6 +496,7 @@ cd apps/client && flutter analyze && flutter test                  # 91 个
 | `docs/settings.md`         | 设置：文件格式、谁读它、损坏文件为什么与身份文件处理不同     |
 | `docs/bookmarks.md`        | 书签：文件格式、明文密码这件事、地址归一化、两处入口的分工   |
 | `docs/notifications.md`    | 通知：三种送达方式、两个坑、为什么不打扰正在看的、Windows toast 依赖 |
+| `docs/devices.md`          | 设备：状态出口、为什么电平是拉不是推、静音着采集就是麦克风测试 |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

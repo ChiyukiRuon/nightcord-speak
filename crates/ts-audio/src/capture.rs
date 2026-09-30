@@ -49,6 +49,8 @@ pub struct Capture {
     /// Held only to keep the stream running: `cpal` stops capture when the
     /// value is dropped, so it is deliberately never read.
     _stream: cpal::Stream,
+    /// Which device this actually is, so a front-end can say so.
+    device: device::Resolved,
     frames: std::sync::mpsc::Receiver<Vec<f32>>,
     format: CaptureFormat,
     /// Cleared by the error callback when the device fails or is unplugged.
@@ -65,7 +67,8 @@ impl Capture {
     /// usable sample format, or [`AudioError::Backend`] for anything the host
     /// reports.
     pub fn open(device_id: Option<&str>) -> Result<Self, AudioError> {
-        let device = device::resolve(Direction::Input, device_id)?;
+        let resolved = device::resolve(Direction::Input, device_id)?;
+        let device = &resolved.device;
         let config = device
             .default_input_config()
             .map_err(|error| AudioError::Backend {
@@ -85,19 +88,19 @@ impl Capture {
         // builder is generic over it; branching per callback is not possible.
         let stream = match sample_format {
             SampleFormat::F32 => {
-                build::<f32>(&device, &stream_config, assembler, Arc::clone(&running))
+                build::<f32>(device, &stream_config, assembler, Arc::clone(&running))
             }
             SampleFormat::I16 => {
-                build::<i16>(&device, &stream_config, assembler, Arc::clone(&running))
+                build::<i16>(device, &stream_config, assembler, Arc::clone(&running))
             }
             SampleFormat::U16 => {
-                build::<u16>(&device, &stream_config, assembler, Arc::clone(&running))
+                build::<u16>(device, &stream_config, assembler, Arc::clone(&running))
             }
             SampleFormat::I32 => {
-                build::<i32>(&device, &stream_config, assembler, Arc::clone(&running))
+                build::<i32>(device, &stream_config, assembler, Arc::clone(&running))
             }
             SampleFormat::F64 => {
-                build::<f64>(&device, &stream_config, assembler, Arc::clone(&running))
+                build::<f64>(device, &stream_config, assembler, Arc::clone(&running))
             }
             other => {
                 tracing::warn!(?other, "microphone offers no sample format we can convert");
@@ -109,8 +112,12 @@ impl Capture {
             message: error.to_string(),
         })?;
 
+        // The device that was *actually* opened, not the one that was asked
+        // for: after a fallback those differ, and logging the request reads as
+        // "your unplugged headset is working".
         tracing::info!(
-            device = device_id.unwrap_or("default"),
+            device = %resolved.id,
+            name = %resolved.name,
             rate = device_rate,
             channels = device_channels,
             "microphone opened"
@@ -120,6 +127,7 @@ impl Capture {
             _stream: stream,
             frames,
             running,
+            device: resolved,
             format: CaptureFormat {
                 device_rate,
                 device_channels,
@@ -144,6 +152,17 @@ impl Capture {
 
     /// Whether the stream is still running.
     ///
+    /// The device that was actually opened, and whether it is the one that was
+    /// asked for.
+    ///
+    /// The two differ after a fallback, and a user who believes they are on a
+    /// headset while the laptop's microphone is live has no other way to find
+    /// out.
+    #[must_use]
+    pub fn device(&self) -> &device::Resolved {
+        &self.device
+    }
+
     /// Goes false when the host reports an error — a microphone unplugged
     /// mid-call, which the UI should surface rather than silently transmit
     /// nothing.

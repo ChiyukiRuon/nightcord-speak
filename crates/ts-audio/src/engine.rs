@@ -25,7 +25,7 @@ use crate::capture::Capture;
 use crate::encoder::OpusEncoder;
 use crate::format::{FRAME_MS, PLAYBACK_SAMPLES, is_full_frame};
 use crate::playback::Playback;
-use crate::vad::{VoiceGate, rms};
+use crate::vad::{VoiceGate, peak, rms};
 
 /// Decides whether a captured frame should be sent.
 ///
@@ -185,7 +185,41 @@ pub struct VoiceEngine {
     output_muted: Arc<AtomicBool>,
     /// Scratch for rendering one frame to stereo before queueing it.
     frame_stereo: Vec<f32>,
+    /// The most recent frame's loudness, for a level meter.
+    ///
+    /// Stored on *every* frame, before the transmission policy is consulted —
+    /// push-to-talk, continuous and muted all bypass the gate, and a meter that
+    /// only moved in voice-activation mode would look broken in the three modes
+    /// people actually use to test a microphone.
+    last_level: f32,
+    /// The most recent frame's peak, for a clipping indicator.
+    last_peak: f32,
+    /// What each side actually opened, when it did.
+    input_device: Option<OpenDevice>,
+    output_device: Option<OpenDevice>,
 }
+
+/// A device that was successfully opened, and whether it is the one that was
+/// asked for.
+///
+/// The distinction matters: `resolve` falls back to the system default when a
+/// saved device is gone, and a user who thinks they are on a headset while the
+/// laptop's built-in microphone is live has no way to find out otherwise.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenDevice {
+    /// The id that was actually opened.
+    pub id: String,
+    /// Its name, as the host reports it.
+    pub name: String,
+    /// Whether the configured device could not be found and this is the
+    /// fallback.
+    pub fell_back: bool,
+}
+
+/// The pitch of the speaker test. Concert A — the note every reference tone
+/// uses, and the one a person is most likely to recognise as "a sound" rather
+/// than as a fault.
+const TEST_TONE_HZ: f32 = 440.0;
 
 /// Routes a backend's decoded audio into the engine's speakers.
 ///
@@ -224,7 +258,50 @@ impl AudioSink for PlaybackSink {
     }
 }
 
+impl From<&crate::device::Resolved> for OpenDevice {
+    fn from(resolved: &crate::device::Resolved) -> Self {
+        Self {
+            id: resolved.id.clone(),
+            name: resolved.name.clone(),
+            fell_back: resolved.fell_back,
+        }
+    }
+}
+
 impl VoiceEngine {
+    /// The loudness of the most recent captured frame, `0.0..=1.0`.
+    ///
+    /// Zero until a frame arrives, and zero forever without a microphone. This
+    /// is what a level meter draws, and why it is worth having: picking a
+    /// device from a list tells you nothing about whether it is picking up
+    /// sound.
+    #[must_use]
+    pub fn input_level(&self) -> f32 {
+        self.last_level
+    }
+
+    /// The peak sample of the most recent captured frame.
+    ///
+    /// Above 1.0 means the input is clipping, which no amount of gain staging
+    /// downstream can undo.
+    #[must_use]
+    pub fn input_peak(&self) -> f32 {
+        self.last_peak
+    }
+
+    /// The microphone actually open, and whether it is the one that was asked
+    /// for.
+    #[must_use]
+    pub fn input_device(&self) -> Option<&OpenDevice> {
+        self.input_device.as_ref()
+    }
+
+    /// The speakers actually open. See [`VoiceEngine::input_device`].
+    #[must_use]
+    pub fn output_device(&self) -> Option<&OpenDevice> {
+        self.output_device.as_ref()
+    }
+
     /// Builds an engine with no devices open.
     ///
     /// # Errors
@@ -239,6 +316,10 @@ impl VoiceEngine {
             policy: TransmitPolicy::new(VoiceActivationMode::default(), settings),
             output_muted: Arc::new(AtomicBool::new(false)),
             frame_stereo: vec![0.0; PLAYBACK_SAMPLES],
+            last_level: 0.0,
+            last_peak: 0.0,
+            input_device: None,
+            output_device: None,
         })
     }
 
@@ -258,6 +339,7 @@ impl VoiceEngine {
     ) -> Result<(), AudioError> {
         let input_failed = match Capture::open(input) {
             Ok(capture) => {
+                self.input_device = Some(OpenDevice::from(capture.device()));
                 self.capture = Some(capture);
                 false
             }
@@ -268,7 +350,10 @@ impl VoiceEngine {
         };
 
         match Playback::open(output) {
-            Ok(playback) => self.playback = Some(Arc::new(playback)),
+            Ok(playback) => {
+                self.output_device = Some(OpenDevice::from(playback.device()));
+                self.playback = Some(Arc::new(playback));
+            }
             Err(error) => {
                 tracing::warn!(%error, "could not open speakers; voice output is unavailable");
                 if input_failed {
@@ -416,10 +501,19 @@ impl VoiceEngine {
             return Ok(Vec::new());
         };
 
+        // Drained before anything is done with them: `measure` needs the engine
+        // mutably, and the capture holds it borrowed for as long as it is
+        // looked at. The channel only ever holds whole frames (the assembler
+        // emits nothing else), so collecting first changes nothing else.
+        let mut frames = Vec::new();
+        while let Some(frame) = capture.try_recv() {
+            frames.push(frame);
+        }
+
         let mut packets = Vec::new();
         let mut first_error = None;
 
-        while let Some(frame) = capture.try_recv() {
+        for frame in frames {
             if !is_full_frame(frame.len()) {
                 // The assembler only emits whole frames, so this cannot happen
                 // — but sending a short frame would corrupt the stream, so it
@@ -428,8 +522,7 @@ impl VoiceEngine {
                 continue;
             }
 
-            let level = rms(&frame);
-            if !self.policy.should_transmit(level, FRAME_MS) {
+            if !self.measure(&frame) {
                 continue;
             }
 
@@ -451,6 +544,19 @@ impl VoiceEngine {
         }
     }
 
+    /// Records what a meter should show, then asks whether to transmit.
+    ///
+    /// Split out so the ordering can be tested without a microphone: the level
+    /// must be recorded *before* the policy runs, because push-to-talk,
+    /// continuous and muted all short-circuit the gate — and those are exactly
+    /// the modes someone uses while testing whether their microphone works.
+    fn measure(&mut self, frame: &[f32]) -> bool {
+        let level = rms(frame);
+        self.last_level = level;
+        self.last_peak = peak(frame);
+        self.policy.should_transmit(level, FRAME_MS)
+    }
+
     /// Queues decoded, mixed stereo audio for playback.
     ///
     /// `interleaved` is what the protocol backend's mixer produced. A muted
@@ -460,6 +566,23 @@ impl VoiceEngine {
         if let Some(sink) = self.sink() {
             sink.push(interleaved);
         }
+    }
+
+    /// Plays a short tone through the speakers.
+    ///
+    /// For "can I hear anything at all" — the question a device list cannot
+    /// answer, and the reason a user opens the settings dialog in the first
+    /// place. Straight to playback, so it is heard and never transmitted.
+    ///
+    /// Quiet on purpose: the playback gain is fixed at 1.0, and a test tone
+    /// that startles someone tells them nothing that turning it down would not.
+    pub fn play_test_tone(&mut self) {
+        let mut phase = 0.0;
+        // A third of a second: long enough to recognise as a tone rather than
+        // as a click, short enough not to be in the way.
+        let samples = crate::format::FRAME_SAMPLES * 16;
+        let mono = crate::tone::sine(TEST_TONE_HZ, 0.2, samples, &mut phase);
+        self.play(&crate::tone::to_stereo(&mono));
     }
 
     /// Queues a frame of silence, so playback keeps up when nobody is talking.
@@ -694,6 +817,55 @@ mod tests {
         policy.reset();
         assert!(!policy.transmitted_last());
         assert!(!policy.is_resume());
+    }
+
+    #[test]
+    fn the_level_is_recorded_in_every_transmission_mode() {
+        // The trap: push-to-talk, continuous and muted all return from
+        // `should_transmit` without ever looking at the level, so a meter filled
+        // in *after* that call would sit at zero in three of the four modes —
+        // including the two people use to check a microphone without
+        // transmitting a word.
+        for mode in [
+            VoiceActivationMode::PushToTalk,
+            VoiceActivationMode::VoiceActivation,
+            VoiceActivationMode::Continuous,
+            VoiceActivationMode::Muted,
+        ] {
+            let mut engine = VoiceEngine::new(VoiceActivationSettings::default()).unwrap();
+            engine.set_mode(mode);
+            assert_eq!(engine.input_level(), 0.0, "{mode:?} starts silent");
+
+            let loud = vec![0.5_f32; crate::format::FRAME_SAMPLES];
+            let _ = engine.measure(&loud);
+
+            assert!(
+                (engine.input_level() - 0.5).abs() < 1e-3,
+                "{mode:?} did not record the level"
+            );
+            assert!(
+                (engine.input_peak() - 0.5).abs() < 1e-3,
+                "{mode:?} did not record the peak"
+            );
+        }
+    }
+
+    #[test]
+    fn muting_does_not_stop_the_meter() {
+        // Muted capture keeps running — `should_transmit` says no, so nothing is
+        // sent — and that is exactly what makes "start voice while muted" a
+        // microphone test.
+        let mut engine = VoiceEngine::new(VoiceActivationSettings::default()).unwrap();
+        engine.set_input_muted(true);
+
+        let quiet = vec![0.02_f32; crate::format::FRAME_SAMPLES];
+        let _ = engine.measure(&quiet);
+
+        assert!(
+            engine.input_level() > 0.0,
+            "a muted microphone still measures"
+        );
+        assert!(!engine.state().transmitting, "but it transmits nothing");
     }
 
     #[test]

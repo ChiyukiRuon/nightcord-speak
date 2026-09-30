@@ -47,6 +47,13 @@ pub(crate) enum Command {
     /// Enumerate the machine's audio devices.
     ListDevices { direction: AudioDirection },
 
+    /// Report the audio engine's state: which devices are open, how loud the
+    /// microphone is, and whether either side is still alive.
+    VoiceStatus,
+
+    /// Play a short tone, so the user can hear whether the speakers work.
+    VoiceTestOutput,
+
     /// Bind the voice engine to a session and open devices.
     VoiceStart {
         session: SessionId,
@@ -100,6 +107,8 @@ impl Command {
             Self::SendMessage { .. } => "send_message",
             Self::MoveClient { .. } => "move_client",
             Self::ListDevices { .. } => "audio_devices",
+            Self::VoiceStatus => "voice_status",
+            Self::VoiceTestOutput => "voice_test_output",
             Self::VoiceStart { .. } => "voice_start",
             Self::VoiceStop => "voice_stop",
             Self::VoiceSetInputMuted { .. } => "voice_set_input_muted",

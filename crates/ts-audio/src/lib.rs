@@ -33,15 +33,17 @@ pub mod format;
 pub mod playback;
 pub mod resampler;
 pub mod ring;
+mod tone;
 pub mod vad;
 
 pub use capture::{Capture, CaptureFormat};
 pub use device::{AudioBackend, AudioDevice, Direction, SystemAudio};
 pub use encoder::OpusEncoder;
-pub use engine::{TransmitPolicy, VoiceEngine};
+pub use engine::{OpenDevice, TransmitPolicy, VoiceEngine};
 pub use playback::{Playback, PlaybackFormat};
 pub use resampler::Resampler;
 pub use ring::SampleRing;
+pub use tone::{sine, to_stereo};
 pub use vad::{VoiceGate, peak, rms};
 
 pub use format::{

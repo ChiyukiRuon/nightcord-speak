@@ -213,20 +213,49 @@ pub(crate) fn is_fatal(error: &cpal::Error) -> bool {
     )
 }
 
+/// A device that was resolved, and whether it is the one that was asked for.
+///
+/// Public because [`Capture::device`] and [`Playback::device`] hand it out: what
+/// a caller needs to know is not just "something opened" but *which*, since a
+/// fallback is silent otherwise.
+///
+/// [`Capture::device`]: crate::capture::Capture::device
+/// [`Playback::device`]: crate::playback::Playback::device
+pub struct Resolved {
+    /// The device to open.
+    pub device: cpal::Device,
+    /// The id it is known by, so the caller can report *what* it opened rather
+    /// than what it was asked for.
+    pub id: String,
+    /// Its name, as the host reports it.
+    pub name: String,
+    /// Whether the requested device was not found and this is the fallback.
+    pub fell_back: bool,
+}
+
 /// Looks up a device by id, or falls back to the host's default.
 ///
 /// A saved device id can stop existing — a USB headset gets unplugged — and
 /// failing the entire call for that would leave the user with no audio and no
-/// obvious way back. Falling back to the default keeps them audible, and logs
-/// what happened so the UI can say so.
-pub(crate) fn resolve(direction: Direction, id: Option<&str>) -> Result<cpal::Device, AudioError> {
+/// obvious way back. Falling back to the default keeps them audible.
+///
+/// Returns *which* device it settled on, so the answer can reach the user: a
+/// log line nobody reads is not enough for "you think you are on a headset and
+/// you are actually on the laptop's microphone".
+pub(crate) fn resolve(direction: Direction, id: Option<&str>) -> Result<Resolved, AudioError> {
     let host = cpal::default_host();
 
     if let Some(wanted) = id {
         match cpal::DeviceId::from_str(wanted) {
             Ok(parsed) => {
                 if let Some(device) = host.device_by_id(&parsed) {
-                    return Ok(device);
+                    let described = describe(&device);
+                    return Ok(Resolved {
+                        device,
+                        id: described.0,
+                        name: described.1,
+                        fell_back: false,
+                    });
                 }
                 tracing::warn!(
                     direction = direction.label(),
@@ -250,7 +279,31 @@ pub(crate) fn resolve(direction: Direction, id: Option<&str>) -> Result<cpal::De
         Direction::Output => host.default_output_device(),
     };
 
-    fallback.ok_or_else(|| direction.missing())
+    // Only a *requested* device that could not be opened is a fallback;
+    // choosing the system default on purpose is not. Read before `describe`
+    // shadows the name.
+    let fell_back = id.is_some();
+
+    let device = fallback.ok_or_else(|| direction.missing())?;
+    let (id, name) = describe(&device);
+
+    Ok(Resolved {
+        device,
+        id,
+        name,
+        fell_back,
+    })
+}
+
+/// The id and name of a device, with the id's absence reported as an empty
+/// string rather than as a failure.
+fn describe(device: &cpal::Device) -> (String, String) {
+    let id = device.id().map(|id| id.to_string()).unwrap_or_default();
+    let name = device
+        .description()
+        .map(|described| described.name().to_string())
+        .unwrap_or_default();
+    (id, name)
 }
 
 #[cfg(test)]

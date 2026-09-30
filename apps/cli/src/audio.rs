@@ -83,17 +83,11 @@ impl AudioSink for AudioReport {
 
 /// Generates one frame of a sine wave.
 ///
-/// `phase` is carried by the caller so consecutive frames join without a click
-/// — a discontinuity every 20 ms would encode as a rattle rather than a tone.
+/// A thin wrapper around `ts-audio`'s generator rather than a second
+/// implementation: the app's speaker test needs the same wave, and two copies
+/// would drift in the way that is hardest to notice — one of them clicking.
 pub fn tone_frame(hz: f32, amplitude: f32, phase: &mut f32) -> Vec<f32> {
-    let step = 2.0 * std::f32::consts::PI * hz / SAMPLE_RATE as f32;
-    (0..FRAME_SAMPLES)
-        .map(|_| {
-            let value = amplitude * phase.sin();
-            *phase = (*phase + step) % (2.0 * std::f32::consts::PI);
-            value
-        })
-        .collect()
+    ts_audio::sine(hz, amplitude, FRAME_SAMPLES, phase)
 }
 
 /// How long to wait between transmitted frames.

@@ -42,6 +42,8 @@ pub struct Playback {
     /// Held only to keep the stream running: `cpal` stops playback when the
     /// value is dropped, so it is deliberately never read.
     _stream: cpal::Stream,
+    /// Which device this actually is, so a front-end can say so.
+    device: device::Resolved,
     producer: SampleProducer,
     format: PlaybackFormat,
     /// Cleared by the error callback when the device fails or is unplugged.
@@ -57,8 +59,9 @@ impl Playback {
     /// [`AudioError::UnsupportedConfig`] when the device cannot run at 48 kHz,
     /// or [`AudioError::Backend`] for anything the host reports.
     pub fn open(device_id: Option<&str>) -> Result<Self, AudioError> {
-        let device = device::resolve(Direction::Output, device_id)?;
-        let (config, sample_format) = pick_config(&device)?;
+        let resolved = device::resolve(Direction::Output, device_id)?;
+        let (config, sample_format) = pick_config(&resolved.device)?;
+        let device = &resolved.device;
 
         let device_channels = config.channels;
         let device_rate = config.sample_rate;
@@ -69,21 +72,21 @@ impl Playback {
 
         let stream = match sample_format {
             SampleFormat::F32 => build::<f32>(
-                &device,
+                device,
                 &config,
                 consumer,
                 Arc::clone(&volume),
                 Arc::clone(&running),
             ),
             SampleFormat::I16 => build::<i16>(
-                &device,
+                device,
                 &config,
                 consumer,
                 Arc::clone(&volume),
                 Arc::clone(&running),
             ),
             SampleFormat::U16 => build::<u16>(
-                &device,
+                device,
                 &config,
                 consumer,
                 Arc::clone(&volume),
@@ -108,6 +111,7 @@ impl Playback {
 
         Ok(Self {
             _stream: stream,
+            device: resolved,
             producer,
             running,
             format: PlaybackFormat {
@@ -147,6 +151,15 @@ impl Playback {
     /// Discards queued audio, as after a device switch.
     pub fn clear(&self) {
         self.producer.clear();
+    }
+
+    /// The device that was actually opened, and whether it is the one that was
+    /// asked for. See [`Capture::device`].
+    ///
+    /// [`Capture::device`]: crate::capture::Capture::device
+    #[must_use]
+    pub fn device(&self) -> &device::Resolved {
+        &self.device
     }
 
     /// Whether the stream is still running.

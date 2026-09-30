@@ -1,6 +1,6 @@
 // Raw `dart:ffi` declarations for the Rust core.
 //
-// Hand-written rather than generated: there are twenty-four functions and the
+// Hand-written rather than generated: there are twenty-six functions and the
 // signatures are the contract, so a generator would add a build step and a
 // dependency without removing much work.
 //
@@ -98,6 +98,12 @@ typedef _VoiceStopDart = void Function(Handle handle);
 typedef _VoiceSetBoolC = Void Function(Handle handle, Bool value);
 typedef _VoiceSetBoolDart = void Function(Handle handle, bool value);
 
+typedef _VoiceStatusC = Void Function(Handle handle);
+typedef _VoiceStatusDart = void Function(Handle handle);
+
+typedef _VoiceTestOutputC = Void Function(Handle handle);
+typedef _VoiceTestOutputDart = void Function(Handle handle);
+
 // --- events ----------------------------------------------------------------
 
 typedef _PollEventsC = Pointer<Utf8> Function(Handle handle);
@@ -159,6 +165,12 @@ class NightcordBindings {
       ),
       voicePushToTalk = library.lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
         'nightcord_voice_push_to_talk',
+      ),
+      voiceStatus = library.lookupFunction<_VoiceStatusC, _VoiceStatusDart>(
+        'nightcord_voice_status',
+      ),
+      voiceTestOutput = library.lookupFunction<_VoiceTestOutputC, _VoiceTestOutputDart>(
+        'nightcord_voice_test_output',
       ),
       pollEvents = library.lookupFunction<_PollEventsC, _PollEventsDart>(
         'nightcord_poll_events',
@@ -236,6 +248,13 @@ class NightcordBindings {
 
   /// Push-to-talk key down or up.
   final void Function(Handle, bool) voicePushToTalk;
+
+  /// Asks what the audio engine is doing. The answer arrives as a
+  /// `voice_status` `CommandResult`.
+  final void Function(Handle) voiceStatus;
+
+  /// Plays a short tone through the speakers.
+  final void Function(Handle) voiceTestOutput;
 
   /// Drains queued events as a JSON array. The result must be freed with
   /// [freeString].

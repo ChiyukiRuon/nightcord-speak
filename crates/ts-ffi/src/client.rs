@@ -20,6 +20,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use ts_audio::{FRAME_MS, VoiceEngine};
 use ts_core::Client as CoreClient;
+use ts_events::ClientEvent;
 use ts_model::{ClientError, NetworkError, ProtocolError, SessionId, VoiceState};
 
 use crate::command::Command;
@@ -389,6 +390,46 @@ async fn handle(
             }
         },
 
+        Command::VoiceStatus => match voice.as_ref() {
+            Some(active) => {
+                let data = serde_json::json!({
+                    "input": device_json(active.engine.input_device(), active.engine.input_available()),
+                    "output": device_json(active.engine.output_device(), active.engine.output_available()),
+                    "level": active.engine.input_level(),
+                    "peak": active.engine.input_peak(),
+                    "transmitting": active.engine.state().transmitting,
+                    "healthy": active.engine.devices_healthy(),
+                });
+                events.push(FfiEvent::with_data(name, Some(active.session), data));
+            }
+            // No engine is not a failure — it is what "voice has not been
+            // started" looks like, and the UI renders it as such.
+            None => events.push(FfiEvent::with_data(
+                name,
+                None,
+                serde_json::json!({
+                    "input": serde_json::Value::Null,
+                    "output": serde_json::Value::Null,
+                    "level": 0.0,
+                    "peak": 0.0,
+                    "transmitting": false,
+                    "healthy": false,
+                }),
+            )),
+        },
+
+        Command::VoiceTestOutput => match voice.as_mut() {
+            Some(active) => {
+                active.engine.play_test_tone();
+                events.push(FfiEvent::ok(name, Some(active.session)));
+            }
+            None => events.push(FfiEvent::failed(
+                name,
+                None,
+                ClientError::Audio(ts_model::AudioError::NoOutputDevice),
+            )),
+        },
+
         Command::VoiceStart {
             session,
             input,
@@ -434,7 +475,7 @@ async fn handle(
 
         Command::SettingsUpdate(settings) => match core.update_settings(*settings) {
             Ok(()) => {
-                apply_settings(core, voice, voice_intent).await;
+                apply_settings(core, voice, voice_intent, events).await;
                 events.push(FfiEvent::ok(name, None));
             }
             Err(error) => events.push(FfiEvent::failed(name, None, error)),
@@ -481,6 +522,45 @@ async fn handle(
     }
 }
 
+/// Tells the front-end what the voice state now is.
+///
+/// Published from *here* rather than from the core because the engine lives
+/// here: `ts-core` deliberately does not depend on `ts-audio` (§2), so the
+/// audio state is the exit's to report.
+///
+/// It was not reported at all. `ClientEvent::VoiceStateChanged` had no publisher
+/// anywhere in the workspace, while the Dart side parsed it *and* relied on it —
+/// "the core's `voice_state_changed` is what makes it stick" — so every mute
+/// button was showing its own optimistic guess and nothing could ever correct
+/// it. That the two happened to agree is a coincidence, not a guarantee.
+fn report_voice_state(voice: Option<&Voice>, events: &EventQueue) {
+    let Some(active) = voice else {
+        // No engine means no session to stamp the event with. Nothing has been
+        // reported to a server either, so there is nothing to correct.
+        return;
+    };
+    events.push(FfiEvent::client(
+        active.session,
+        ClientEvent::VoiceStateChanged(active.engine.state()),
+    ));
+}
+
+/// One side of the engine's device state, as the UI reads it.
+///
+/// `available` is "something is open on this side", which is not the same as
+/// "the one you asked for is open" — that is what `fell_back` says.
+fn device_json(device: Option<&ts_audio::OpenDevice>, available: bool) -> serde_json::Value {
+    match device {
+        Some(open) => serde_json::json!({
+            "id": open.id,
+            "name": open.name,
+            "available": available,
+            "fell_back": open.fell_back,
+        }),
+        None => serde_json::Value::Null,
+    }
+}
+
 /// Adopts what a running engine can take without being restarted, and tells the
 /// server about the part it can see.
 ///
@@ -497,6 +577,7 @@ async fn apply_settings(
     core: &mut CoreClient,
     voice: &mut Option<Voice>,
     voice_intent: &mut VoiceState,
+    events: &EventQueue,
 ) {
     let audio = core.settings().audio.clone();
 
@@ -519,6 +600,8 @@ async fn apply_settings(
     if let Err(error) = outcome {
         tracing::debug!(%error, "could not tell the server about the new voice settings");
     }
+
+    report_voice_state(voice.as_ref(), events);
 }
 
 /// Applies a mute change and tells the server.
@@ -564,6 +647,7 @@ async fn set_muted(
         tracing::debug!(%error, "could not tell the server about the mute change");
     }
 
+    report_voice_state(Some(active), events);
     events.push(FfiEvent::ok(name, Some(session)));
 }
 
@@ -946,6 +1030,34 @@ mod tests {
         assert!(
             (data["audio"]["activation"]["sensitivity"].as_f64().unwrap() - 0.25).abs() < 1e-6,
             "got {data}"
+        );
+    }
+
+    #[test]
+    fn asking_for_the_voice_status_without_voice_answers_rather_than_failing() {
+        // "Voice has not been started" is a state, not an error. Answering with
+        // a failure would put an error banner on screen every time the settings
+        // dialog opened, which is where the meter lives.
+        let client = NightcordClient::new().expect("start the core");
+        client.send(Command::VoiceStatus);
+
+        let batch = wait_for_batch(&client, "voice_status", Duration::from_secs(5))
+            .expect("voice_status went unanswered");
+
+        let parsed: serde_json::Value = serde_json::from_str(&batch).expect("valid JSON");
+        let data = parsed
+            .as_array()
+            .and_then(|events| events.iter().find(|e| e["command"] == "voice_status"))
+            .map(|event| event["data"].clone())
+            .expect("a status payload");
+
+        assert_eq!(data["input"], serde_json::Value::Null);
+        assert_eq!(data["output"], serde_json::Value::Null);
+        assert_eq!(data["level"], 0.0);
+        assert_eq!(data["healthy"], false);
+        assert!(
+            !batch.contains("\"status\":\"failed\""),
+            "not-started is not a failure: {batch}"
         );
     }
 

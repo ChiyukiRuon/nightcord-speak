@@ -469,6 +469,50 @@ pub unsafe extern "C" fn nightcord_voice_push_to_talk(handle: *mut NightcordClie
     client.send(Command::VoicePushToTalk { held });
 }
 
+/// Asks what the audio engine is doing.
+///
+/// The answer arrives as a `command_result` named `voice_status`: which device
+/// each side actually opened (and whether it is the one that was asked for),
+/// the microphone's current level and peak, whether we are transmitting, and
+/// whether either device has since gone away.
+///
+/// **Pulled rather than pushed.** The engine produces a frame every 20 ms, and
+/// a stream of status events at that rate would fill the event queue — the
+/// thing `audio.rs` exists to keep Opus payload out of — and give every
+/// front-end's event handling a 50 Hz heartbeat to keep up with. The caller
+/// decides how often to ask.
+///
+/// With no engine running the answer is "nothing is open" rather than a
+/// failure: that is what "voice has not been started" looks like.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_status(handle: *mut NightcordClient) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceStatus);
+}
+
+/// Plays a short tone so the user can hear whether the speakers work.
+///
+/// Goes to the speakers only — it is playback, never captured, so nothing is
+/// sent anywhere. Requires voice to be running, because the engine is what owns
+/// the output device.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_test_output(handle: *mut NightcordClient) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceTestOutput);
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------

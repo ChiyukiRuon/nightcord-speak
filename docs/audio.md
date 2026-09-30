@@ -109,7 +109,8 @@ sink.push() ─▶ 环形缓冲 ─▶ 回调取用
 | `StreamInvalidated` | `DeviceChanged`（宿主已自动切换路由） |
 | | `RealtimeDenied` |
 
-设备消失时 `is_running()` 转为 false，UI 应提示而不是静默无声。
+设备消失时 `is_running()` 转为 false。**UI 会提示**——`nightcord_voice_status` 的
+`available` / `healthy` 就是为此而设，见 [`docs/devices.md`](devices.md)。
 
 ---
 

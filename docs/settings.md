@@ -106,7 +106,7 @@ WARN ts_core::client: using default settings
 | 设置 | 谁读 | 什么时候生效 |
 | --- | --- | --- |
 | 重连次数 | `ts-core`，填进 `ConnectionConfig.reconnect` | 下一次连接 |
-| 设备 | `ts-ffi` 的 worker，`start_voice` 时 | 下一次「开始语音」 |
+| 设备 | `ts-ffi` 的 worker，`start_voice` 时 | 下一次「开始语音」。实际在用哪个可以从 `nightcord_voice_status` 看到，见 [`docs/devices.md`](devices.md) |
 | 传输方式 | 同上，另外**改了就应用**到活着的引擎 | 立即 |
 | 灵敏度 | 同上，同上 | 立即 |
 | 通知开关 | 前端 | 立即（见 [`docs/notifications.md`](notifications.md)） |
