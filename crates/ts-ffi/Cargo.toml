@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 ts-audio.workspace = true
 ts-core.workspace = true
+ts-crash.workspace = true
 ts-events.workspace = true
 ts-identity.workspace = true
 ts-logging.workspace = true

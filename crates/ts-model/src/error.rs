@@ -58,6 +58,15 @@ pub enum ClientError {
     /// The server or protocol cannot do this.
     #[error("unsupported: {0}")]
     Unsupported(String),
+
+    /// The core's own worker is gone — it panicked, and nothing will answer any
+    /// more.
+    ///
+    /// Reported once per process by the FFI layer, because a dead worker
+    /// without it looks like a frozen UI, which is worse than an error.
+    /// Restarting the application is the only recovery; see `docs/crash.md`.
+    #[error("the core is gone; restart the application")]
+    CoreGone,
 }
 
 impl ClientError {

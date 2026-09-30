@@ -33,6 +33,7 @@ extension ClientErrorText on ClientError {
         'timeout' => l10n.errorTimeout,
         'command_failed' => l10n.errorCommandFailed,
         'join_denied' => l10n.errorJoinDenied,
+        'core_gone' => l10n.errorCoreGone,
         // A variant this build does not know: its name is all there is.
         _ => kind,
       };

@@ -140,6 +140,15 @@
   "noticeReconnecting": "连接已断开，正在重连",
   "noticeConnectionFailed": "连接失败",
 
+  "crashBannerTitle": "上次会话异常结束",
+  "crashBannerNotes": "有 {count} 份崩溃记录",
+  "crashGenerateReport": "生成报告",
+  "crashOpenFolder": "打开文件夹",
+  "crashDismiss": "忽略",
+  "crashReportWritten": "报告已生成：{path}",
+  "crashReportFailed": "生成报告失败，详情见日志",
+  "errorCoreGone": "核心已崩溃，请重启应用",
+
   "modePushToTalk": "按键说话",
   "modeVoiceActivation": "语音激活",
   "modeContinuous": "持续传输",

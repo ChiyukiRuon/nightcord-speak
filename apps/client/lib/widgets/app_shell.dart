@@ -1,17 +1,20 @@
 // Chooses what the window shows: the connect screen, or a server.
 
 import 'dart:io' show Platform;
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/connect/connect_page.dart';
+import '../features/crash/crash_banner.dart';
 import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
 import '../ffi/rust_client.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/errors.dart';
+import '../models/crash.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
 import '../providers/providers.dart';
@@ -94,8 +97,23 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
+  /// Watches for the window's close button.
+  ///
+  /// The exit path is the one place "this run ended cleanly" can be recorded:
+  /// the provider scope is never torn down on the way out, so the client's
+  /// `dispose` never runs, and without this every normal exit would look like
+  /// a crash to the next start.
+  AppLifecycleListener? _exitListener;
+
+  /// What the previous runs left behind, asked once at start-up.
+  CrashStatus _crash = CrashStatus.none;
+
+  /// Whether the user waved the banner away for this session.
+  bool _crashDismissed = false;
+
   @override
   void dispose() {
+    _exitListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -115,6 +133,20 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     // desktop notification is ever sent — while the window is in front, a toast
     // inside it is both visible and less intrusive.
     WidgetsBinding.instance.addObserver(this);
+
+    // Asked before anything can fail again, and answered without the core —
+    // see the no-handle exports in `ffi/bindings.dart`.
+    _crash = ref.read(rustClientProvider).crashStatus();
+
+    _exitListener = AppLifecycleListener(
+      onExitRequested: () {
+        // Synchronous, before the response: after `exit` no Dart callback
+        // runs, and a marker left behind would be a false crash. The call is
+        // cheap by design — it must not hold the close button hostage.
+        ref.read(rustClientProvider).markCleanExit();
+        return Future.value(AppExitResponse.exit);
+      },
+    );
     // A pop-up that never appears is a real possibility on Windows, where an
     // unpackaged app needs a Start Menu shortcut carrying an AppUserModelID.
     // The wrapper logs the failure rather than letting it pass unnoticed.
@@ -192,12 +224,26 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
     // The notices ride above whichever screen is showing, including the connect
     // one: a private message can arrive for a server you are not looking at.
+    // The crash banner rides above both for the same reason — and because it is
+    // most needed exactly when a server screen does not exist.
     return ShortcutHost(
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (active == null) const ConnectPage() else ServerPage(session: active),
           const NoticeStack(),
+          if (_crash.shouldNotify && !_crashDismissed)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: CrashBanner(
+                status: _crash,
+                onDismissed: () => setState(() => _crashDismissed = true),
+                onResolved: () =>
+                    setState(() => _crash = ref.read(rustClientProvider).crashStatus()),
+              ),
+            ),
         ],
       ),
     );

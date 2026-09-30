@@ -48,6 +48,8 @@ void main() {
       expect(const ClientError(kind: 'command_failed').describe(zh), '命令失败');
       expect(const ClientError(kind: 'command_failed').describe(en), 'The command failed');
       expect(const ClientError(kind: 'join_denied').describe(en), contains('permission'));
+      expect(const ClientError(kind: 'core_gone').describe(zh), contains('重启'));
+      expect(const ClientError(kind: 'core_gone').describe(en), contains('Restart'));
 
       // The one Dart-side kind that carries data.
       const lagged = ClientError(kind: 'lagged', detail: {'missed': 3});
@@ -107,5 +109,14 @@ void main() {
       isEmpty,
       reason: 'zh has keys the template does not know',
     );
+  });
+
+  test('the crash note count is pluralized in English', () {
+    // The one ICU plural in the app so far: a dropped plural form would put
+    // "1 crash notes" in front of a user, and only a test notices.
+    expect(en.crashBannerNotes(1), contains('1 crash note'));
+    expect(en.crashBannerNotes(2), contains('2 crash notes'));
+    expect(en.crashBannerNotes(1), isNot(contains('notes')));
+    expect(zh.crashBannerNotes(2), contains('2'));
   });
 }

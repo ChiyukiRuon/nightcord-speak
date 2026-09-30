@@ -18,6 +18,7 @@ ts-core = { path = "crates/ts-core" }
 ts-events = { path = "crates/ts-events" }
 ts-ffi = { path = "crates/ts-ffi" }
 ts-identity = { path = "crates/ts-identity" }
+ts-crash = { path = "crates/ts-crash" }
 ts-logging = { path = "crates/ts-logging" }
 ts-model = { path = "crates/ts-model" }
 ts-protocol = { path = "crates/ts-protocol" }
@@ -46,6 +47,21 @@ tracing = "0.1"
 # and cleanup; this crate is maintained by the `tracing` project itself.
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- crash evidence ---------------------------------------------------------
+# Installs the SEH/signal handler that runs user code while the process dies.
+# A minidump would need `minidumper` and a sidecar process; this crate only ever
+# writes a text note in the handler, which is the v1 trade-off (docs/crash.md).
+crash-handler = "0.8"
+# Frame addresses for the crash notes. `std::backtrace` cannot be used: the
+# `frames()`/`symbols()` API it would need is still unstable.
+backtrace = "0.3"
+# `ts-crash` uses it to ask whether the process that left a run marker is still
+# alive. Only the two features the check needs, so nothing else is dragged in.
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
 
 # --- protocol backends -----------------------------------------------------
 # crates.io only ever published tsclientlib 0.2.0 (2021), far behind upstream,

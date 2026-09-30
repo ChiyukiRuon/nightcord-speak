@@ -436,6 +436,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noticeConnectionFailed => 'Connection failed';
 
   @override
+  String get crashBannerTitle => 'Last session ended unexpectedly';
+
+  @override
+  String crashBannerNotes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count crash notes',
+      one: '1 crash note',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get crashGenerateReport => 'Generate report';
+
+  @override
+  String get crashOpenFolder => 'Open folder';
+
+  @override
+  String get crashDismiss => 'Dismiss';
+
+  @override
+  String crashReportWritten(String path) {
+    return 'Report written: $path';
+  }
+
+  @override
+  String get crashReportFailed => 'Could not generate the report; see the log';
+
+  @override
+  String get errorCoreGone => 'The core has crashed. Restart the application.';
+
+  @override
   String get modePushToTalk => 'Push to talk';
 
   @override

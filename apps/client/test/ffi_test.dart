@@ -340,4 +340,57 @@ void main() {
       expect(second, isNotEmpty);
     });
   });
+
+  group('crash evidence', () {
+    test('the status answers and names the directory', () {
+      // Deliberately no command and no handle on the Rust side: the question
+      // is asked when the core is dead or never started, which is exactly when
+      // a command could not be answered.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final status = client.crashStatus();
+      expect(status.available, isTrue, reason: 'the desktop always has a data root');
+
+      // A sibling of `logs/`, not a child of it: the first version of this
+      // wiring reused the log helper, which appends `logs`, and the `contains`
+      // assertion this replaces would not have noticed (docs/settings.md's
+      // reasoning about the shared data root, one directory over).
+      final logDir = coreLogDirectory();
+      expect(logDir, isNotNull);
+      final dataRoot = File(logDir!).parent.path;
+      expect(status.directory, '$dataRoot${Platform.pathSeparator}crashes');
+    });
+
+    test('a live run can be marked as a clean exit, twice', () {
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      expect(client.markCleanExit(), isTrue, reason: 'the worker is alive');
+      // Idempotent: the second call has nothing left to remove and must not
+      // turn into a failure.
+      expect(client.markCleanExit(), isTrue);
+    });
+
+    test('a report is written, readable, and can be taken back', () {
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final result = client.buildCrashReport();
+      expect(result.error, isNull);
+      final path = result.path;
+      expect(path, isNotNull);
+
+      final file = File(path!);
+      expect(file.existsSync(), isTrue);
+      final text = file.readAsStringSync();
+      expect(text, contains('Nightcord Speak crash report'));
+      expect(text, contains('===== log tail ====='));
+      expect(text, contains('Review it before sharing'));
+
+      // The report went into the developer's real crashes directory; this test
+      // puts the directory back the way it found it.
+      file.deleteSync();
+    });
+  });
 }

@@ -91,6 +91,7 @@ macOS / Android / iOS。
 | `ts-session`           | `Session` / `SessionManager`          | 知道具体协议                    |
 | `ts-identity`          | 身份持久化、应用数据目录              | 碰密码学（由 backend 提供生成） |
 | `ts-logging`           | 进程级 subscriber：文件、轮转、filter | 自己找目录（由调用方传入）      |
+| `ts-crash`             | 崩溃笔记、运行标记、报告              | 依赖任何内部 crate              |
 | `ts-settings`          | 用户偏好与已存服务器：结构、存储      | 决定谁读它（由 core 应用）      |
 | `ts-audio`             | 设备、采集、编码、播放、VAD           | 依赖协议库                      |
 | `ts-protocol-tsclient` | **唯一**允许知道 `tsclientlib` 的地方 | 出现具体协议判断                |
@@ -180,13 +181,17 @@ cd apps/client && flutter run -d windows
 cd apps/client && flutter gen-l10n
 ```
 
+> `flutter build windows` **之前先关掉正在运行的应用**：安装步骤要覆盖
+> exe/DLL，文件被占用时构建以 `error MSB3073`（cmake_install 失败）告终，
+> 报错信息不会直说原因。冒烟测试时踩到过一次。
+
 ### 3.5 门禁：提交前必须全绿
 
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 311 个
-cd apps/client && flutter analyze && flutter test                  # 125 个
+cargo test  --workspace --all-features                             # 326 个
+cd apps/client && flutter analyze && flutter test                  # 132 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -265,7 +270,7 @@ cd apps/client && flutter analyze && flutter test                  # 125 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 只剩崩溃上报 |
+| M0.6     | Production Client               | ✅ **全部完成** |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -282,9 +287,9 @@ cd apps/client && flutter analyze && flutter test                  # 125 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **16,790 行**，13 crates + CLI |
-| Dart | **11,222 行**，45 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **311 Rust + 125 Dart**，全绿  |
+| Rust | **18,129 行**，14 crates + CLI |
+| Dart | **11,763 行**，48 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **326 Rust + 132 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -422,6 +427,21 @@ cd apps/client && flutter analyze && flutter test                  # 125 个
 | **顺带修正**：TS6 分段陈旧 UI | ✅ 截图确认两个分段都可选——原先 `enabled: false` + 「尚未实现」停留在 M0.4 之前，见 §6 ⑤ |
 | `flutter gen-l10n` 产物入库 | ✅ 生成文件已提交（`analyze`/`test` 不会自动生成，不提交则克隆后第一次门禁即红） |
 
+**崩溃上报（M0.6 第九项）**
+
+| 项 | 结果 |
+| --- | --- |
+| **硬杀 → 横幅 → 报告（端到端）** | ✅ 实测截图：`taskkill /F` → 重启 → 顶部横幅「上次会话异常结束 / 有 N 份崩溃记录」→ 点「生成报告」（鼠标自动化）→ SnackBar 显示路径、死标记被消费、横幅随之消失；报告含头部、标记（活/死分别标注）、日志尾部与隐私说明 |
+| **正常关窗不误报** | ✅ 实测：关窗 → 标记被删 → 重启**无横幅**。这条路径靠 `AppLifecycleListener(onExitRequested)`——ProviderScope 从不销毁，`client.dispose()` 在正常退出时不会执行 |
+| **真 panic → 真死亡** | ✅ 实测：`NIGHTCORD_TEST_PANIC=ffi` → 进程 abort → 笔记含 `message: NIGHTCORD_TEST_PANIC=ffi`、源码位置与**帧地址**；重启出现横幅；报告含两条笔记（原始原因 + «cannot unwind»） |
+| **worker 半死** | ✅ 实测：`NIGHTCORD_TEST_PANIC=worker` → 进程存活、界面红色「核心已崩溃，请重启应用」（此前是静默冻结）；日志一次性 `ERROR` + 命令级失败；关窗后标记**保留** → 重启横幅 |
+| 笔记同名覆盖 | ✅ 回归测试：纳秒命名——毫秒粒度的第一版把「真正的原因」那条覆盖掉了（冒烟抓出） |
+| 崩溃目录位置 | ✅ FFI 测试断言它是 `logs/` 的**兄弟**而非子目录——第一版复用了日志助手（会拼 `logs`），冒烟抓出 |
+| SEH 路径（模拟） | ✅ 集成测试：`simulate_exception` 走真实回调，笔记含异常码与地址 |
+| 标记判定 | ✅ 单测：死 pid 算异常、活 pid 不算；按 pid 分文件（两实例互不干扰）、报告消费死标记、清理上限 |
+| **真实原生崩溃（非模拟）** | ⚠️ 未触发过；且 Dart↔FFI 路径上的 UEF 已知盲区（dart-lang/sdk#51726）——SEH 笔记按「尽力而为」理解，承重信号是 panic 笔记与运行标记 |
+| minidump | ❌ 明确不做（v1），升级路径写进 [`docs/crash.md`](docs/crash.md) |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -490,7 +510,12 @@ cd apps/client && flutter analyze && flutter test                  # 125 个
       `ui.language`，默认跟随系统。两处无 BuildContext 的组句（错误句、通知文案）
       改为「状态层存数据、渲染期组句」。顺带修正连接页停滞在 M0.4 之前的 TS6 陈旧 UI。
       见 [`docs/localization.md`](docs/localization.md)。
-- [ ] 崩溃上报
+- [x] **崩溃上报** —— `ts-crash`：按 pid 的运行标记 + 同步直写的崩溃笔记（panic/SEH，
+      含帧地址不解析符号）+ 按需生成的单文件报告（无云、无自动上传）。顺带修掉
+      「worker panic 后界面静默冻结」与「`shutdown` 把 `JoinError` 当干净结束」。
+      见 [`docs/crash.md`](docs/crash.md)。
+
+> **M0.6 至此全部完成。** 下一站是 Phase 7（Web Gateway，§71）。
 
 ### 其他
 
@@ -538,6 +563,7 @@ cd apps/client && flutter analyze && flutter test                  # 125 个
 | `docs/devices.md`          | 设备：状态出口、为什么电平是拉不是推、静音着采集就是麦克风测试 |
 | `docs/shortcuts.md`        | 快捷键：为什么系统级、物理键与 HID 码的代价、旧 PTT 的卡住 bug |
 | `docs/localization.md`     | 本地化：工具与文件、语言如何决定、无 context 组句、什么不本地化、加语言/加文案 |
+| `docs/crash.md`            | 崩溃上报：三类信号、标记语义、为什么不解析符号、Dart 侧的关窗路径、边界与触发法 |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

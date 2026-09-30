@@ -423,6 +423,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noticeConnectionFailed => '连接失败';
 
   @override
+  String get crashBannerTitle => '上次会话异常结束';
+
+  @override
+  String crashBannerNotes(int count) {
+    return '有 $count 份崩溃记录';
+  }
+
+  @override
+  String get crashGenerateReport => '生成报告';
+
+  @override
+  String get crashOpenFolder => '打开文件夹';
+
+  @override
+  String get crashDismiss => '忽略';
+
+  @override
+  String crashReportWritten(String path) {
+    return '报告已生成：$path';
+  }
+
+  @override
+  String get crashReportFailed => '生成报告失败，详情见日志';
+
+  @override
+  String get errorCoreGone => '核心已崩溃，请重启应用';
+
+  @override
   String get modePushToTalk => '按键说话';
 
   @override

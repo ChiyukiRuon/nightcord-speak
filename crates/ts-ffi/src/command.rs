@@ -91,6 +91,15 @@ pub(crate) enum Command {
 
     /// Stop the worker.
     Shutdown,
+
+    /// Panics the worker on purpose, killing the task but not the process.
+    ///
+    /// A test seam, compiled only for tests and never reachable from the
+    /// C ABI: reproducing the "core half-dead" failure is otherwise impossible
+    /// without editing code, and it is the failure the crash evidence exists to
+    /// surface (`docs/crash.md`).
+    #[cfg(test)]
+    TestPanic,
 }
 
 impl Command {
@@ -120,6 +129,8 @@ impl Command {
             Self::BookmarksUpdate(_) => "bookmarks_update",
             Self::BookmarksAdd(_) => "bookmark_add",
             Self::Shutdown => "shutdown",
+            #[cfg(test)]
+            Self::TestPanic => "test_panic",
         }
     }
 

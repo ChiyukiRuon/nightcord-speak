@@ -12,6 +12,7 @@
 //! outcomes arrive on the event queue.
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -28,6 +29,12 @@ use crate::event::FfiEvent;
 
 /// How long a clean shutdown may take before the task is abandoned.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
+
+/// The pseudo-command the dead-worker failure is reported under.
+///
+/// The result channel is the envelope that reaches the UI's error path without
+/// inventing a session — a domain event has to name one, and there is none.
+const CORE_COMMAND: &str = "core";
 
 /// How many events may queue before the oldest are dropped.
 ///
@@ -126,6 +133,10 @@ pub struct NightcordClient {
     commands: mpsc::UnboundedSender<Command>,
     events: EventQueue,
     worker: Mutex<Option<JoinHandle<()>>>,
+    /// Whether the dead-worker error has been reported, so the first command
+    /// after a worker panic says something and the next thousand do not —
+    /// push-to-talk sends commands continuously.
+    reported_core_gone: AtomicBool,
 }
 
 impl NightcordClient {
@@ -159,6 +170,7 @@ impl NightcordClient {
             commands,
             events,
             worker: Mutex::new(Some(worker)),
+            reported_core_gone: AtomicBool::new(false),
         })
     }
 
@@ -174,9 +186,40 @@ impl NightcordClient {
                     command = error.0.name(),
                     "the worker is gone; command dropped"
                 );
+                self.report_core_gone();
                 false
             }
         }
+    }
+
+    /// Tells the UI once that the worker died.
+    ///
+    /// A dropped command is otherwise indistinguishable from a slow one, and a
+    /// core that is gone looks exactly like an interface that froze — which is
+    /// worse, because a freeze eventually gets a restart and a silent no-op
+    /// just gets stared at. Once is the point: every later command would
+    /// otherwise repeat it.
+    fn report_core_gone(&self) {
+        if self.reported_core_gone.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        tracing::error!("the core's worker is gone; no further commands can run");
+        self.events
+            .push(FfiEvent::failed(CORE_COMMAND, None, ClientError::CoreGone));
+    }
+
+    /// Whether the worker task is still running.
+    ///
+    /// The difference between "this run can still exit cleanly" and "the
+    /// marker must stay so the next start reports a crash" — see
+    /// [`nightcord_mark_clean_exit`](crate::nightcord_mark_clean_exit).
+    #[must_use]
+    pub fn worker_alive(&self) -> bool {
+        self.worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|worker| !worker.is_finished())
     }
 
     /// Queues a failure that never reached the worker.
@@ -205,7 +248,11 @@ impl NightcordClient {
     /// Sessions are disconnected on the way out, so the server does not hold a
     /// stale client — TS3 refuses a second connection from the same identity
     /// until it times out.
-    pub fn shutdown(&mut self) {
+    ///
+    /// Returns whether the worker finished *cleanly*. A worker that ended in a
+    /// panic — the task is dead but the process is not — must not be recorded
+    /// as a clean exit: the crash evidence has to survive to the next start.
+    pub fn shutdown(&mut self) -> bool {
         let _ = self.commands.send(Command::Shutdown);
 
         let worker = self
@@ -214,16 +261,26 @@ impl NightcordClient {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
 
+        let mut clean = true;
         if let Some(worker) = worker {
-            let finished = self
+            let outcome = self
                 .runtime
-                .block_on(async { tokio::time::timeout(SHUTDOWN_GRACE, worker).await.is_ok() });
-            if !finished {
-                tracing::warn!("the worker did not stop in time; abandoning it");
-            }
+                .block_on(async { tokio::time::timeout(SHUTDOWN_GRACE, worker).await });
+            clean = match outcome {
+                Ok(Ok(())) => true,
+                Ok(Err(error)) => {
+                    tracing::error!(%error, "the worker ended in a panic");
+                    false
+                }
+                Err(_) => {
+                    tracing::warn!("the worker did not stop in time; abandoning it");
+                    false
+                }
+            };
         }
 
         tracing::info!("nightcord core stopped");
+        clean
     }
 }
 
@@ -247,6 +304,13 @@ async fn run(
     mut commands: mpsc::UnboundedReceiver<Command>,
     events: EventQueue,
 ) {
+    // A development aid next to `NIGHTCORD_AUTO_CONNECT`, and the only way to
+    // reproduce the failure the crash evidence exists to surface: the task
+    // dies, the process lives on, and every later command vanishes.
+    if std::env::var(crate::TEST_PANIC_VAR).is_ok_and(|value| value == "worker") {
+        panic!("{}=worker", crate::TEST_PANIC_VAR);
+    }
+
     // Subscribed before anything can be commanded, so the handshake burst is
     // never missed.
     let mut subscription = core.subscribe();
@@ -519,6 +583,10 @@ async fn handle(
         },
 
         Command::Shutdown => unreachable!("filtered by the caller"),
+
+        // A test seam, never reachable from the C ABI — see the variant's docs.
+        #[cfg(test)]
+        Command::TestPanic => panic!("Command::TestPanic"),
     }
 }
 
@@ -1099,5 +1167,54 @@ mod tests {
             wait_for(&client, "voice_stop", Duration::from_secs(5)),
             "the worker stopped answering after a device query"
         );
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn a_dead_worker_is_reported_once_and_is_not_a_clean_exit() {
+        // The "core half-dead" failure: the task panics, the process lives,
+        // and without the report every later command would vanish in silence.
+        let mut client = NightcordClient::new().expect("start the core");
+        assert!(client.worker_alive());
+
+        // The panic kills the task; the channel closes when its receiver drops,
+        // which is what `send` notices.
+        assert!(client.send(Command::TestPanic));
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while client.worker_alive() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(!client.worker_alive(), "the worker should have died");
+
+        // Every later command is refused, and the first refusal says why — but
+        // only the first; push-to-talk would otherwise repeat it forever.
+        assert!(!client.send(Command::VoiceStop));
+        assert!(!client.send(Command::VoiceStop));
+        let batch = client.poll_events();
+        assert_eq!(
+            batch.matches("\"command\":\"core\"").count(),
+            1,
+            "reported once, not once per command: {batch}"
+        );
+        assert!(batch.contains("\"core_gone\""), "{batch}");
+
+        // And a worker that ended in a panic must not be recorded as a clean
+        // exit: the next start has to be able to report it.
+        assert!(!client.shutdown(), "a panic is not a clean shutdown");
+    }
+
+    #[test]
+    fn crash_status_answers_without_a_client() {
+        // The whole point of the no-handle exports: the answer must be
+        // available when the core is not. Only the shape is checked — the
+        // directory is whatever the machine running the test has.
+        let status: serde_json::Value =
+            serde_json::from_str(&crate::crash::status_json()).expect("valid JSON");
+        assert!(status["available"].is_boolean(), "{status}");
+        if status["available"] == true {
+            assert!(status["directory"].is_string(), "{status}");
+            assert!(status["abnormal"].is_boolean(), "{status}");
+            assert!(status["notes"].is_number(), "{status}");
+        }
     }
 }

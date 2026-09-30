@@ -848,6 +848,54 @@ abstract class AppLocalizations {
   /// **'Connection failed'**
   String get noticeConnectionFailed;
 
+  /// Banner heading shown when the previous run did not exit cleanly
+  ///
+  /// In en, this message translates to:
+  /// **'Last session ended unexpectedly'**
+  String get crashBannerTitle;
+
+  /// How much crash evidence is waiting to be bundled
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 crash note} other{{count} crash notes}}'**
+  String crashBannerNotes(int count);
+
+  /// Button that bundles logs, notes and markers into one text file
+  ///
+  /// In en, this message translates to:
+  /// **'Generate report'**
+  String get crashGenerateReport;
+
+  /// Button that reveals the crash evidence directory
+  ///
+  /// In en, this message translates to:
+  /// **'Open folder'**
+  String get crashOpenFolder;
+
+  /// Button that hides the crash banner for this session
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get crashDismiss;
+
+  /// Snack bar after a crash report was generated
+  ///
+  /// In en, this message translates to:
+  /// **'Report written: {path}'**
+  String crashReportWritten(String path);
+
+  /// Snack bar when the crash report could not be written
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate the report; see the log'**
+  String get crashReportFailed;
+
+  /// Error sentence for the dead-worker variant
+  ///
+  /// In en, this message translates to:
+  /// **'The core has crashed. Restart the application.'**
+  String get errorCoreGone;
+
   /// Transmission mode: only while the key is held
   ///
   /// In en, this message translates to:

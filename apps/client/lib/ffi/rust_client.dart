@@ -9,6 +9,7 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
+import '../models/crash.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/bookmarks.dart';
@@ -294,6 +295,48 @@ class RustClient {
     bookmark.toJson(),
     (json) => _bindings.bookmarkAdd(_handle, json),
   );
+
+  /// What the previous runs left behind.
+  ///
+  /// A direct answer rather than a command: the question is asked when the core
+  /// is dead or never started, which is precisely when the worker cannot reply.
+  CrashStatus crashStatus() {
+    final raw = _bindings.crashStatus();
+    try {
+      final json = (jsonDecode(raw.toDartString()) as Map).cast<String, dynamic>();
+      return CrashStatus.fromJson(json);
+    } on Object catch (error) {
+      // A library that cannot answer this is a library that has bigger
+      // problems; the banner is simply not shown.
+      logToCore('warn', 'could not read the crash status: $error');
+      return CrashStatus.none;
+    } finally {
+      _bindings.freeString(raw);
+    }
+  }
+
+  /// Builds a crash report and answers with its path, or the reason it could
+  /// not be built.
+  ///
+  /// The report is a text file (logs, notes, markers) the user can review and
+  /// send; nothing leaves the machine on its own.
+  ({String? path, String? error}) buildCrashReport() {
+    final raw = _bindings.crashReport();
+    try {
+      final json = (jsonDecode(raw.toDartString()) as Map).cast<String, dynamic>();
+      return (path: json['path'] as String?, error: json['error'] as String?);
+    } on Object catch (error) {
+      return (path: null, error: '$error');
+    } finally {
+      _bindings.freeString(raw);
+    }
+  }
+
+  /// Marks this run as a clean exit, so the next start does not report it.
+  ///
+  /// Returns false when the core's worker is already gone: the run was not
+  /// clean, and the evidence is kept on purpose.
+  bool markCleanExit() => _bindings.markCleanExit(_handle);
 
   /// Drains whatever is queued right now.
   ///

@@ -1,0 +1,25 @@
+[package]
+name = "ts-crash"
+description = "Crash evidence: run markers, the notes a panic or an exception leaves, and the report that bundles them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# No internal dependency, like `ts-logging`: the crash directory is passed in by
+# the caller (the FFI layer knows the application data root), so this crate
+# stays a leaf.
+#
+# `backtrace` rather than `std::backtrace`: the notes must carry frame
+# addresses, and std's `frames()`/`symbols()` are still unstable.
+backtrace.workspace = true
+crash-handler.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Asking whether the process that left a marker is still alive.
+windows-sys.workspace = true
+
+[dev-dependencies]
+# The integration tests drive `write_exception_note` through the real handler.
+crash-handler.workspace = true

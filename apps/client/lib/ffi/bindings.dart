@@ -1,6 +1,6 @@
 // Raw `dart:ffi` declarations for the Rust core.
 //
-// Hand-written rather than generated: there are twenty-six functions and the
+// Hand-written rather than generated: there are twenty-nine functions and the
 // signatures are the contract, so a generator would add a build step and a
 // dependency without removing much work.
 //
@@ -33,6 +33,17 @@ typedef _LogDirDart = Pointer<Utf8> Function();
 
 typedef _LogC = Void Function(Pointer<Utf8> level, Pointer<Utf8> message);
 typedef _LogDart = void Function(Pointer<Utf8> level, Pointer<Utf8> message);
+
+// --- crash evidence --------------------------------------------------------
+
+typedef _CrashStatusC = Pointer<Utf8> Function();
+typedef _CrashStatusDart = Pointer<Utf8> Function();
+
+typedef _CrashReportC = Pointer<Utf8> Function();
+typedef _CrashReportDart = Pointer<Utf8> Function();
+
+typedef _MarkCleanExitC = Bool Function(Handle handle);
+typedef _MarkCleanExitDart = bool Function(Handle handle);
 
 // --- commands --------------------------------------------------------------
 
@@ -140,6 +151,15 @@ class NightcordBindings {
       version = library.lookupFunction<_VersionC, _VersionDart>('nightcord_version'),
       logDir = library.lookupFunction<_LogDirC, _LogDirDart>('nightcord_log_dir'),
       log = library.lookupFunction<_LogC, _LogDart>('nightcord_log'),
+      crashStatus = library.lookupFunction<_CrashStatusC, _CrashStatusDart>(
+        'nightcord_crash_status',
+      ),
+      crashReport = library.lookupFunction<_CrashReportC, _CrashReportDart>(
+        'nightcord_crash_report',
+      ),
+      markCleanExit = library.lookupFunction<_MarkCleanExitC, _MarkCleanExitDart>(
+        'nightcord_mark_clean_exit',
+      ),
       connect = library.lookupFunction<_ConnectC, _ConnectDart>('nightcord_connect'),
       disconnect = library.lookupFunction<_DisconnectC, _DisconnectDart>('nightcord_disconnect'),
       joinChannel = library.lookupFunction<_JoinChannelC, _JoinChannelDart>(
@@ -212,6 +232,23 @@ class NightcordBindings {
   /// Takes no handle: this is the call an error handler makes, and it must work
   /// whatever state the core is in.
   final void Function(Pointer<Utf8>, Pointer<Utf8>) log;
+
+  /// What the previous runs left behind, as JSON.
+  ///
+  /// Takes no handle, for the same reason as [log] — the question is asked
+  /// exactly when the core is dead or never started.
+  final Pointer<Utf8> Function() crashStatus;
+
+  /// Builds a crash report and answers with its path (or why not), as JSON.
+  ///
+  /// Takes no handle; see [crashStatus].
+  final Pointer<Utf8> Function() crashReport;
+
+  /// Marks the run as a clean exit, so the next start does not report a crash.
+  ///
+  /// Returns false when the core's worker is already gone — the run was not
+  /// clean, and the evidence is kept on purpose.
+  final bool Function(Handle) markCleanExit;
 
   /// Sends a serialised `ConnectRequest`.
   final void Function(Handle, Pointer<Utf8>) connect;

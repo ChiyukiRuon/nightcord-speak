@@ -27,6 +27,7 @@
 mod audio;
 mod client;
 mod command;
+mod crash;
 mod event;
 mod logging;
 mod string;
@@ -40,6 +41,13 @@ use crate::audio::AudioDirection;
 use crate::client::NightcordClient;
 use crate::command::Command;
 use crate::string::{free_c_string, from_c_str, into_c_string};
+
+/// A development aid, next to `NIGHTCORD_AUTO_CONNECT` (which lives in the
+/// Dart layer): `ffi` makes `nightcord_create` panic — the process aborts, the
+/// "died on the spot" path — and `worker` makes the worker task panic, the
+/// "core half-dead" path. Both are how the crash-reporting smoke tests ask for
+/// a crash on purpose (`docs/crash.md`).
+pub(crate) const TEST_PANIC_VAR: &str = "NIGHTCORD_TEST_PANIC";
 
 /// Reports a request that could not even be understood.
 ///
@@ -80,10 +88,26 @@ pub extern "C" fn nightcord_create() -> *mut NightcordClient {
     // after the thing that failed has already given up is a line nobody reads.
     install_logging();
 
+    // The crash hooks and the run marker, before anything that could die. The
+    // marker is also what gates note-writing, so a start that never gets this
+    // far leaves nothing behind on purpose.
+    crash::begin();
+
+    // Read after the hooks are installed, so the note is written before the
+    // abort. This panic unwinds out of an `extern "C"` function, which edition
+    // 2024 turns into an abort — the real "process died" path.
+    if std::env::var(TEST_PANIC_VAR).is_ok_and(|value| value == "ffi") {
+        panic!("{TEST_PANIC_VAR}=ffi");
+    }
+
     match NightcordClient::new() {
         Ok(client) => Box::into_raw(Box::new(client)),
         Err(error) => {
             tracing::error!(%error, "could not start the core");
+            // A run that never began is not a crash: clear the marker so the
+            // start-up-failure screen is not followed by a false "last session
+            // ended abnormally" banner on the next start.
+            crash::mark_clean();
             std::ptr::null_mut()
         }
     }
@@ -105,7 +129,68 @@ pub unsafe extern "C" fn nightcord_destroy(handle: *mut NightcordClient) {
         return;
     }
     // Safety: the caller guarantees a live pointer from `nightcord_create`.
-    drop(unsafe { Box::from_raw(handle) });
+    let mut client = unsafe { Box::from_raw(handle) };
+    if client.shutdown() {
+        crash::mark_clean();
+    }
+    // Dropping runs `shutdown` again, which is harmless and idempotent.
+    drop(client);
+}
+
+/// Marks this run as a clean exit, so the next start does not report it.
+///
+/// The front-end calls this when the user closes the window: that path never
+/// destroys the client (the process is about to end), and without this call
+/// every normal exit would look like a crash.
+///
+/// Returns `false` when the worker is already gone — a run whose core died is
+/// not a clean one, and its marker is kept so the next start can say so.
+///
+/// # Safety
+///
+/// `handle` must be null, or a pointer returned by [`nightcord_create`] that
+/// has not already been destroyed. It is only *read* here, so calling this
+/// right before `nightcord_destroy` is fine.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_mark_clean_exit(handle: *mut NightcordClient) -> bool {
+    // Safety: null is allowed, anything else is the caller's live pointer.
+    match unsafe { handle.as_ref() } {
+        Some(client) if !client.worker_alive() => {
+            // Keep the marker: the next start must report the dead core even
+            // though the user closed the window themselves.
+            tracing::error!("the worker is gone; not marking this run as clean");
+            false
+        }
+        _ => {
+            crash::mark_clean();
+            true
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Crash evidence
+// ---------------------------------------------------------------------------
+
+/// What the last runs left behind, as JSON.
+///
+/// No handle on purpose, like [`nightcord_log_dir`]: the answer must be
+/// available when the core is dead or never started — which is exactly when it
+/// is asked for — so it must not depend on the worker.
+///
+/// The returned string must be freed with [`nightcord_free_string`].
+#[unsafe(no_mangle)]
+pub extern "C" fn nightcord_crash_status() -> *mut c_char {
+    into_c_string(crash::status_json())
+}
+
+/// Builds the crash report and answers with its path (or why not), as JSON.
+///
+/// Same no-handle reasoning as [`nightcord_crash_status`]. The returned string
+/// must be freed with [`nightcord_free_string`].
+#[unsafe(no_mangle)]
+pub extern "C" fn nightcord_crash_report() -> *mut c_char {
+    into_c_string(crash::report_json())
 }
 
 /// The library version, as a static string the caller must **not** free.

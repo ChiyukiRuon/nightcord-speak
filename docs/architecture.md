@@ -14,6 +14,7 @@
 | 1 | `ts-events` | model | 事件与 `EventBus` |
 | 1 | `ts-identity` | model | 身份持久化（不碰密码学）；应用数据目录 |
 | 1 | `ts-logging` | **无**（仅外部 tracing 三件套） | 进程级 subscriber：文件、轮转、filter |
+| 1 | `ts-crash` | **无**（仅 `crash-handler` + `backtrace`） | 崩溃笔记、运行标记、报告打包。目录由调用方传入，与 `ts-logging` 同型 |
 | 2 | `ts-settings` | model, identity | 用户偏好与已存服务器：结构、存储 |
 | 2 | `ts-protocol` | model, identity | 能力拆分的 trait + `Backend` |
 | 3 | `ts-session` | model, events, protocol | `Session` / `SessionManager` |
@@ -21,7 +22,7 @@
 | 4 | `ts-protocol-tsclient` | model, events, identity, protocol, **tsclientlib** | 唯一知道 `tsclientlib` 的地方 |
 | 5 | `ts-protocol-ts3` / `ts-protocol-ts6` | model, events, identity, protocol, tsclient | 声明「我是谁」+ 各自扩展 |
 | 6 | `ts-core` | model, events, identity, protocol, ts3, ts6, session | facade + 后端选择 |
-| 7 | `ts-ffi` | core, session, audio, identity, logging, settings, model, events, protocol | C ABI / JSON / 日志 / 设置出口 |
+| 7 | `ts-ffi` | core, session, audio, identity, logging, settings, crash, model, events, protocol | C ABI / JSON / 日志 / 设置 / 崩溃证据出口 |
 | 7 | `apps/cli` | core, session, audio, identity, model, events, protocol | 无头客户端 |
 
 `ts-audio` 与 `ts-session` 同层：都只依赖 model + protocol，**互不依赖**。

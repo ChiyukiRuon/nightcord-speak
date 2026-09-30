@@ -620,6 +620,49 @@
     "description": "Notification body when the connection failed for good"
   },
 
+  "crashBannerTitle": "Last session ended unexpectedly",
+  "@crashBannerTitle": {
+    "description": "Banner heading shown when the previous run did not exit cleanly"
+  },
+  "crashBannerNotes": "{count, plural, one{1 crash note} other{{count} crash notes}}",
+  "@crashBannerNotes": {
+    "description": "How much crash evidence is waiting to be bundled",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "crashGenerateReport": "Generate report",
+  "@crashGenerateReport": {
+    "description": "Button that bundles logs, notes and markers into one text file"
+  },
+  "crashOpenFolder": "Open folder",
+  "@crashOpenFolder": {
+    "description": "Button that reveals the crash evidence directory"
+  },
+  "crashDismiss": "Dismiss",
+  "@crashDismiss": {
+    "description": "Button that hides the crash banner for this session"
+  },
+  "crashReportWritten": "Report written: {path}",
+  "@crashReportWritten": {
+    "description": "Snack bar after a crash report was generated",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "crashReportFailed": "Could not generate the report; see the log",
+  "@crashReportFailed": {
+    "description": "Snack bar when the crash report could not be written"
+  },
+  "errorCoreGone": "The core has crashed. Restart the application.",
+  "@errorCoreGone": {
+    "description": "Error sentence for the dead-worker variant"
+  },
+
   "modePushToTalk": "Push to talk",
   "@modePushToTalk": {
     "description": "Transmission mode: only while the key is held"
