@@ -39,7 +39,7 @@ pub mod vad;
 pub use capture::{Capture, CaptureFormat};
 pub use device::{AudioBackend, AudioDevice, Direction, SystemAudio};
 pub use encoder::OpusEncoder;
-pub use engine::{OpenDevice, TransmitPolicy, VoiceEngine};
+pub use engine::{OpenDevice, TransmitPolicy, VoiceEngine, play_test_tone};
 pub use playback::{Playback, PlaybackFormat};
 pub use resampler::Resampler;
 pub use ring::SampleRing;

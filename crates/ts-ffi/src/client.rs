@@ -483,15 +483,25 @@ async fn handle(
         },
 
         Command::VoiceTestOutput => match voice.as_mut() {
+            // An engine is already holding the output device, so the tone goes
+            // through it: a second stream on the same speakers is not something
+            // the OS allows anyway.
             Some(active) => {
                 active.engine.play_test_tone();
                 events.push(FfiEvent::ok(name, Some(active.session)));
             }
-            None => events.push(FfiEvent::failed(
-                name,
-                None,
-                ClientError::Audio(ts_model::AudioError::NoOutputDevice),
-            )),
+            // No engine, and the speakers are still testable on their own.
+            // Requiring the engine left the two checks coupled — the speaker
+            // button stayed grey until a microphone had been opened for some
+            // other reason — when all a tone needs is the output device.
+            None => {
+                match ts_audio::play_test_tone(core.settings().audio.output_device.as_deref()) {
+                    Ok(()) => events.push(FfiEvent::ok(name, None)),
+                    Err(error) => {
+                        events.push(FfiEvent::failed(name, None, ClientError::Audio(error)));
+                    }
+                }
+            }
         },
 
         Command::VoiceStart {

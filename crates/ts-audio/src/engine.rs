@@ -242,6 +242,53 @@ pub struct OpenDevice {
 /// than as a fault.
 const TEST_TONE_HZ: f32 = 440.0;
 
+/// How long the stream outlives the queued tone before the device is released.
+///
+/// The tone plays out of the device's own buffer, so the stream cannot be
+/// dropped the moment the samples are written. A little slack beyond the
+/// tone's own length costs nothing and covers whatever the device still had
+/// queued when the tone went in.
+const TEST_TONE_TAIL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Plays the test tone through `output`, with no engine and no microphone.
+///
+/// The engine owns the playback stream, so a tone needs one either way — but
+/// nothing else: no capture device, no session, no sink. The speaker check used
+/// to require a running engine, and starting an engine opens a microphone, so
+/// "can I hear anything" could not be asked without also grabbing the mic.
+///
+/// The stream is kept alive for exactly as long as the tone needs and then
+/// dropped, which is what releases the device again.
+///
+/// # Errors
+///
+/// Whatever opening the output device returns; see [`Playback::open`].
+pub fn play_test_tone(output: Option<&str>) -> Result<(), AudioError> {
+    let playback = Playback::open(output)?;
+
+    let mut phase = 0.0;
+    // The same length and amplitude as the engine's own test tone, so the two
+    // paths are indistinguishable to the person listening — the point of the
+    // check is the answer, not which code produced it.
+    let mono = crate::tone::sine(
+        TEST_TONE_HZ,
+        0.2,
+        crate::format::FRAME_SAMPLES * 16,
+        &mut phase,
+    );
+    let queued = playback.write(&crate::tone::to_stereo(&mono));
+
+    let seconds =
+        queued as f32 / (crate::SAMPLE_RATE as f32 * crate::format::PLAYBACK_CHANNELS as f32);
+    let lifetime = std::time::Duration::from_secs_f32(seconds) + TEST_TONE_TAIL;
+    std::thread::spawn(move || {
+        std::thread::sleep(lifetime);
+        drop(playback);
+    });
+
+    Ok(())
+}
+
 /// Routes a backend's decoded audio into the engine's speakers.
 ///
 /// A separate type rather than an implementation of [`AudioSink`] on
