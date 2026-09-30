@@ -761,7 +761,7 @@ abstract class AppLocalizations {
   /// Says what is actually lost, which is the reason the dialog exists
   ///
   /// In en, this message translates to:
-  /// **'This ends the session. The channel tree and the conversation are cleared with it.'**
+  /// **'You will return to the initial page, and your chat history will be cleared.'**
   String get voiceDisconnectConfirmBody;
 
   /// Tooltip of the microphone button while open

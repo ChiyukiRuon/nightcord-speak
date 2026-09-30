@@ -377,7 +377,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceDisconnectConfirmBody =>
-      'This ends the session. The channel tree and the conversation are cleared with it.';
+      'You will return to the initial page, and your chat history will be cleared.';
 
   @override
   String get voiceMuteMic => 'Mute microphone';

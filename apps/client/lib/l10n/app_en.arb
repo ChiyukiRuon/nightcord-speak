@@ -516,7 +516,7 @@
   "@voiceDisconnectConfirmTitle": {
     "description": "Title of the dialog that asks before closing a server connection"
   },
-  "voiceDisconnectConfirmBody": "This ends the session. The channel tree and the conversation are cleared with it.",
+  "voiceDisconnectConfirmBody": "You will return to the initial page, and your chat history will be cleared.",
   "@voiceDisconnectConfirmBody": {
     "description": "Says what is actually lost, which is the reason the dialog exists"
   },

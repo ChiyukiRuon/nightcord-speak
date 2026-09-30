@@ -119,7 +119,7 @@
   "voiceUnmuteMic": "取消静音",
   "voiceDisconnect": "断开连接",
   "voiceDisconnectConfirmTitle": "断开连接？",
-  "voiceDisconnectConfirmBody": "这次会话会结束，频道树和聊天记录都会一起清掉。",
+  "voiceDisconnectConfirmBody": "你将回到初始页面，聊天记录也会清空。",
   "voiceMuteMic": "静音麦克风",
   "voiceUndeafen": "取消耳聋",
   "voiceDeafen": "耳聋（关闭扬声器）",
