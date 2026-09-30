@@ -88,6 +88,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
           _MemberRow(
             member: member,
             depth: row.depth + 1,
+            speaking: _view.speaking.contains(member.id),
             // Someone else's name is the way into a private conversation with
             // them — the only one there is, and without it a private message
             // arrives with nowhere to read it.
@@ -396,6 +397,7 @@ class _MemberRow extends StatelessWidget {
     required this.member,
     required this.depth,
     this.dimmed = false,
+    this.speaking = false,
     this.onTap,
     this.unread = false,
   });
@@ -403,6 +405,9 @@ class _MemberRow extends StatelessWidget {
   final Client member;
   final int depth;
   final bool dimmed;
+
+  /// Whether this person is talking right now.
+  final bool speaking;
 
   /// Opens a private conversation, when there is one to open.
   final VoidCallback? onTap;
@@ -413,7 +418,12 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final nameColour = dimmed ? AppColors.textMuted : AppColors.textPrimary;
+    // The name lighting up is the whole indicator, the way TeamSpeak draws it:
+    // an icon next to a talking name is one more thing to read when the eye is
+    // already on the name.
+    final nameColour = speaking
+        ? AppColors.live
+        : (dimmed ? AppColors.textMuted : AppColors.textPrimary);
 
     return InkWell(
       onTap: onTap,
@@ -439,6 +449,15 @@ class _MemberRow extends StatelessWidget {
           ],
           if (member.flags.inputMuted && !dimmed)
             _StateBadge(colour: AppColors.danger, tooltip: l10n.memberMuted, icon: Icons.mic_off),
+          // Deafened is its own badge, not a quieter microphone: the two say
+          // different things about who can hear whom, and the official client
+          // draws them apart for the same reason.
+          if (member.flags.outputMuted && !dimmed)
+            _StateBadge(
+              colour: AppColors.danger,
+              tooltip: l10n.memberDeafened,
+              icon: Icons.headset_off,
+            ),
           if (member.flags.recording)
             _StateBadge(
               colour: AppColors.danger,

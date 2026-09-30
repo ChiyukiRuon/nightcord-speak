@@ -483,4 +483,41 @@ void main() {
       expect(target.isConnected, isTrue);
     });
   });
+
+  group('speaking', () {
+    test('a name lights up and goes out again', () {
+      // Regression: `SpeakingEvent` was parsed and then dropped — and the core
+      // never sent it either, so the two failures hid each other and nobody
+      // was ever shown as talking. A talking light that only ever goes *on*
+      // would be worse than none: names would stay lit for good.
+      final target = view();
+
+      target.apply(const SpeakingEvent(clientId: 4, speaking: true));
+      expect(target.speaking, contains(4));
+
+      target.apply(const SpeakingEvent(clientId: 4, speaking: false));
+      expect(target.speaking, isNot(contains(4)));
+    });
+
+    test('someone talking who leaves stops talking', () {
+      // The `false` half can be the packet that never arrives — a client that
+      // dropped mid-sentence would otherwise leave a lit name behind.
+      final target = view();
+      target.apply(const SpeakingEvent(clientId: 4, speaking: true));
+
+      target.apply(const ClientLeftEvent(4));
+      expect(target.speaking, isNot(contains(4)));
+    });
+
+    test('a dropped session clears everyone', () {
+      final target = view();
+      applyAll(target, [
+        const SpeakingEvent(clientId: 4, speaking: true),
+        const SpeakingEvent(clientId: 5, speaking: true),
+        const DisconnectedEvent(),
+      ]);
+
+      expect(target.speaking, isEmpty);
+    });
+  });
 }

@@ -121,7 +121,59 @@ void main() {
     container.read(sessionsProvider.notifier).toggleInputMuted(7);
     container.read(sessionsProvider.notifier).toggleOutputMuted(7);
 
-    expect(transport.calls, ['setInputMuted:true', 'setOutputMuted:true']);
+    // `voiceStart` comes first because connecting opens the engine — see the
+    // test below for why.
+    expect(transport.calls, [
+      'voiceStart:7',
+      'setInputMuted:true',
+      'setOutputMuted:true',
+    ]);
+  });
+
+  test('connecting opens the voice engine', () async {
+    // Regression: voice was started only from a button inside the settings
+    // dialog, so a client that had connected and joined a channel both heard
+    // nothing and said nothing — with no error, no log line and nothing on
+    // screen to say why. There is no "start voice" in TeamSpeak: the
+    // connection is the switch.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [clientTransportProvider.overrideWithValue(transport)],
+    );
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    transport._events.add(const DomainEvent(
+      session: 3,
+      event: ConnectionStateChangedEvent(ConnectionState.connected),
+    ));
+    await pumpEventQueue();
+
+    expect(transport.calls, ['voiceStart:3']);
+  });
+
+  test('a reconnect does not reopen a microphone that is already running', () async {
+    // The engine outlives a dropped connection: reopening the devices would
+    // cut off a stream that had recovered on its own.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [clientTransportProvider.overrideWithValue(transport)],
+    );
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    for (final state in [
+      ConnectionState.connected,
+      ConnectionState.reconnecting,
+      ConnectionState.connected,
+    ]) {
+      transport._events.add(
+        DomainEvent(session: 3, event: ConnectionStateChangedEvent(state)),
+      );
+      await pumpEventQueue();
+    }
+
+    expect(transport.calls, ['voiceStart:3']);
   });
 
   group('localeProvider', () {

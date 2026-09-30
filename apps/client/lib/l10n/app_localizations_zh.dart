@@ -46,13 +46,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTransmissionMode => '传输方式';
 
   @override
-  String get settingsDeviceChangeNote => '设备改动会在下次「开始语音」时生效。';
+  String get settingsDeviceChangeNote => '换设备会立刻重新打开音频。';
 
   @override
-  String get settingsConnectFirst => '连接后可开始语音。';
+  String get settingsConnectFirst => '连接后可以测试麦克风。';
 
   @override
-  String get settingsStartVoice => '开始语音';
+  String get settingsTestMicrophone => '测试麦克风';
+
+  @override
+  String get settingsStopTest => '关闭测试';
 
   @override
   String get settingsTestSpeaker => '测试扬声器';
@@ -242,6 +245,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get memberMuted => '已静音';
+
+  @override
+  String get memberDeafened => '已关闭扬声器';
 
   @override
   String get memberRecording => '录音中';

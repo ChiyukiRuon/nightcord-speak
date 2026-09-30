@@ -68,6 +68,13 @@ final lastErrorProvider =
 
 /// Accumulates events into per-session views.
 class SessionsNotifier extends Notifier<Map<int, ServerView>> {
+  /// Sessions whose voice engine has already been opened.
+  ///
+  /// The engine follows the connection, not a button, and it opens once: a
+  /// reconnect republishes `connected`, and reopening a microphone that is
+  /// already running would tear down a working stream mid-sentence.
+  final Set<int> _voiceStarted = {};
+
   @override
   Map<int, ServerView> build() {
     // `listen` rather than `watch`: this must react to each event without
@@ -96,6 +103,18 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 
         view.apply(event);
         state = {...state, session: view};
+
+        // The engine opens when the session does.
+        //
+        // There is no "start voice" in TeamSpeak: joining a channel *is*
+        // joining the conversation, and a client that stays silent until a
+        // control inside the settings dialog is found reads as a broken
+        // microphone and a broken speaker at once — with nothing on screen
+        // saying which. The web front-end opens its engine on connect for the
+        // same reason; this is the desktop half of that.
+        if (view.isConnected && _voiceStarted.add(session)) {
+          ref.read(clientTransportProvider).voiceStart(session);
+        }
 
         // The core's own errors — a failed handshake, a dropped connection, a
         // refused reconnect — used to stop here: `ServerView` keeps no error

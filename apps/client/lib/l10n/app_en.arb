@@ -51,17 +51,21 @@
   "@settingsTransmissionMode": {
     "description": "Label of the transmission mode dropdown"
   },
-  "settingsDeviceChangeNote": "Device changes take effect the next time voice is started.",
+  "settingsDeviceChangeNote": "Changing a device reopens the audio at once.",
   "@settingsDeviceChangeNote": {
-    "description": "Explains that a device cannot be swapped under a running voice stream"
+    "description": "Explains that a device change is applied immediately"
   },
-  "settingsConnectFirst": "Connect to start voice.",
+  "settingsConnectFirst": "Connect to test the microphone.",
   "@settingsConnectFirst": {
     "description": "Shown instead of the above when no session is connected"
   },
-  "settingsStartVoice": "Start voice",
-  "@settingsStartVoice": {
-    "description": "Button that starts the audio engine"
+  "settingsTestMicrophone": "Test microphone",
+  "@settingsTestMicrophone": {
+    "description": "Button that opens the selected microphone so its level can be watched"
+  },
+  "settingsStopTest": "Stop the test",
+  "@settingsStopTest": {
+    "description": "The same button while the microphone test is running"
   },
   "settingsTestSpeaker": "Test speakers",
   "@settingsTestSpeaker": {
@@ -326,6 +330,10 @@
   "memberMuted": "Muted",
   "@memberMuted": {
     "description": "Tooltip of the muted badge on a member row"
+  },
+  "memberDeafened": "Deafened",
+  "@memberDeafened": {
+    "description": "Tooltip of the deafened badge on a member row"
   },
   "memberRecording": "Recording",
   "@memberRecording": {

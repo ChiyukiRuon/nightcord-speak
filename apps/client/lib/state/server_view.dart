@@ -94,6 +94,15 @@ class ServerView {
   final Map<int, Channel> channels = {};
   final Map<int, Client> clients = {};
 
+  /// Who is talking right now.
+  ///
+  /// A set here rather than a flag on [Client] because speaking is not a
+  /// property of a person — it flips several times a second — and a flag would
+  /// be carried into every snapshot diff as though it were one. It is also why
+  /// the core sends it as a pair of events: an indicator that fails to go out
+  /// leaves a name lit for good.
+  final Set<int> speaking = {};
+
   /// Messages by [ConversationKey].
   final Map<String, List<Message>> conversations = {};
 
@@ -268,6 +277,9 @@ class ServerView {
       case DisconnectedEvent():
         connection = ConnectionState.disconnected;
         reconnect = null;
+        // Nobody is talking on a connection that is gone, and the last
+        // `speaking: false` may have been the packet that never arrived.
+        speaking.clear();
 
       case ReconnectScheduledEvent(:final attempt, :final delayMs):
         // Kept rather than ignored: this is the only thing that knows *when* the
@@ -295,6 +307,7 @@ class ServerView {
           ownChannelId = null;
         }
         final gone = clients.remove(clientId);
+        speaking.remove(clientId);
         if (gone != null) {
           offline.insert(0, gone);
         }
@@ -333,9 +346,15 @@ class ServerView {
       case VoiceStateChangedEvent(:final state):
         voice = state;
 
+      case SpeakingEvent(:final clientId, :final speaking):
+        if (speaking) {
+          this.speaking.add(clientId);
+        } else {
+          this.speaking.remove(clientId);
+        }
+
       // Not part of the rendered state.
       case PokedEvent():
-      case SpeakingEvent():
       case ErrorEvent():
       case UnknownEvent():
         break;

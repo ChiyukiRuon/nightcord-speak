@@ -48,13 +48,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDeviceChangeNote =>
-      'Device changes take effect the next time voice is started.';
+      'Changing a device reopens the audio at once.';
 
   @override
-  String get settingsConnectFirst => 'Connect to start voice.';
+  String get settingsConnectFirst => 'Connect to test the microphone.';
 
   @override
-  String get settingsStartVoice => 'Start voice';
+  String get settingsTestMicrophone => 'Test microphone';
+
+  @override
+  String get settingsStopTest => 'Stop the test';
 
   @override
   String get settingsTestSpeaker => 'Test speakers';
@@ -253,6 +256,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get memberMuted => 'Muted';
+
+  @override
+  String get memberDeafened => 'Deafened';
 
   @override
   String get memberRecording => 'Recording';

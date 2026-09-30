@@ -41,7 +41,11 @@ class SettingsDialog extends ConsumerStatefulWidget {
 class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   late final TextEditingController _nickname = TextEditingController();
   late final TextEditingController _profile = TextEditingController();
-  bool _started = false;
+  /// Whether the microphone test is running.
+  ///
+  /// Not the voice state: the engine follows the connection now, so this only
+  /// says whether the user asked for the meter to be opened on demand.
+  bool _testing = false;
 
   /// Asks the core for the meter reading, and — far more slowly — re-enumerates
   /// the devices so a headset plugged in while this is open shows up.
@@ -65,7 +69,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     // Enumeration touches real hardware on the core's thread, so the lists
     // arrive through `audioDevicesProvider` rather than as a return value.
     // Asking again on open also picks up a headset plugged in since last time.
-    final client = ref.read(rustClientProvider);
+    final client = ref.read(clientTransportProvider);
     client.requestSettings();
     client.requestAudioDevices('input');
     client.requestAudioDevices('output');
@@ -213,17 +217,20 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 children: [
                   FilledButton(
                     style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
-                    onPressed: (_started || !connected) ? null : _startVoice,
-                    child: Text(l10n.settingsStartVoice),
+                    onPressed: connected ? _toggleMicTest : null,
+                    child: Text(
+                      _testing ? l10n.settingsStopTest : l10n.settingsTestMicrophone,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  // Only meaningful with an engine: it owns the output device,
-                  // and a second stream on the same speakers is not something
-                  // the OS allows anyway.
+                  // Always available, engine or not: with no engine the core
+                  // opens the output device on its own for the length of the
+                  // tone. Gating this on the engine made the speaker check
+                  // depend on a microphone being open first — nothing a person
+                  // could guess from two buttons sitting side by side.
                   OutlinedButton.icon(
-                    onPressed: (ref.watch(voiceStatusProvider)?.running ?? false)
-                        ? () => ref.read(voiceStatusProvider.notifier).testOutput()
-                        : null,
+                    onPressed: () =>
+                        ref.read(voiceStatusProvider.notifier).testOutput(),
                     icon: const Icon(Icons.volume_up_outlined, size: 18),
                     label: Text(l10n.settingsTestSpeaker),
                   ),
@@ -329,9 +336,30 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     );
   }
 
-  /// Stores an audio change.
-  void _audio(Settings settings, AudioSettings audio) =>
-      ref.read(settingsProvider.notifier).update(settings.copyWith(audio: audio));
+  /// Stores an audio change, and applies a device change to the live stream.
+  ///
+  /// Changing a device used to be a promise for next time: the dropdown showed
+  /// the new one while the engine kept the old, and nothing on screen said
+  /// which was which. Devices cannot be swapped under a running stream, so
+  /// honouring the choice means reopening the engine — done here, while the
+  /// choice is being made.
+  void _audio(Settings settings, AudioSettings audio) {
+    ref.read(settingsProvider.notifier).update(settings.copyWith(audio: audio));
+
+    final devicesChanged =
+        audio.inputDevice != settings.audio.inputDevice ||
+        audio.outputDevice != settings.audio.outputDevice;
+    final connected = ref.read(sessionsProvider)[widget.session]?.isConnected ?? false;
+    if (!devicesChanged || !connected) return;
+
+    // Passed explicitly: the settings write above is asynchronous, and a
+    // `voice_start` that raced it would open the device that was stored last.
+    ref.read(clientTransportProvider).voiceStart(
+      widget.session,
+      inputDevice: audio.inputDevice,
+      outputDevice: audio.outputDevice,
+    );
+  }
 
   /// Stores a connection change.
   void _connection(Settings settings, ConnectionSettings connection) =>
@@ -361,12 +389,25 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     );
   }
 
-  void _startVoice() {
-    // No device arguments: the core takes them from the settings that were just
-    // written, so there is one place a device is chosen rather than two that
-    // can disagree.
-    ref.read(rustClientProvider).voiceStart(widget.session);
-    setState(() => _started = true);
+  /// Opens the selected microphone so its level can be watched, or closes it.
+  ///
+  /// The devices are passed explicitly rather than left to the core to look up.
+  /// The settings write above is asynchronous, and a `voice_start` that raced
+  /// it would open whichever device was stored *last* — which is the one device
+  /// the user just said they did not want.
+  void _toggleMicTest() {
+    final transport = ref.read(clientTransportProvider);
+    if (_testing) {
+      transport.voiceStop();
+    } else {
+      final audio = ref.read(settingsProvider)?.audio;
+      transport.voiceStart(
+        widget.session,
+        inputDevice: audio?.inputDevice,
+        outputDevice: audio?.outputDevice,
+      );
+    }
+    setState(() => _testing = !_testing);
   }
 }
 

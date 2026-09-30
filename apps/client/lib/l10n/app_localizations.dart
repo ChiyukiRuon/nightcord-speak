@@ -170,23 +170,29 @@ abstract class AppLocalizations {
   /// **'Transmission'**
   String get settingsTransmissionMode;
 
-  /// Explains that a device cannot be swapped under a running voice stream
+  /// Explains that a device change is applied immediately
   ///
   /// In en, this message translates to:
-  /// **'Device changes take effect the next time voice is started.'**
+  /// **'Changing a device reopens the audio at once.'**
   String get settingsDeviceChangeNote;
 
   /// Shown instead of the above when no session is connected
   ///
   /// In en, this message translates to:
-  /// **'Connect to start voice.'**
+  /// **'Connect to test the microphone.'**
   String get settingsConnectFirst;
 
-  /// Button that starts the audio engine
+  /// Button that opens the selected microphone so its level can be watched
   ///
   /// In en, this message translates to:
-  /// **'Start voice'**
-  String get settingsStartVoice;
+  /// **'Test microphone'**
+  String get settingsTestMicrophone;
+
+  /// The same button while the microphone test is running
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the test'**
+  String get settingsStopTest;
 
   /// Button that plays a test tone through the output device
   ///
@@ -541,6 +547,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Muted'**
   String get memberMuted;
+
+  /// Tooltip of the deafened badge on a member row
+  ///
+  /// In en, this message translates to:
+  /// **'Deafened'**
+  String get memberDeafened;
 
   /// Tooltip of the recording badge on a member row
   ///
