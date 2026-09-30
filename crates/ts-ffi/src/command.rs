@@ -5,7 +5,8 @@
 //! the core never reach the ABI — see `client.rs` for why that matters.
 
 use ts_core::ConnectRequest;
-use ts_model::{ChannelId, ClientId, MessageTarget, SessionId, VoiceActivationMode};
+use ts_model::{ChannelId, ClientId, MessageTarget, SessionId};
+use ts_settings::Settings;
 
 use crate::audio::AudioDirection;
 
@@ -56,9 +57,6 @@ pub(crate) enum Command {
     /// Close the voice engine and unbind it.
     VoiceStop,
 
-    /// Change how transmission is triggered.
-    VoiceSetMode { mode: VoiceActivationMode },
-
     /// Mute or unmute the microphone.
     VoiceSetInputMuted { muted: bool },
 
@@ -67,6 +65,13 @@ pub(crate) enum Command {
 
     /// Push-to-talk key down or up.
     VoicePushToTalk { held: bool },
+
+    /// Report the preferences in force.
+    SettingsGet,
+
+    /// Replace the preferences, write them down, and apply what can be applied
+    /// to a running engine.
+    SettingsUpdate(Box<Settings>),
 
     /// Stop the worker.
     Shutdown,
@@ -88,10 +93,11 @@ impl Command {
             Self::ListDevices { .. } => "audio_devices",
             Self::VoiceStart { .. } => "voice_start",
             Self::VoiceStop => "voice_stop",
-            Self::VoiceSetMode { .. } => "voice_set_mode",
             Self::VoiceSetInputMuted { .. } => "voice_set_input_muted",
             Self::VoiceSetOutputMuted { .. } => "voice_set_output_muted",
             Self::VoicePushToTalk { .. } => "voice_push_to_talk",
+            Self::SettingsGet => "settings",
+            Self::SettingsUpdate(_) => "settings_update",
             Self::Shutdown => "shutdown",
         }
     }

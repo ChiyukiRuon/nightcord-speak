@@ -36,6 +36,10 @@ pub enum ClientError {
     #[error("identity error: {0}")]
     Identity(IdentityError),
 
+    /// The user's settings could not be read or written.
+    #[error("settings error: {0}")]
+    Settings(SettingsError),
+
     /// The server refused an operation for permission reasons.
     #[error("permission error: {0}")]
     Permission(PermissionError),
@@ -241,6 +245,33 @@ pub enum IdentityError {
     InvalidName {
         /// The rejected name.
         name: String,
+    },
+    /// No platform data directory could be determined.
+    #[error("could not determine the application data directory")]
+    NoStorageRoot,
+}
+
+/// The user's settings could not be read or written.
+///
+/// Deliberately *not* sharing [`IdentityError`]'s severity. A settings file that
+/// cannot be read is worth a warning and a fall back to defaults; a client that
+/// refuses to start because a preference file is malformed has turned a cosmetic
+/// problem into a fatal one. This type carries the reason so the caller can make
+/// that call, rather than making it here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingsError {
+    /// Reading or writing the settings file failed.
+    #[error("settings storage failed: {message}")]
+    Io {
+        /// Description from the filesystem.
+        message: String,
+    },
+    /// The file exists but could not be parsed.
+    #[error("the settings file is malformed: {message}")]
+    Malformed {
+        /// Why it could not be parsed.
+        message: String,
     },
     /// No platform data directory could be determined.
     #[error("could not determine the application data directory")]

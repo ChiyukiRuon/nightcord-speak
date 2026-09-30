@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../ffi/rust_client.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
+import '../models/settings.dart';
 import '../state/server_view.dart';
 
 /// The running Rust core, started once for the app.
@@ -146,6 +147,10 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 }
 
 /// The audio devices the core last reported, by direction.
+final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
+  SettingsNotifier.new,
+);
+
 final audioDevicesProvider =
     NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
   AudioDevicesNotifier.new,
@@ -181,6 +186,50 @@ class AudioDevicesNotifier extends Notifier<Map<String, List<AudioDevice>>> {
         .toList(growable: false);
 
     state = {...state, direction: devices};
+  }
+}
+
+/// The user's preferences.
+///
+/// Null until the core has answered once. The UI renders its defaults until
+/// then rather than blocking: the settings live on disk and take a round trip to
+/// fetch, and a settings screen that refuses to draw for a frame is worse than
+/// one that fills in.
+///
+/// The core is the owner. Nothing is cached here that the core has not said —
+/// an edit goes to `updateSettings` and comes back as the result, so the two
+/// cannot end up disagreeing about what is stored.
+class SettingsNotifier extends Notifier<Settings?> {
+  @override
+  Settings? build() {
+    ref.listen(eventStreamProvider, (_, next) {
+      final event = next.value;
+      if (event is CommandResultEvent) _collect(event.result);
+    });
+    return null;
+  }
+
+  /// Asks the core for the current settings.
+  void refresh() => ref.read(rustClientProvider).requestSettings();
+
+  /// Records an edit, and sends it to the core to be stored and applied.
+  ///
+  /// Applied locally first so the control the user just moved does not spring
+  /// back while the round trip happens. If the write fails the failure is
+  /// reported like any other command failure, and the next `settings` result
+  /// puts the truth back.
+  void update(Settings settings) {
+    state = settings;
+    ref.read(rustClientProvider).updateSettings(settings);
+  }
+
+  void _collect(CommandResult result) {
+    if (result.command != 'settings' || !result.ok) return;
+
+    final data = result.data;
+    if (data == null) return;
+
+    state = Settings.fromJson(data);
   }
 }
 

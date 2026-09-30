@@ -38,7 +38,7 @@ pub use client::{Client, ClientFlags, ClientType};
 pub use connection::{ConnectionState, ReconnectPolicy};
 pub use error::{
     AddressError, AudioError, AuthError, ClientError, IdentityError, NetworkError, PermissionError,
-    ProtocolError, VoiceError,
+    ProtocolError, SettingsError, VoiceError,
 };
 pub use id::{ChannelId, ClientId, MessageId, ServerId, SessionId};
 pub use message::{Message, MessageTarget};

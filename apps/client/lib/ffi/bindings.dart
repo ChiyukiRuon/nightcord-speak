@@ -1,6 +1,6 @@
 // Raw `dart:ffi` declarations for the Rust core.
 //
-// Hand-written rather than generated: there are twenty functions and the
+// Hand-written rather than generated: there are twenty-one functions and the
 // signatures are the contract, so a generator would add a build step and a
 // dependency without removing much work.
 //
@@ -95,9 +95,6 @@ typedef _VoiceStartDart = void Function(
 typedef _VoiceStopC = Void Function(Handle handle);
 typedef _VoiceStopDart = void Function(Handle handle);
 
-typedef _VoiceSetModeC = Void Function(Handle handle, Pointer<Utf8> mode);
-typedef _VoiceSetModeDart = void Function(Handle handle, Pointer<Utf8> mode);
-
 typedef _VoiceSetBoolC = Void Function(Handle handle, Bool value);
 typedef _VoiceSetBoolDart = void Function(Handle handle, bool value);
 
@@ -108,6 +105,14 @@ typedef _PollEventsDart = Pointer<Utf8> Function(Handle handle);
 
 typedef _FreeStringC = Void Function(Pointer<Utf8> text);
 typedef _FreeStringDart = void Function(Pointer<Utf8> text);
+
+// --- settings --------------------------------------------------------------
+
+typedef _SettingsGetC = Void Function(Handle handle);
+typedef _SettingsGetDart = void Function(Handle handle);
+
+typedef _SettingsUpdateC = Void Function(Handle handle, Pointer<Utf8> settingsJson);
+typedef _SettingsUpdateDart = void Function(Handle handle, Pointer<Utf8> settingsJson);
 
 /// The bound C functions.
 ///
@@ -137,9 +142,6 @@ class NightcordBindings {
       ),
       voiceStart = library.lookupFunction<_VoiceStartC, _VoiceStartDart>('nightcord_voice_start'),
       voiceStop = library.lookupFunction<_VoiceStopC, _VoiceStopDart>('nightcord_voice_stop'),
-      voiceSetMode = library.lookupFunction<_VoiceSetModeC, _VoiceSetModeDart>(
-        'nightcord_voice_set_mode',
-      ),
       voiceSetInputMuted = library.lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
         'nightcord_voice_set_input_muted',
       ),
@@ -154,6 +156,12 @@ class NightcordBindings {
       ),
       freeString = library.lookupFunction<_FreeStringC, _FreeStringDart>(
         'nightcord_free_string',
+      ),
+      settingsGet = library.lookupFunction<_SettingsGetC, _SettingsGetDart>(
+        'nightcord_settings',
+      ),
+      settingsUpdate = library.lookupFunction<_SettingsUpdateC, _SettingsUpdateDart>(
+        'nightcord_update_settings',
       );
 
   /// Starts the core. Returns `null` on failure, which is fatal.
@@ -204,9 +212,6 @@ class NightcordBindings {
   /// Closes the devices.
   final void Function(Handle) voiceStop;
 
-  /// Sets the transmission mode.
-  final void Function(Handle, Pointer<Utf8>) voiceSetMode;
-
   /// Mutes the microphone.
   final void Function(Handle, bool) voiceSetInputMuted;
 
@@ -222,4 +227,11 @@ class NightcordBindings {
 
   /// Frees a string returned by [pollEvents].
   final void Function(Pointer<Utf8>) freeString;
+
+  /// Asks for the preferences. The answer arrives as a `settings`
+  /// `CommandResult` whose `data` is the settings object.
+  final void Function(Handle) settingsGet;
+
+  /// Replaces the preferences. The answer arrives as `settings_update`.
+  final void Function(Handle, Pointer<Utf8>) settingsUpdate;
 }

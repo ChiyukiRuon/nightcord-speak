@@ -34,9 +34,7 @@ mod string;
 use std::ffi::c_char;
 
 use ts_core::ConnectRequest;
-use ts_model::{
-    ChannelId, ClientError, ClientId, MessageTarget, ProtocolError, SessionId, VoiceActivationMode,
-};
+use ts_model::{ChannelId, ClientError, ClientId, MessageTarget, ProtocolError, SessionId};
 
 use crate::audio::AudioDirection;
 use crate::client::NightcordClient;
@@ -63,17 +61,6 @@ fn parse_json<T: serde::de::DeserializeOwned>(
             reject(client, command, format!("malformed request: {error}"));
             None
         }
-    }
-}
-
-/// Maps the ABI's spelling of a voice mode onto the domain enum.
-fn parse_mode(text: &str) -> Option<VoiceActivationMode> {
-    match text {
-        "push_to_talk" => Some(VoiceActivationMode::PushToTalk),
-        "voice_activation" => Some(VoiceActivationMode::VoiceActivation),
-        "continuous" => Some(VoiceActivationMode::Continuous),
-        "muted" => Some(VoiceActivationMode::Muted),
-        _ => None,
     }
 }
 
@@ -386,9 +373,15 @@ pub unsafe extern "C" fn nightcord_audio_devices(
 
 /// Opens audio devices and binds voice to a session.
 ///
-/// Either device id may be null or empty, which selects the system default. A
-/// saved id that no longer exists also falls back to the default rather than
-/// failing — an unplugged headset should not leave the user silent.
+/// Either device id may be null or empty, which means "whatever is configured";
+/// an explicit id overrides it for this run, which is what the CLI's
+/// `--input-device` needs. A configured id that no longer exists falls back to
+/// the system default rather than failing — an unplugged headset should not
+/// leave the user silent.
+///
+/// The transmission mode and the voice-activation tuning come from the settings
+/// too, so this is the point where everything the user chose about audio takes
+/// effect at once.
 ///
 /// # Safety
 ///
@@ -426,38 +419,6 @@ pub unsafe extern "C" fn nightcord_voice_stop(handle: *mut NightcordClient) {
         return;
     };
     client.send(Command::VoiceStop);
-}
-
-/// Changes how transmission is triggered.
-///
-/// `mode` is one of `push_to_talk`, `voice_activation`, `continuous`, `muted`.
-///
-/// # Safety
-///
-/// `handle` must be live, and `mode` a NUL-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn nightcord_voice_set_mode(
-    handle: *mut NightcordClient,
-    mode: *const c_char,
-) {
-    let Some(client) = (unsafe { handle.as_ref() }) else {
-        return;
-    };
-    let Some(text) = (unsafe { from_c_str(mode) }) else {
-        reject(client, "voice_set_mode", "no mode provided");
-        return;
-    };
-
-    match parse_mode(&text) {
-        Some(mode) => {
-            client.send(Command::VoiceSetMode { mode });
-        }
-        None => reject(
-            client,
-            "voice_set_mode",
-            format!("`{text}` is not a voice mode"),
-        ),
-    }
 }
 
 /// Mutes or unmutes the microphone.
@@ -509,6 +470,60 @@ pub unsafe extern "C" fn nightcord_voice_push_to_talk(handle: *mut NightcordClie
 }
 
 // ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+/// Asks for the preferences in force.
+///
+/// The answer arrives as a `command_result` named `settings`, whose `data` is
+/// the settings object. Asynchronous rather than a return value, so there is one
+/// copy of the settings — the core's — instead of a second cache here that could
+/// disagree with it.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_settings(handle: *mut NightcordClient) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::SettingsGet);
+}
+
+/// Replaces the preferences.
+///
+/// `settings_json` is a serialised `Settings`, complete rather than partial: the
+/// caller has the current object and edits it. A malformed one is rejected
+/// without touching what is stored, so a bad write cannot cost the user the
+/// settings they had.
+///
+/// The outcome arrives as a `command_result` named `settings_update`. On success
+/// the file has been written and whatever a running voice engine can adopt —
+/// the transmission mode and the voice-activation tuning — has been applied.
+///
+/// # Safety
+///
+/// `handle` must be live, and `settings_json` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_update_settings(
+    handle: *mut NightcordClient,
+    settings_json: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(settings_json) }) else {
+        reject(client, "settings_update", "no settings provided");
+        return;
+    };
+
+    if let Some(settings) = parse_json::<ts_settings::Settings>(client, "settings_update", &text) {
+        client.send(Command::SettingsUpdate(Box::new(settings)));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
 
@@ -546,41 +561,15 @@ pub unsafe extern "C" fn nightcord_free_string(text: *mut c_char) {
 
 #[cfg(test)]
 mod tests {
+    use ts_model::VoiceActivationMode;
+
     use super::*;
 
     #[test]
-    fn every_mode_the_ui_can_send_parses() {
-        // These strings are the contract with Dart; renaming one silently would
-        // disable the corresponding button.
-        assert_eq!(
-            parse_mode("push_to_talk"),
-            Some(VoiceActivationMode::PushToTalk)
-        );
-        assert_eq!(
-            parse_mode("voice_activation"),
-            Some(VoiceActivationMode::VoiceActivation)
-        );
-        assert_eq!(
-            parse_mode("continuous"),
-            Some(VoiceActivationMode::Continuous)
-        );
-        assert_eq!(parse_mode("muted"), Some(VoiceActivationMode::Muted));
-    }
-
-    #[test]
-    fn an_unknown_mode_is_rejected_rather_than_defaulted() {
-        // Defaulting would silently switch a push-to-talk user to
-        // voice-activated, transmitting their room without them pressing
-        // anything.
-        assert_eq!(parse_mode("PushToTalk"), None);
-        assert_eq!(parse_mode(""), None);
-        assert_eq!(parse_mode("always"), None);
-    }
-
-    #[test]
     fn the_mode_names_match_the_serialised_form() {
-        // Dart parses `VoiceStateChanged` from the same vocabulary, so the two
-        // must not drift apart.
+        // The transmission mode now travels inside the settings object rather
+        // than as its own command, and Dart parses `VoiceStateChanged` from the
+        // same vocabulary — so all three have to agree on these strings.
         for (text, mode) in [
             ("push_to_talk", VoiceActivationMode::PushToTalk),
             ("voice_activation", VoiceActivationMode::VoiceActivation),
@@ -590,6 +579,20 @@ mod tests {
             let json = serde_json::to_value(mode).unwrap();
             assert_eq!(json.as_str(), Some(text), "{mode:?} serialises as {json}");
         }
+    }
+
+    #[test]
+    fn a_malformed_settings_update_is_refused_rather_than_stored() {
+        // The user's existing settings must survive a caller sending nonsense;
+        // the entry point rejects before anything reads or writes the file.
+        let client = NightcordClient::new().expect("start the core");
+        reject(&client, "settings_update", "malformed request");
+
+        let batch: serde_json::Value =
+            serde_json::from_str(&client.poll_events()).expect("valid JSON");
+
+        assert_eq!(batch[0]["command"], "settings_update");
+        assert_eq!(batch[0]["outcome"]["status"], "failed");
     }
 
     #[test]

@@ -14,13 +14,14 @@
 | 1 | `ts-events` | model | 事件与 `EventBus` |
 | 1 | `ts-identity` | model | 身份持久化（不碰密码学）；应用数据目录 |
 | 1 | `ts-logging` | **无**（仅外部 tracing 三件套） | 进程级 subscriber：文件、轮转、filter |
+| 2 | `ts-settings` | model, identity | 用户偏好：结构、存储、默认值 |
 | 2 | `ts-protocol` | model, identity | 能力拆分的 trait + `Backend` |
 | 3 | `ts-session` | model, events, protocol | `Session` / `SessionManager` |
 | 3 | `ts-audio` | model, protocol | 设备、采集、编码、播放、VAD |
 | 4 | `ts-protocol-tsclient` | model, events, identity, protocol, **tsclientlib** | 唯一知道 `tsclientlib` 的地方 |
 | 5 | `ts-protocol-ts3` / `ts-protocol-ts6` | model, events, identity, protocol, tsclient | 声明「我是谁」+ 各自扩展 |
 | 6 | `ts-core` | model, events, identity, protocol, ts3, ts6, session | facade + 后端选择 |
-| 7 | `ts-ffi` | core, session, audio, identity, logging, model, events, protocol | C ABI / JSON / 日志出口 |
+| 7 | `ts-ffi` | core, session, audio, identity, logging, settings, model, events, protocol | C ABI / JSON / 日志 / 设置出口 |
 | 7 | `apps/cli` | core, session, audio, identity, model, events, protocol | 无头客户端 |
 
 `ts-audio` 与 `ts-session` 同层：都只依赖 model + protocol，**互不依赖**。
@@ -58,6 +59,11 @@ wire 处理放在 `ts-protocol-tsclient`，上面两个 crate 各自只声明「
 用 `app_data_root()` 算好传进来。这样它保持叶子身份，CLI（写 stderr）和 Flutter 客户端
 （写文件）能共用同一份默认 filter 与「供应商库压到 warn」的判断，而不会各存一份慢慢漂移。
 细节见 [`docs/logging.md`](logging.md)。
+
+**`ts-settings` 为什么反过来依赖 `ts-identity`**：设置只有一个固定的文件位置，
+`SettingsStore::platform_default()` 得回答「在哪」，而这正是 `app_data_root()` 唯一知道的事。
+把目录当参数传（像 `ts-logging` 那样）在这里只会让每个调用方各自去拼路径。
+细节见 [`docs/settings.md`](settings.md)。
 
 ---
 

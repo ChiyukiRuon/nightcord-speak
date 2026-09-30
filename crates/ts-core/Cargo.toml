@@ -10,6 +10,7 @@ license.workspace = true
 ts-events.workspace = true
 ts-identity.workspace = true
 ts-model.workspace = true
+ts-settings.workspace = true
 ts-protocol.workspace = true
 ts-protocol-ts3.workspace = true
 ts-protocol-ts6.workspace = true

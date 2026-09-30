@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/ffi/native.dart';
 import 'package:nightcord_client/ffi/rust_client.dart';
 import 'package:nightcord_client/models/events.dart';
+import 'package:nightcord_client/models/settings.dart';
 
 import 'test_support.dart';
 
@@ -28,6 +29,20 @@ Future<bool> _pollUntil(bool Function() check) async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
   return false;
+}
+
+/// Asks the core for its settings and parses them.
+///
+/// A helper rather than inline because more than one test needs to read them,
+/// and the request-and-collect dance is the part that would drift.
+Future<Settings> readSettings(RustClient client) async {
+  final pending = awaitCommand(client, 'settings');
+  client.requestSettings();
+  final result = await pending;
+  if (!result.ok) {
+    throw StateError('the core refused to report settings: ${result.error?.message}');
+  }
+  return Settings.fromJson((result.data as Map).cast<String, dynamic>());
 }
 
 /// Whether any file under [directory] contains [needle].
@@ -173,6 +188,48 @@ void main() {
       expect(() => logToCore('not a level', '记录下来'), returnsNormally);
       expect(() => logToCore('error', ''), returnsNormally);
       expect(() => logToCore('error', '换行\n也要能记'), returnsNormally);
+    });
+  });
+
+  group('settings', () {
+    test('an edit written through the FFI comes back', () async {
+      // The whole chain — Dart, the ABI, the core, the file, and back — without
+      // any UI in the way.
+      //
+      // This writes the developer's real preferences file, so whatever was
+      // there is read first and put back afterwards. A test that leaves someone
+      // else's nickname rewritten is a test that gets switched off.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final original = await readSettings(client);
+      addTearDown(() => client.updateSettings(original));
+
+      final edited = original.copyWith(
+        connection: original.connection.copyWith(nickname: 'Round Trip'),
+      );
+
+      final pending = awaitCommand(client, 'settings_update');
+      client.updateSettings(edited);
+      final result = await pending;
+
+      expect(result.ok, isTrue, reason: result.error?.message);
+      expect((await readSettings(client)).connection.nickname, 'Round Trip');
+    });
+
+    test('the core answers with settings this build can read', () async {
+      // Read-only on purpose: a test that rewrote the developer's own
+      // preferences would be a test that gets switched off. The write path is
+      // covered where it can be undone — `crates/ts-ffi`, which restores the
+      // file it found.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final settings = await readSettings(client);
+
+      expect(settings.version, 1);
+      expect(settings.connection.nickname, isNotEmpty);
+      expect(settings.connection.profile, isNotEmpty);
     });
   });
 

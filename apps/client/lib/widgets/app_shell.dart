@@ -10,6 +10,7 @@ import '../features/server/server_page.dart';
 import '../features/voice/voice_bar.dart';
 import '../ffi/rust_client.dart';
 import '../models/events.dart';
+import '../models/settings.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../util/reveal.dart';
@@ -29,9 +30,6 @@ const String _nicknameVar = 'NIGHTCORD_NICKNAME';
 /// TeamSpeak refuses a second connection from the same identity while the first
 /// is still open, so repeated scripted runs need a distinct profile each time.
 const String _profileVar = 'NIGHTCORD_PROFILE';
-
-/// The default nickname when none was given.
-const String _defaultNickname = 'Nightcord User';
 
 /// Shows a failure, with the way to the log it was written to.
 ///
@@ -89,12 +87,20 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  /// Whether the auto-connect has already been attempted.
+  bool _autoConnected = false;
+
   @override
   void initState() {
     super.initState();
-    // After the first frame, so providers are settled and the connect is not
-    // issued during a build.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _autoConnect());
+    // The defaults the environment does not override — nickname and identity
+    // profile — come from the settings, so this waits for them to arrive. It is
+    // a development aid; a round trip is nothing next to typing an address.
+    ref.read(rustClientProvider).requestSettings();
+    ref.listenManual(settingsProvider, (_, settings) => _autoConnect(settings));
+
+    // In case the answer beat the subscription above.
+    _autoConnect(ref.read(settingsProvider));
   }
 
   /// Connects to every address named in the environment.
@@ -102,10 +108,16 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// Comma-separated, so more than one can be given at once. That is what makes
   /// multi-session actually exercisable: the server switcher and the per-session
   /// stores need two live servers before they mean anything (§86).
-  void _autoConnect() {
-    final raw = Platform.environment[_autoConnectVar];
-    if (raw == null || raw.isEmpty || !mounted) return;
+  void _autoConnect(Settings? settings) {
+    if (settings == null || _autoConnected || !mounted) return;
 
+    final raw = Platform.environment[_autoConnectVar];
+    if (raw == null || raw.isEmpty) return;
+
+    _autoConnected = true;
+
+    // The environment wins where it says anything: it is the development aid,
+    // and a saved preference must not quietly override what a script asked for.
     final nickname = Platform.environment[_nicknameVar];
     final profile = Platform.environment[_profileVar];
 
@@ -113,14 +125,16 @@ class _AppShellState extends ConsumerState<AppShell> {
     for (final address in raw.split(',').map((part) => part.trim())) {
       if (address.isEmpty) continue;
 
-      debugPrint(
-        '[nightcord] auto-connecting to $address (profile ${profile ?? "default"})',
-      );
+      debugPrint('[nightcord] auto-connecting to $address');
       client.connect(
         ConnectRequest(
           address: address,
-          nickname: (nickname == null || nickname.isEmpty) ? _defaultNickname : nickname,
-          profile: (profile == null || profile.isEmpty) ? 'default' : profile,
+          nickname: (nickname == null || nickname.isEmpty)
+              ? settings.connection.nickname
+              : nickname,
+          profile: (profile == null || profile.isEmpty)
+              ? settings.connection.profile
+              : profile,
         ),
       );
     }

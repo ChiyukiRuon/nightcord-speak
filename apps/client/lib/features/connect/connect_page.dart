@@ -28,6 +28,26 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   ProtocolKind _protocol = ProtocolKind.ts3;
 
   @override
+  void initState() {
+    super.initState();
+    // Ask for the settings, and fill the nickname in when they arrive. The field
+    // starts with the same fallback the settings default to, so the page looks
+    // the same whether the answer comes back before or after the first frame.
+    ref.read(rustClientProvider).requestSettings();
+    ref.listenManual(settingsProvider, (_, settings) {
+      if (settings == null || !mounted) return;
+      // Not while the user is typing: overwriting a half-written nickname with
+      // the stored one would be a fine way to lose their edit.
+      if (_nickname.text == _initialNickname) {
+        _nickname.text = settings.connection.nickname;
+      }
+    });
+  }
+
+  /// What the nickname field held before any settings arrived.
+  late final String _initialNickname = _nickname.text;
+
+  @override
   void dispose() {
     _address.dispose();
     _nickname.dispose();
@@ -39,6 +59,12 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final address = _address.text.trim();
     if (address.isEmpty) return;
 
+    // The identity profile comes from the settings — there is no field for it
+    // here, and it is what decides which client the server sees you as. Before
+    // the settings arrive, the request's own default applies, which is the same
+    // value.
+    final profile = ref.read(settingsProvider)?.connection.profile ?? 'default';
+
     setState(() => _connecting = true);
     ref.read(rustClientProvider).connect(
       ConnectRequest(
@@ -46,6 +72,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
         nickname: _nickname.text.trim(),
         serverPassword: _password.text.isEmpty ? null : _password.text,
         protocol: _protocol,
+        profile: profile,
       ),
     );
     // Deliberately not awaited. The core answers on its own thread and the

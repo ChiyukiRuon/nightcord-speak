@@ -22,6 +22,7 @@ use ts_events::{ClientEvent, SessionEvent};
 use ts_identity::IdentityStore;
 use ts_model::{ChannelId, MessageTarget, ProtocolKind, SessionId, VoiceActivationSettings};
 use ts_protocol::AudioSink;
+use ts_settings::SettingsStore;
 
 use crate::audio::AudioReport;
 use crate::view::View;
@@ -219,7 +220,16 @@ async fn run() -> Result<()> {
             .context("could not find a place to store identities; pass --identity-dir")?,
     };
 
-    let mut client = Client::new(identities);
+    // `--identity-dir` exists to keep a run's state out of the real profile, so
+    // the settings follow it there rather than being written to `%APPDATA%`
+    // anyway — a flag that only half-relocates the state is a trap.
+    let settings = match &args.identity_dir {
+        Some(dir) => SettingsStore::new(dir),
+        None => SettingsStore::platform_default()
+            .context("could not find a place to store settings; pass --identity-dir")?,
+    };
+
+    let mut client = Client::new(identities, settings);
 
     // Always installed, even without `--voice`: it costs nothing and makes the
     // "did any audio arrive" question answerable on any run.

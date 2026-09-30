@@ -25,6 +25,7 @@ ts-protocol-ts3 = { path = "crates/ts-protocol-ts3" }
 ts-protocol-ts6 = { path = "crates/ts-protocol-ts6" }
 ts-protocol-tsclient = { path = "crates/ts-protocol-tsclient" }
 ts-session = { path = "crates/ts-session" }
+ts-settings = { path = "crates/ts-settings" }
 
 # --- external --------------------------------------------------------------
 async-trait = "0.1"

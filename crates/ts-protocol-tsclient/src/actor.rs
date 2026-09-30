@@ -389,16 +389,15 @@ pub(crate) struct Reconnect {
 }
 
 impl Reconnect {
-    /// Reconnects on §35's schedule.
+    /// Reconnects on the schedule the config carries.
     ///
-    /// The policy is fixed for now. Making it configurable means carrying a
-    /// [`ReconnectPolicy`] through [`ConnectionConfig`], which is a settings
-    /// item (§41) rather than part of the mechanism.
+    /// The schedule itself is §35's; what the user decides is whether retrying
+    /// happens at all and for how long. Everything needed for a rebuild —
+    /// including that policy — travels together in the config, so a rebuild
+    /// cannot end up using a different one than the first attempt did.
     pub(crate) fn new(config: ConnectionConfig) -> Self {
-        Self {
-            config,
-            schedule: ReconnectSchedule::new(ReconnectPolicy::default()),
-        }
+        let schedule = ReconnectSchedule::new(config.reconnect);
+        Self { config, schedule }
     }
 }
 
@@ -1194,6 +1193,36 @@ mod tests {
         schedule.reset();
         assert_eq!(schedule.attempts(), 0);
         assert_eq!(schedule.next(DROPPED), Some(1_000));
+    }
+
+    #[test]
+    fn the_policy_comes_from_the_config_rather_than_a_constant() {
+        // The seam the settings reach the reconnect through. "Turn automatic
+        // reconnect off" is `max_attempts: Some(0)`, and a schedule built from
+        // that config must refuse the very first retry.
+        let mut config = ConnectionConfig::new(
+            ts_model::ConnectionTarget::new("example.com", ts_model::DEFAULT_PORT),
+            "Tester",
+            ts_identity::Identity::new("uid=", vec![1, 2, 3]),
+        );
+        config.reconnect.max_attempts = Some(0);
+
+        let mut reconnect = Reconnect::new(config);
+        assert_eq!(reconnect.schedule.next(DROPPED), None);
+    }
+
+    #[test]
+    fn a_config_carrying_no_policy_still_retries() {
+        // The other half: a config built without touching the field — which is
+        // what every caller that predates settings does — behaves as before.
+        let config = ConnectionConfig::new(
+            ts_model::ConnectionTarget::new("example.com", ts_model::DEFAULT_PORT),
+            "Tester",
+            ts_identity::Identity::new("uid=", vec![1, 2, 3]),
+        );
+
+        let mut reconnect = Reconnect::new(config);
+        assert_eq!(reconnect.schedule.next(DROPPED), Some(1_000));
     }
 
     #[test]

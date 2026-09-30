@@ -15,6 +15,7 @@ ts-logging.workspace = true
 ts-model.workspace = true
 ts-protocol.workspace = true
 ts-session.workspace = true
+ts-settings.workspace = true
 
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }

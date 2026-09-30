@@ -29,6 +29,7 @@ PACKAGES=(
 	-p ts-core
 	-p ts-ffi
 	-p ts-logging
+	-p ts-settings
 	-p nightcord-cli
 )
 

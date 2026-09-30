@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use ts_audio::{FRAME_MS, VoiceEngine};
 use ts_core::Client as CoreClient;
-use ts_model::{ClientError, NetworkError, SessionId, VoiceActivationSettings, VoiceState};
+use ts_model::{ClientError, NetworkError, ProtocolError, SessionId, VoiceState};
 
 use crate::command::Command;
 use crate::event::FfiEvent;
@@ -252,7 +252,15 @@ async fn run(
     let mut voice: Option<Voice> = None;
     // What the user has asked for, held outside `voice` because it has to
     // outlive the engine not existing yet — see `set_muted`.
-    let mut voice_intent = VoiceState::default();
+    //
+    // The transmission mode comes from the settings, because it is a preference
+    // and should survive a restart. Being muted does not: it is a state you put
+    // yourself in for a moment, and nobody wants to be muted afresh on every
+    // launch.
+    let mut voice_intent = VoiceState {
+        mode: core.settings().audio.mode,
+        ..VoiceState::default()
+    };
 
     let mut ticker = tokio::time::interval(Duration::from_millis(u64::from(FRAME_MS)));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -395,27 +403,6 @@ async fn handle(
             events.push(FfiEvent::ok(name, was_bound));
         }
 
-        Command::VoiceSetMode { mode } => {
-            // Recorded even with no engine, so the choice survives until voice
-            // starts — same reasoning as `set_muted`.
-            voice_intent.mode = mode;
-            if let Some(active) = voice.as_mut() {
-                active.engine.set_mode(mode);
-                // Tell the server too, so other clients can see the change
-                // rather than inferring it from silence.
-                let state = active.engine.state();
-                let session = active.session;
-                let outcome = with_session!(core, session, s => s.set_voice_state(state));
-                if let Err(error) = outcome {
-                    tracing::debug!(%error, "could not tell the server about the voice mode");
-                }
-            }
-            events.push(FfiEvent::ok(
-                name,
-                voice.as_ref().map(|active| active.session),
-            ));
-        }
-
         Command::VoiceSetInputMuted { muted } => {
             set_muted(core, voice, voice_intent, events, name, muted, true).await;
         }
@@ -431,7 +418,69 @@ async fn handle(
             // Too frequent to report: this fires on every key press (§30).
         }
 
+        Command::SettingsGet => match serde_json::to_value(core.settings()) {
+            Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
+            // Serialising our own data cannot fail; if it somehow does, saying so
+            // beats reporting an empty object the UI would take for the truth.
+            Err(error) => {
+                tracing::error!(%error, "could not serialise the settings");
+                events.push(FfiEvent::failed(
+                    name,
+                    None,
+                    ClientError::Protocol(ProtocolError::new(error.to_string())),
+                ));
+            }
+        },
+
+        Command::SettingsUpdate(settings) => match core.update_settings(*settings) {
+            Ok(()) => {
+                apply_settings(core, voice, voice_intent).await;
+                events.push(FfiEvent::ok(name, None));
+            }
+            Err(error) => events.push(FfiEvent::failed(name, None, error)),
+        },
+
         Command::Shutdown => unreachable!("filtered by the caller"),
+    }
+}
+
+/// Adopts what a running engine can take without being restarted, and tells the
+/// server about the part it can see.
+///
+/// The transmission mode and the voice-activation tuning both have live setters,
+/// and both are things a user adjusts *while talking* — `VoiceGate::set_settings`
+/// is written specifically not to close an already-open gate, so dragging the
+/// sensitivity slider mid-sentence does not cut the speaker off.
+///
+/// The device ids are deliberately left to the next `voice_start`. Switching a
+/// live `cpal` stream means tearing it down and reopening it, and doing that from
+/// under a conversation is worse than waiting. The settings screen says so where
+/// the dropdowns are.
+async fn apply_settings(
+    core: &mut CoreClient,
+    voice: &mut Option<Voice>,
+    voice_intent: &mut VoiceState,
+) {
+    let audio = core.settings().audio.clone();
+
+    // Recorded even with no engine, so the choice survives until voice starts —
+    // same reasoning as `set_muted`.
+    voice_intent.mode = audio.mode;
+
+    let Some(active) = voice.as_mut() else {
+        return;
+    };
+
+    active.engine.set_mode(audio.mode);
+    active.engine.set_settings(audio.activation);
+
+    // Tell the server as well, so other clients can see the change rather than
+    // inferring it from silence.
+    let state = active.engine.state();
+    let session = active.session;
+    let outcome = with_session!(core, session, s => s.set_voice_state(state));
+    if let Err(error) = outcome {
+        tracing::debug!(%error, "could not tell the server about the new voice settings");
     }
 }
 
@@ -494,6 +543,9 @@ async fn start_voice(
 ) {
     const NAME: &str = "voice_start";
 
+    // Read before the session is borrowed mutably below — one `&mut` at a time.
+    let audio = core.settings().audio.clone();
+
     // An engine already bound elsewhere is stopped first: two capture streams
     // on one microphone is not something the OS will allow anyway, and holding
     // the old one would keep the device busy.
@@ -508,7 +560,7 @@ async fn start_voice(
         return;
     };
 
-    let mut engine = match VoiceEngine::new(VoiceActivationSettings::default()) {
+    let mut engine = match VoiceEngine::new(audio.activation) {
         Ok(engine) => engine,
         Err(error) => {
             events.push(FfiEvent::failed(
@@ -519,6 +571,11 @@ async fn start_voice(
             return;
         }
     };
+
+    // An explicit argument wins, so `--input-device` on the command line still
+    // means what it says; an empty one means "whatever is configured".
+    let input = input.or(audio.input_device);
+    let output = output.or(audio.output_device);
 
     if let Err(error) = engine.open_devices(input.as_deref(), output.as_deref()) {
         // Only reported when *both* sides failed; a single missing device is
@@ -762,18 +819,49 @@ mod tests {
     }
 
     #[test]
-    fn choosing_a_mode_before_voice_starts_succeeds() {
-        // Same reasoning: the choice is a preference and is applied when the
-        // engine starts.
+    fn settings_survive_a_round_trip_through_the_worker() {
+        // The whole point of the settings being the core's rather than the
+        // front-end's: what was written comes back, and it came back from the
+        // same place the voice engine will read it.
+        //
+        // This writes a real file in the real profile, so whatever was there is
+        // put back afterwards. A test that leaves the developer's own
+        // preferences rewritten is a test that gets switched off.
+        let store = ts_settings::SettingsStore::platform_default().expect("a data root");
+        let before = store.load().unwrap_or_default();
+
         let client = NightcordClient::new().expect("start the core");
-        client.send(Command::VoiceSetMode {
-            mode: ts_model::VoiceActivationMode::PushToTalk,
-        });
 
-        let batch = wait_for_batch(&client, "voice_set_mode", Duration::from_secs(5))
-            .expect("voice_set_mode went unanswered");
+        let mut settings = ts_settings::Settings::default();
+        settings.audio.mode = ts_model::VoiceActivationMode::PushToTalk;
+        settings.audio.activation.sensitivity = 0.25;
+        settings.connection.nickname = "Round Trip".into();
 
-        assert!(batch.contains("\"status\":\"ok\""), "got {batch}");
+        client.send(Command::SettingsUpdate(Box::new(settings)));
+        wait_for_batch(&client, "settings_update", Duration::from_secs(5))
+            .expect("settings_update went unanswered");
+
+        client.send(Command::SettingsGet);
+        let batch = wait_for_batch(&client, "\"settings\"", Duration::from_secs(5))
+            .expect("settings went unanswered");
+
+        let parsed: serde_json::Value = serde_json::from_str(&batch).expect("valid JSON");
+        let data = parsed
+            .as_array()
+            .and_then(|events| events.iter().find(|e| e["command"] == "settings"))
+            .map(|event| event["data"].clone())
+            .expect("a settings result");
+
+        // Restored before the assertions, so a failing assertion does not also
+        // leave the file changed.
+        store.save(&before).expect("restore the settings");
+
+        assert_eq!(data["audio"]["mode"], "push_to_talk");
+        assert_eq!(data["connection"]["nickname"], "Round Trip");
+        assert!(
+            (data["audio"]["activation"]["sensitivity"].as_f64().unwrap() - 0.25).abs() < 1e-6,
+            "got {data}"
+        );
     }
 
     #[test]

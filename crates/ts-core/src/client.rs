@@ -5,6 +5,7 @@ use ts_identity::IdentityStore;
 use ts_model::{ClientError, ConnectionState, ConnectionTarget, ProtocolKind, Server, SessionId};
 use ts_protocol::{Backend, ConnectionConfig};
 use ts_session::SessionManager;
+use ts_settings::{Settings, SettingsStore};
 
 use crate::request::ConnectRequest;
 
@@ -23,15 +24,31 @@ use crate::request::ConnectRequest;
 pub struct Client {
     sessions: SessionManager,
     identities: IdentityStore,
+    /// Where preferences are written when they change.
+    settings_store: SettingsStore,
+    /// The preferences in force, so a connect does not re-read the file.
+    settings: Settings,
 }
 
 impl Client {
-    /// A client that persists identities under `identities`.
+    /// A client that persists identities under `identities` and preferences
+    /// under `settings`.
     #[must_use]
-    pub fn new(identities: IdentityStore) -> Self {
+    pub fn new(identities: IdentityStore, settings_store: SettingsStore) -> Self {
+        // Unreadable settings are not a reason to refuse to start. The defaults
+        // are perfectly usable and the user's next change overwrites whatever is
+        // wrong; the file is left alone so it can be looked at. The identity
+        // store makes the opposite choice, and `docs/settings.md` says why.
+        let settings = settings_store.load().unwrap_or_else(|error| {
+            tracing::warn!(%error, path = %settings_store.path().display(), "using default settings");
+            Settings::default()
+        });
+
         Self {
             sessions: SessionManager::new(EventBus::with_default_capacity()),
             identities,
+            settings_store,
+            settings,
         }
     }
 
@@ -39,12 +56,36 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns [`ClientError::Identity`] where the platform gives no data
-    /// directory — Android and iOS, which must supply their sandbox path via
-    /// [`Client::new`] instead.
+    /// Returns [`ClientError::Identity`] or [`ClientError::Settings`] where the
+    /// platform gives no data directory — Android and iOS, which must supply
+    /// their sandbox path via [`Client::new`] instead.
     pub fn with_platform_store() -> Result<Self, ClientError> {
-        let store = IdentityStore::platform_default().map_err(ClientError::Identity)?;
-        Ok(Self::new(store))
+        let identities = IdentityStore::platform_default().map_err(ClientError::Identity)?;
+        let settings = SettingsStore::platform_default().map_err(ClientError::Settings)?;
+        Ok(Self::new(identities, settings))
+    }
+
+    /// The preferences in force.
+    #[must_use]
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    /// Replaces the preferences and writes them down.
+    ///
+    /// Saved before it is adopted, so a write that fails leaves the client
+    /// running on the values it actually persisted rather than on ones it only
+    /// believes it did.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Settings`] if the file cannot be written.
+    pub fn update_settings(&mut self, settings: Settings) -> Result<(), ClientError> {
+        self.settings_store
+            .save(&settings)
+            .map_err(ClientError::Settings)?;
+        self.settings = settings;
+        Ok(())
     }
 
     /// The bus every session publishes to.
@@ -133,6 +174,10 @@ impl Client {
             privilege_key: request.privilege_key.clone(),
             default_channel: request.default_channel.clone(),
             dialect: request.dialect,
+            // Not on `ConnectRequest`: how hard to retry is a preference, not a
+            // decision made once per connection, and the front-end has no
+            // business restating it on every connect.
+            reconnect: self.settings.connection.reconnect_policy(),
         };
 
         self.sessions.insert(session_id, server, backend);

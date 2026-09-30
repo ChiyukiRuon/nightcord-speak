@@ -21,6 +21,7 @@ ts-logging.workspace = true
 ts-model.workspace = true
 ts-protocol.workspace = true
 ts-session.workspace = true
+ts-settings.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true

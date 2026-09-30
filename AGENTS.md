@@ -91,6 +91,7 @@ macOS / Android / iOS。
 | `ts-session`           | `Session` / `SessionManager`          | 知道具体协议                    |
 | `ts-identity`          | 身份持久化、应用数据目录              | 碰密码学（由 backend 提供生成） |
 | `ts-logging`           | 进程级 subscriber：文件、轮转、filter | 自己找目录（由调用方传入）      |
+| `ts-settings`          | 用户偏好：结构、存储、默认值          | 决定谁读它（由 core 应用）      |
 | `ts-audio`             | 设备、采集、编码、播放、VAD           | 依赖协议库                      |
 | `ts-protocol-tsclient` | **唯一**允许知道 `tsclientlib` 的地方 | 出现具体协议判断                |
 | `ts-protocol-ts3/ts6`  | 声明协议、承载各自扩展                | 复制适配层                      |
@@ -179,8 +180,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 270 个
-cd apps/client && flutter analyze && flutter test                  # 49 个
+cargo test  --workspace --all-features                             # 281 个
+cd apps/client && flutter analyze && flutter test                  # 57 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -259,7 +260,7 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 logging / 重连 已完成，其余未开始 |
+| M0.6     | Production Client               | 🚧 logging / 重连 / 设置界面 已完成 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -276,9 +277,9 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **14,483 行**，12 crates + CLI |
-| Dart | **4,971 行**，24 文件          |
-| 测试 | **270 Rust + 49 Dart**，全绿   |
+| Rust | **15,172 行**，13 crates + CLI |
+| Dart | **5,619 行**，26 文件          |
+| 测试 | **281 Rust + 57 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -330,12 +331,25 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 
 | 项 | 结果 |
 | --- | --- |
-| fork 补丁 `ReconnectMode::External` | ✅ 已推送 `c5cc287`，本仓库 pin 已更新，编译通过 |
+| fork 补丁 `ReconnectMode::External` | ✅ 已推送 `c5cc287`；本仓库 pin 已在 `dcf2509` 提交，编译通过 |
 | 正常路径未受影响 | ✅ 真实服务器连接 / 服务器信息 / 能力集 / 干净断开，与补丁前一致 |
 | actor 的 `Reconnecting → Connected` bug | ✅ 已修（`refresh` 不再拿一次性 `ready` 当状态开关） |
 | §35 退避表 | ✅ 6 个单测：1/2/4/8/16→30 封顶、首次编号为 1、不可重试错误不消耗预算、恢复后重新计数 |
 | Dart 侧断线保留上下文与倒计时 | ✅ 7 个测试 |
 | **重连循环本身** | ❌ **未跑通过一次真实掉线** —— 见 §5.4 |
+
+**设置界面（M0.6 第三项）**
+
+| 项 | 结果 |
+| --- | --- |
+| 设置落盘 | ✅ `<应用数据目录>/settings.json`，字段可读、可手改 |
+| **关掉对话框后值还在** | ✅ 截图确认对话框从设置渲染（不再是 widget state） |
+| **跨进程往返** | ✅ Dart 写入 → 经 FFI → core → 文件 → 读回一致（Dart 集成测试，收尾恢复原值） |
+| Rust 侧往返 | ✅ `settings_update` → `settings` 同一份值（真实 DLL，收尾恢复原值） |
+| 坏文件不阻塞启动 | ✅ 实测：写成 `{ this is not json`，应用照常启动并连上服务器，日志一条 `warn` 带原因与路径，**文件原样保留** |
+| 无 `.tmp` 残留 | ✅ 原子写入的回归测试 + 实测 |
+| 部分/未知字段 | ✅ 删掉一行只重置那一项；未知字段被忽略而不是报错 |
+| 策略真的进了配置 | ✅ 两个测试：`Some(0)` 一次都不重试；没动过的配置照旧重试 |
 
 ### 5.4 未验证
 
@@ -374,8 +388,6 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 ### 立刻
 
 - [x] ~~仓库零提交~~ —— 已有 `Initial commit`。
-- [ ] `效果图.png`（1.9 MB，设计参考图）仍是未跟踪状态。要么提交，要么写进
-      `.gitignore`；现在它挂在 `git status` 里当噪音。
 
 ### M0.6 — Production Client（§87）
 
@@ -386,8 +398,9 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 - [x] **重连** —— actor 成为唯一的策略所有者，fork 加了 `ReconnectMode::External`
       把库的内部重试关掉，§35 的退避表落在 actor。见 [`docs/reconnect.md`](docs/reconnect.md)。
       **欠一次真实掉线的端到端验证**，原因见 §5.4。
-- [ ] 设置界面 —— **已有落点**：`lib/features/settings/settings_dialog.dart`，
-      目前是音频与日志两节，其余项往这里加
+- [x] **设置界面** —— `ts-settings` + `settings.json`，音频（设备/传输方式/灵敏度）
+      与连接（昵称/身份档/重连次数）两节真的存下来了。见 [`docs/settings.md`](docs/settings.md)。
+      设备管理、通知、快捷键、主题、本地化仍是 §70 里的独立项。
 - [ ] 书签 / 服务器列表
 - [ ] 通知
 - [ ] 设备管理（设置对话框里已有雏形）
@@ -435,6 +448,7 @@ cd apps/client && flutter analyze && flutter test                  # 49 个
 | `docs/audio.md`            | 音频管线、线程模型、收发格式差异、已知取舍                 |
 | `docs/logging.md`          | 日志：位置、轮转、环境变量、「UI 可见即落日志」的不变式     |
 | `docs/reconnect.md`        | 重连：职责边界、fork 补丁、退避表、为什么首连失败不重试     |
+| `docs/settings.md`         | 设置：文件格式、谁读它、损坏文件为什么与身份文件处理不同     |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

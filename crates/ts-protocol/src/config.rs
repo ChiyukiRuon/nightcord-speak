@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use ts_identity::Identity;
-use ts_model::ConnectionTarget;
+use ts_model::{ConnectionTarget, ReconnectPolicy};
 
 use crate::Dialect;
 
@@ -38,6 +38,14 @@ pub struct ConnectionConfig {
 
     /// Which server flavour to expect, or how to find out.
     pub dialect: Dialect,
+
+    /// How hard to try to keep this connection alive.
+    ///
+    /// Carried here rather than read from the settings by the backend, because
+    /// this struct is already everything a rebuild needs: the reconnect is
+    /// driven inside the backend that owns the connection, and it must not
+    /// grow a second source of configuration to do it.
+    pub reconnect: ReconnectPolicy,
 }
 
 impl ConnectionConfig {
@@ -53,6 +61,7 @@ impl ConnectionConfig {
             privilege_key: None,
             default_channel: None,
             dialect: Dialect::default(),
+            reconnect: ReconnectPolicy::default(),
         }
     }
 
@@ -88,6 +97,7 @@ impl fmt::Debug for ConnectionConfig {
             .field("privilege_key", &Redacted(self.privilege_key.is_some()))
             .field("default_channel", &self.default_channel)
             .field("dialect", &self.dialect)
+            .field("reconnect", &self.reconnect)
             .finish()
     }
 }

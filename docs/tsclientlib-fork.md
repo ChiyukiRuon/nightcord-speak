@@ -41,7 +41,8 @@ git checkout -b nightcord          # 或你喜欢的名字
 
 ### 2. ~~应用局域网改动~~ ✅ 已完成
 
-分支 `nightcord`，提交 `df38c87`，已推送到 `ChiyukiRuon/tsclientlib`。
+分支 `nightcord` 上的第一处改动，提交 `df38c87`，已推送到 `ChiyukiRuon/tsclientlib`。
+（分支此后又前进了一个提交，见下文〈第二处改动〉。）
 
 改动只有一个函数（`tsclientlib/src/resolver.rs`）：
 
@@ -75,7 +76,8 @@ pub fn is_allowed_target(ip: &IpAddr) -> bool {
   branch = nightcord
 ```
 
-submodule 当前 pin 在 `df38c87`。本地的临时补丁已丢弃——改动现在是正式版本。
+submodule 当前 pin 在 `c5cc287`（即下文〈第二处改动〉）。本地的临时补丁已丢弃
+——改动现在是正式版本。
 
 ---
 

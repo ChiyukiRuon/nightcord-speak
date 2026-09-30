@@ -1533,6 +1533,7 @@ dependencies = [
  "ts-model",
  "ts-protocol",
  "ts-session",
+ "ts-settings",
 ]
 
 [[package]]
@@ -2975,6 +2976,7 @@ dependencies = [
  "ts-protocol-ts3",
  "ts-protocol-ts6",
  "ts-session",
+ "ts-settings",
 ]
 
 [[package]]
@@ -3004,6 +3006,7 @@ dependencies = [
  "ts-model",
  "ts-protocol",
  "ts-session",
+ "ts-settings",
 ]
 
 [[package]]
@@ -3099,6 +3102,16 @@ dependencies = [
  "ts-events",
  "ts-model",
  "ts-protocol",
+]
+
+[[package]]
+name = "ts-settings"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-identity",
+ "ts-model",
 ]
 
 [[package]]

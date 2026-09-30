@@ -11,6 +11,7 @@ import 'package:ffi/ffi.dart';
 
 import '../models/domain.dart';
 import '../models/events.dart';
+import '../models/settings.dart';
 import 'bindings.dart';
 import 'native.dart';
 
@@ -220,10 +221,6 @@ class RustClient {
   /// Closes the audio devices.
   void voiceStop() => _bindings.voiceStop(_handle);
 
-  /// Sets how transmission is triggered.
-  void setVoiceMode(VoiceActivationMode mode) =>
-      _withText(mode.wire, (text) => _bindings.voiceSetMode(_handle, text));
-
   /// Mutes or unmutes the microphone.
   void setInputMuted(bool muted) => _bindings.voiceSetInputMuted(_handle, muted);
 
@@ -232,6 +229,21 @@ class RustClient {
 
   /// Push-to-talk key down or up (§30).
   void setPushToTalk(bool held) => _bindings.voicePushToTalk(_handle, held);
+
+  /// Asks for the preferences.
+  ///
+  /// The answer arrives as a `settings` [CommandResult] whose `data` is the
+  /// settings object — the same request-and-collect shape as the device list,
+  /// so there is one copy of the settings rather than a cache here that could
+  /// drift from the core's.
+  void requestSettings() => _bindings.settingsGet(_handle);
+
+  /// Replaces the preferences, and writes them down.
+  ///
+  /// The whole object, not a patch: the caller has the current settings and
+  /// edits them. The answer arrives as `settings_update`.
+  void updateSettings(Settings settings) =>
+      _withJson(settings.toJson(), (json) => _bindings.settingsUpdate(_handle, json));
 
   /// Drains whatever is queued right now.
   ///
