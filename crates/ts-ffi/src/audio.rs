@@ -8,44 +8,16 @@
 use serde::Serialize;
 use ts_audio::{AudioBackend as _, AudioDevice, Direction, SystemAudio};
 use ts_model::AudioError;
+use ts_wire::AudioDirection;
 
-/// Which way audio flows, as the FFI spells it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AudioDirection {
-    /// A microphone.
-    Input,
-    /// Speakers or headphones.
-    Output,
-}
-
-impl AudioDirection {
-    /// Parses the string the C ABI accepts.
-    ///
-    /// Returns `None` for anything else, which the entry point turns into a
-    /// failed `CommandResult` rather than guessing.
-    #[must_use]
-    pub(crate) fn parse(text: &str) -> Option<Self> {
-        match text {
-            "input" => Some(Self::Input),
-            "output" => Some(Self::Output),
-            _ => None,
-        }
-    }
-
-    /// The spelling the ABI uses.
-    #[must_use]
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Input => "input",
-            Self::Output => "output",
-        }
-    }
-
-    fn direction(self) -> Direction {
-        match self {
-            Self::Input => Direction::Input,
-            Self::Output => Direction::Output,
-        }
+/// Maps the wire's spelling onto the audio layer's.
+///
+/// One mapping, at the door of `ts-audio`: the wire enum lives in `ts-wire`
+/// (both hosts share it) and the audio layer keeps its own vocabulary.
+fn direction_of(direction: AudioDirection) -> Direction {
+    match direction {
+        AudioDirection::Input => Direction::Input,
+        AudioDirection::Output => Direction::Output,
     }
 }
 
@@ -89,33 +61,13 @@ impl From<AudioDevice> for DeviceJson {
 ///
 /// Returns [`AudioError::Backend`] when the host cannot be queried at all.
 pub(crate) fn list(direction: AudioDirection) -> Result<Vec<DeviceJson>, AudioError> {
-    let devices = SystemAudio::new().devices(direction.direction())?;
+    let devices = SystemAudio::new().devices(direction_of(direction))?;
     Ok(devices.into_iter().map(DeviceJson::from).collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn directions_round_trip_through_their_spelling() {
-        for direction in [AudioDirection::Input, AudioDirection::Output] {
-            assert_eq!(AudioDirection::parse(direction.as_str()), Some(direction));
-        }
-    }
-
-    #[test]
-    fn an_unknown_direction_is_rejected_rather_than_defaulted() {
-        // Silently treating "microphone" as input would hide a caller's typo
-        // behind a device list that happens to look plausible.
-        assert_eq!(AudioDirection::parse("microphone"), None);
-        assert_eq!(AudioDirection::parse(""), None);
-        assert_eq!(
-            AudioDirection::parse("Input"),
-            None,
-            "the ABI is case-sensitive"
-        );
-    }
 
     #[test]
     fn a_device_without_a_name_still_gets_one() {

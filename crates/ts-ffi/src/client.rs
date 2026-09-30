@@ -24,8 +24,8 @@ use ts_core::Client as CoreClient;
 use ts_events::ClientEvent;
 use ts_model::{ClientError, NetworkError, ProtocolError, SessionId, VoiceState};
 
-use crate::command::Command;
-use crate::event::FfiEvent;
+use ts_wire::Command;
+use ts_wire::FfiEvent;
 
 /// How long a clean shutdown may take before the task is abandoned.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
@@ -595,7 +595,6 @@ async fn handle(
         Command::Shutdown => unreachable!("filtered by the caller"),
 
         // A test seam, never reachable from the C ABI — see the variant's docs.
-        #[cfg(test)]
         Command::TestPanic => panic!("Command::TestPanic"),
     }
 }
@@ -1146,7 +1145,7 @@ mod tests {
         // touches real hardware, so the window is generous.
         let client = NightcordClient::new().expect("start the core");
         client.send(Command::ListDevices {
-            direction: crate::audio::AudioDirection::Output,
+            direction: ts_wire::AudioDirection::Output,
         });
 
         let answered = wait_for(&client, "audio_devices", Duration::from_secs(15));
@@ -1164,7 +1163,7 @@ mod tests {
         let client = NightcordClient::new().expect("start the core");
 
         client.send(Command::ListDevices {
-            direction: crate::audio::AudioDirection::Input,
+            direction: ts_wire::AudioDirection::Input,
         });
         assert!(
             wait_for(&client, "audio_devices", Duration::from_secs(15)),

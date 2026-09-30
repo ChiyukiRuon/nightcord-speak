@@ -1,0 +1,23 @@
+[package]
+name = "ts-wire"
+description = "The JSON vocabulary every front-end speaks: commands in, results and events out."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The command vocabulary carries the types the core and the stores already
+# define, so this crate sits beside the front-ends rather than below them: it
+# owns no behaviour, only the one spelling of "what a front-end may ask for".
+ts-core.workspace = true
+ts-events.workspace = true
+ts-model.workspace = true
+ts-settings.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true

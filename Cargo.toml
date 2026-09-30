@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/cli"]
+members = ["crates/*", "apps/cli", "apps/gateway"]
 # Third-party protocol crates live in their own workspace under vendor/ and are
 # pulled in by path. They must not become members of ours.
 exclude = ["vendor"]
@@ -27,6 +27,8 @@ ts-protocol-ts6 = { path = "crates/ts-protocol-ts6" }
 ts-protocol-tsclient = { path = "crates/ts-protocol-tsclient" }
 ts-session = { path = "crates/ts-session" }
 ts-settings = { path = "crates/ts-settings" }
+ts-wire = { path = "crates/ts-wire" }
+ts-gateway = { path = "crates/ts-gateway" }
 
 # --- external --------------------------------------------------------------
 async-trait = "0.1"
@@ -47,6 +49,25 @@ tracing = "0.1"
 # and cleanup; this crate is maintained by the `tracing` project itself.
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- web gateway ------------------------------------------------------------
+# The WebSocket server a browser connects to (Phase 7). `handshake` is the
+# server side; the tests add `connect` for the client side via the default
+# features, which is why only the tests ask for them.
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
+    "handshake",
+] }
+# `SinkExt`/`StreamExt` for the WebSocket split. Explicitly requested because
+# `sink` is not in futures-util's default feature set — relying on
+# tokio-tungstenite's own dependency to unify it in is a coincidence, not a
+# contract.
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+    "std",
+] }
+# Token generation. Already in the tree (transitively), so asking for it
+# directly costs nothing new.
+getrandom = "0.2"
 
 # --- crash evidence ---------------------------------------------------------
 # Installs the SEH/signal handler that runs user code while the process dies.

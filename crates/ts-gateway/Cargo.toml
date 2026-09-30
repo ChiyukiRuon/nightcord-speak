@@ -1,0 +1,32 @@
+[package]
+name = "ts-gateway"
+description = "The WebSocket front-end: one core, N browser connections, the shared wire vocabulary."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ts-audio.workspace = true
+ts-core.workspace = true
+ts-events.workspace = true
+ts-identity.workspace = true
+ts-model.workspace = true
+ts-protocol.workspace = true
+ts-session.workspace = true
+ts-settings.workspace = true
+ts-wire.workspace = true
+
+futures-util.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs", "net"] }
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+# The tests act as a browser: a real client needs the `connect` handshake.
+tokio = { workspace = true, features = ["net", "time", "rt-multi-thread", "macros"] }
+tokio-tungstenite = { workspace = true, features = ["connect"] }

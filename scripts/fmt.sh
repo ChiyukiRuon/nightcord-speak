@@ -30,8 +30,11 @@ PACKAGES=(
 	-p ts-ffi
 	-p ts-logging
 	-p ts-settings
+	-p ts-wire
 	-p ts-crash
+	-p ts-gateway
 	-p nightcord-cli
+	-p nightcord-gateway
 )
 
 if [[ "${1:-}" == "--check" ]]; then

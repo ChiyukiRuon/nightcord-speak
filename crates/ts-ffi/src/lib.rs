@@ -26,9 +26,7 @@
 
 mod audio;
 mod client;
-mod command;
 mod crash;
-mod event;
 mod logging;
 mod string;
 
@@ -36,10 +34,9 @@ use std::ffi::c_char;
 
 use ts_core::ConnectRequest;
 use ts_model::{ChannelId, ClientError, ClientId, MessageTarget, ProtocolError, SessionId};
+use ts_wire::{AudioDirection, Command};
 
-use crate::audio::AudioDirection;
 use crate::client::NightcordClient;
-use crate::command::Command;
 use crate::string::{free_c_string, from_c_str, into_c_string};
 
 /// A development aid, next to `NIGHTCORD_AUTO_CONNECT` (which lives in the

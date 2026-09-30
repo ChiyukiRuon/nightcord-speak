@@ -1,8 +1,7 @@
-//! The JSON envelopes that cross into Dart.
+//! The JSON envelopes that travel out to a front-end.
 //!
-//! Two kinds of thing arrive at the front-end: domain events, forwarded
-//! unchanged from [`ts_events::ClientEvent`], and the outcome of a command the
-//! user asked for.
+//! Two kinds of thing arrive: domain events, forwarded unchanged from
+//! [`ts_events::ClientEvent`], and the outcome of a command someone asked for.
 //!
 //! Command results exist because a bare [`ClientEvent::Error`] cannot say
 //! *which* action failed. Without them a UI could only report "something went
@@ -55,13 +54,13 @@ pub enum FfiEvent {
 impl FfiEvent {
     /// Forwards a domain event.
     #[must_use]
-    pub(crate) fn client(session: SessionId, event: ClientEvent) -> Self {
+    pub fn client(session: SessionId, event: ClientEvent) -> Self {
         Self::Event { session, event }
     }
 
     /// A command that succeeded, with no payload.
     #[must_use]
-    pub(crate) fn ok(command: &str, session: Option<SessionId>) -> Self {
+    pub fn ok(command: &str, session: Option<SessionId>) -> Self {
         Self::CommandResult {
             command: command.to_string(),
             session,
@@ -72,11 +71,7 @@ impl FfiEvent {
 
     /// A command that succeeded and returned something.
     #[must_use]
-    pub(crate) fn with_data(
-        command: &str,
-        session: Option<SessionId>,
-        data: serde_json::Value,
-    ) -> Self {
+    pub fn with_data(command: &str, session: Option<SessionId>, data: serde_json::Value) -> Self {
         Self::CommandResult {
             command: command.to_string(),
             session,
@@ -92,7 +87,7 @@ impl FfiEvent {
     /// "it just showed the wrong people" — with no other trace of when it
     /// started.
     #[must_use]
-    pub(crate) fn lagged(missed: u64) -> Self {
+    pub fn lagged(missed: u64) -> Self {
         tracing::warn!(missed, "the front-end fell behind; events were dropped");
         Self::Lagged { missed }
     }
@@ -100,14 +95,13 @@ impl FfiEvent {
     /// A command that failed.
     ///
     /// This is deliberately also the one place a UI-visible failure is written
-    /// to the log. [`crate::client::NightcordClient::report_failure`], `report`
-    /// and `reject` all funnel through here, and between them they cover every
-    /// command the ABI accepts — so recording at construction makes "if the
-    /// user saw it, the log has it" a property of the type instead of a rule
-    /// that a dozen call sites have to remember and a new command can quietly
-    /// opt out of.
+    /// to the log. Every host funnels its failures through here — the ABI's
+    /// `report_failure`/`reject`, the gateway's dispatch — so recording at
+    /// construction makes "if the user saw it, the log has it" a property of
+    /// the type instead of a rule that a dozen call sites have to remember and
+    /// a new command can quietly opt out of.
     #[must_use]
-    pub(crate) fn failed(command: &str, session: Option<SessionId>, error: ClientError) -> Self {
+    pub fn failed(command: &str, session: Option<SessionId>, error: ClientError) -> Self {
         tracing::error!(
             command,
             // The bare number, not `Some(SessionId(3))`: these lines get
@@ -195,7 +189,7 @@ mod tests {
 
     #[test]
     fn a_failed_command_is_logged_and_not_only_shown() {
-        // The gap this milestone exists to close: a failure reached the user as
+        // The gap the logging milestone closed: a failure reached the user as
         // a snack bar and left nothing behind when it faded, so a report could
         // only repeat whatever someone happened to read in time.
         let text = logged(|| {

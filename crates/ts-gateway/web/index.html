@@ -1,0 +1,747 @@
+<!doctype html>
+<!--
+  The gateway's debug page — and the deployment seed for Cloudflare Pages.
+
+  One file, no build step, no framework: it exists to make the gateway
+  testable by a person, and to prove the deployment story. The real client
+  (Phase 8) replaces it; everything it needs is in the protocol, not here.
+
+  Open it from the gateway itself (`http://127.0.0.1:8787/`) — or upload this
+  folder to any static host and point `?gw=` at the WebSocket:
+
+      https://<project>.pages.dev/?gw=wss://<tunnel-host>/ws
+
+  A page served over https cannot reach ws://localhost: Chrome's Local
+  Network Access blocks (and later asks permission for) WebSocket
+  connections to local addresses from public pages. The tunnel gives the
+  gateway a public hostname, which the browser treats like any other server.
+  docs/gateway.md has the deployment recipe.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nightcord Speak — gateway</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1f1f2e;
+    --panel: #2b2b3d;
+    --border: #3a3a4f;
+    --text: #e6e6f0;
+    --muted: #9a9ab0;
+    --accent: #8a7ff0;
+    --danger: #e05c5c;
+    --ok: #56c08d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+  }
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header strong { margin-right: 8px; }
+  #status { color: var(--muted); }
+  #status.connected { color: var(--ok); }
+  #status.refused { color: var(--danger); }
+  aside {
+    border-right: 1px solid var(--border);
+    overflow: auto;
+    padding: 8px;
+  }
+  main { display: flex; flex-direction: column; overflow: hidden; }
+  #messages { flex: 1; overflow: auto; padding: 12px; }
+  .msg { margin-bottom: 8px; }
+  .msg .who { color: var(--accent); font-weight: 600; }
+  .msg .when { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  #composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  input, button, select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font: inherit;
+  }
+  button { cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #14141f; }
+  button.danger { background: var(--danger); border-color: var(--danger); }
+  .channel, .client { padding: 4px 6px; border-radius: 6px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+  .channel:hover, .client:hover { background: var(--panel); }
+  .channel.active { background: var(--panel); font-weight: 600; }
+  .client { color: var(--muted); cursor: default; padding-left: 18px; }
+  .client .me { color: var(--ok); }
+  /* Whoever is talking, the same way the desktop tree draws it: the name
+     lights up rather than gaining an icon, because the eye is already there. */
+  .client .speaking { color: var(--ok); font-weight: 600; }
+  .client .mark { font-size: 10px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border); }
+  section h3 { margin: 10px 0 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  #events {
+    border-top: 1px solid var(--border);
+    max-height: 140px;
+    overflow: auto;
+    padding: 6px 12px;
+    font: 11px/1.5 ui-monospace, monospace;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+  #voice {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+  }
+  #meter { width: 140px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  #meter > div { height: 100%; width: 0%; background: var(--ok); }
+  .hidden { display: none !important; }
+</style>
+
+<header>
+  <strong>Nightcord Speak</strong>
+  <input id="token" type="password" placeholder="token" size="12" />
+  <input id="address" placeholder="host or host:port" size="18" />
+  <input id="nickname" placeholder="nickname" size="10" />
+  <select id="protocol">
+    <option value="ts3">TS3</option>
+    <option value="ts6">TS6</option>
+  </select>
+  <button id="connect" class="primary" disabled>Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <label style="display:flex;gap:4px;align-items:center;color:var(--muted)">
+    <input id="autovoice" type="checkbox" checked /> voice on connect
+  </label>
+  <span id="status">not connected to a gateway</span>
+</header>
+
+<aside>
+  <section>
+    <h3>Channels</h3>
+    <div id="channels"></div>
+  </section>
+</aside>
+
+<main>
+  <div id="messages"></div>
+  <div id="voice" class="hidden">
+    <button id="voice-start">Start voice</button>
+    <button id="mic-toggle" class="hidden">Release microphone (listen only)</button>
+    <button id="ptt">Hold to talk</button>
+    <button id="mute">Mute</button>
+    <button id="deafen">Deafen</button>
+    <div id="meter"><div></div></div>
+    <span id="transmit" style="color: var(--muted)">idle</span>
+  </div>
+  <form id="composer">
+    <input id="text" placeholder="Message the channel" style="flex:1" autocomplete="off" />
+    <button class="primary" type="submit">Send</button>
+  </form>
+  <div id="events"></div>
+</main>
+
+<script type="module">
+// The gateway URL: `?gw=wss://host/ws`, or same-origin `/ws` for the embedded
+// page. The token never goes in the URL — it is sent as the first message.
+const params = new URLSearchParams(location.search);
+const gatewayUrl = params.get('gw') ??
+  `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+document.getElementById('address').value = params.get('address') ?? '';
+
+// Diagnostics counters, readable from the console (or a test) at any time:
+// `outputFrames` = decoded audio messages that reached the page,
+// `playedFrames` = stereo frames the playback worklet actually rendered,
+// `contextState` = the AudioContext's state ("running" or the reason it is
+// not). The gap between the counters — and a context stuck on "suspended" —
+// is where a silent receiver hides.
+window.nightcordStats = {
+  outputFrames: 0,
+  playedFrames: 0,
+  playedPeak: 0,
+  contextState: null,
+};
+
+const state = {
+  socket: null,
+  authed: false,
+  session: null,        // the server session id, once connect reported back
+  channels: new Map(),  // id -> { name, clients: [] }
+  clients: new Map(),   // id -> { name, channelId, flags }
+  speaking: new Set(),  // ids talking right now
+  ownClientId: null,
+  ownChannelId: null,
+  audio: null,          // { context, capture, playback, node }
+};
+
+const $ = (id) => document.getElementById(id);
+
+function say(text, kind = 'muted') {
+  const line = document.createElement('div');
+  line.textContent = `${new Date().toLocaleTimeString()}  ${text}`;
+  line.style.color = kind === 'error' ? 'var(--danger)' : 'var(--muted)';
+  const events = $('events');
+  events.appendChild(line);
+  events.scrollTop = events.scrollHeight;
+}
+
+function setStatus(text, className = '') {
+  const status = $('status');
+  status.textContent = text;
+  status.className = className;
+}
+
+function send(frame) {
+  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+  state.socket.send(JSON.stringify(frame));
+}
+
+// --- connection to the gateway -------------------------------------------
+
+$('token').value = params.get('token') ?? sessionStorage.getItem('token') ?? '';
+
+function connectGateway() {
+  if (state.socket) return;
+  setStatus('connecting…');
+  const socket = new WebSocket(gatewayUrl);
+  socket.binaryType = 'arraybuffer';
+  state.socket = socket;
+
+  socket.onopen = () => {
+    // Auth is the first message, always.
+    sessionStorage.setItem('token', $('token').value);
+    send({ kind: 'auth', token: $('token').value });
+  };
+  socket.onmessage = (event) => {
+    if (typeof event.data === 'string') {
+      handleFrame(JSON.parse(event.data));
+    } else {
+      // Audio frames arrive as ArrayBuffers (ws.binaryType defaults to blob;
+      // setting it on the socket is done in connectGateway).
+      handleBinary(new Uint8Array(event.data));
+    }
+  };
+  socket.onclose = () => {
+    state.socket = null;
+    state.authed = false;
+    $('connect').disabled = true;
+    $('disconnect').disabled = true;
+    setStatus('gateway closed', 'refused');
+  };
+  socket.onerror = () => setStatus('gateway unreachable', 'refused');
+}
+
+function handleFrame(frame) {
+  switch (frame.kind) {
+    case 'hello':
+      setStatus('handshake done, sending token…');
+      break;
+    case 'welcome':
+      state.authed = true;
+      $('connect').disabled = false;
+      setStatus('ready', 'connected');
+      say('connected to the gateway');
+      if (state.connectWhenReady) {
+        state.connectWhenReady = false;
+        $('connect').click();
+      }
+      break;
+    case 'error':
+      setStatus(frame.message, 'refused');
+      say(frame.message, 'error');
+      break;
+    case 'lagged':
+      say(`the gateway dropped ${frame.missed} events for this connection`, 'error');
+      break;
+    case 'event':
+      handleEvent(frame.session, frame.event);
+      break;
+    case 'command_result':
+      handleResult(frame);
+      break;
+    default:
+      break;
+  }
+}
+
+function handleResult(frame) {
+  if (frame.outcome.status === 'failed') {
+    say(`${frame.command} failed: ${frame.outcome.error.detail?.message ?? frame.outcome.error.kind}`, 'error');
+    return;
+  }
+  if (frame.command === 'connect' && frame.session != null) {
+    state.session = frame.session;
+    $('connect').disabled = true;
+    $('disconnect').disabled = false;
+    // Voice only makes sense with a session; show the controls with it.
+    $('voice').classList.remove('hidden');
+    setStatus(`connected to session ${frame.session}`, 'connected');
+    // One click, then everything is ready: a session without voice hears
+    // nobody and nobody hears it, and asking for a second click to fix that
+    // is a step that exists for the implementation's convenience, not the
+    // user's.
+    if ($('autovoice').checked && !state.audio) {
+      startVoice();
+    }
+  }
+  if (frame.command === 'disconnect') {
+    resetServer();
+  }
+  if (frame.command === 'voice_status' && frame.data) {
+    updateVoice(frame.data);
+  }
+}
+
+function resetServer() {
+  // The audio engine belongs to the session: leaving one leaves it too.
+  // Without this the microphone stayed held, the button kept saying
+  // "Stop voice", and a re-join silently had no voice path at all — the
+  // voice bar looked armed and received nothing.
+  stopVoice();
+
+  state.session = null;
+  state.channels.clear();
+  state.clients.clear();
+  state.speaking.clear();
+  state.ownClientId = null;
+  state.ownChannelId = null;
+  $('channels').innerHTML = '';
+  $('messages').innerHTML = '';
+  $('connect').disabled = false;
+  $('disconnect').disabled = true;
+  $('voice').classList.add('hidden');
+  setStatus('ready', 'connected');
+}
+
+// --- domain events --------------------------------------------------------
+
+function handleEvent(session, event) {
+  // The gateway serves one client, so every event is about the session this
+  // page is driving; `session` is carried for future multi-session support.
+  switch (event.event) {
+    case 'connected':
+      state.session = session;
+      say(`joined ${event.payload.server.name}`);
+      break;
+    case 'own_client_identified':
+      state.ownClientId = event.payload.client_id;
+      state.ownChannelId = event.payload.channel_id;
+      renderChannels();
+      break;
+    case 'channel_created':
+    case 'channel_updated': {
+      const c = event.payload;
+      state.channels.set(c.id, { name: c.name, clients: state.channels.get(c.id)?.clients ?? [] });
+      renderChannels();
+      break;
+    }
+    case 'channel_removed':
+      state.channels.delete(event.payload);
+      renderChannels();
+      break;
+    case 'client_joined':
+    case 'client_updated': {
+      const c = event.payload;
+      state.clients.set(c.id, {
+        name: c.name,
+        channelId: c.channel_id,
+        isSelf: c.is_self,
+        flags: c.flags ?? {},
+      });
+      if (c.is_self) {
+        state.ownClientId = c.id;
+        state.ownChannelId = c.channel_id;
+      }
+      renderChannels();
+      break;
+    }
+    case 'speaking': {
+      // Speaking is not a property of a person — it flips several times a
+      // second — so it arrives as its own event pair rather than riding on the
+      // client record, where it would make every snapshot diff churn.
+      const { client_id: id, speaking } = event.payload;
+      if (speaking) state.speaking.add(id);
+      else state.speaking.delete(id);
+      renderChannels();
+      break;
+    }
+    case 'client_left':
+      state.clients.delete(event.payload);
+      state.speaking.delete(event.payload);
+      renderChannels();
+      break;
+    case 'client_moved': {
+      const c = state.clients.get(event.payload.client_id);
+      if (c) c.channelId = event.payload.channel_id;
+      renderChannels();
+      break;
+    }
+    case 'message_received': {
+      const m = event.payload;
+      if (m.is_private) {
+        say(`private from ${m.sender_name}: ${m.content}`);
+      } else {
+        addMessage(m.sender_name, m.content, m.timestamp);
+      }
+      break;
+    }
+    case 'voice_state_changed':
+      renderVoiceState(event.payload);
+      break;
+    case 'disconnected':
+      say('disconnected');
+      resetServer();
+      break;
+    default:
+      break;
+  }
+}
+
+/// A one-word badge beside a name.
+function mark(title, text) {
+  const span = document.createElement('span');
+  span.className = 'mark';
+  span.textContent = text;
+  span.title = title;
+  return span;
+}
+
+function renderChannels() {
+  const container = $('channels');
+  container.innerHTML = '';
+  for (const [id, channel] of [...state.channels.entries()].sort((a, b) => a[0] - b[0])) {
+    const row = document.createElement('div');
+    row.className = 'channel' + (id === state.ownChannelId ? ' active' : '');
+    row.textContent = channel.name;
+    row.onclick = () => send({ command: 'join_channel', payload: { session: state.session, channel_id: id } });
+    container.appendChild(row);
+
+    for (const [clientId, client] of state.clients) {
+      if (client.channelId !== id) continue;
+      const person = document.createElement('div');
+      person.className = 'client';
+      const name = document.createElement('span');
+      name.textContent = client.name;
+      if (clientId === state.ownClientId) name.className = 'me';
+      if (state.speaking.has(clientId)) name.classList.add('speaking');
+      person.appendChild(name);
+
+      // The same two indicators the desktop tree draws, and for the same
+      // reason: they say different things about who can hear whom.
+      const flags = client.flags ?? {};
+      if (flags.input_muted) person.appendChild(mark('已静音', '静音'));
+      if (flags.output_muted) person.appendChild(mark('已关闭扬声器', '闭麦'));
+      container.appendChild(person);
+    }
+  }
+}
+
+function addMessage(who, text, sentAt) {
+  const node = document.createElement('div');
+  node.className = 'msg';
+  const time = sentAt ? new Date(sentAt).toLocaleTimeString() : '';
+  node.innerHTML = `<span class="who"></span><span class="when"></span>`;
+  node.querySelector('.who').textContent = who;
+  node.querySelector('.when').textContent = time;
+  node.appendChild(document.createTextNode(text));
+  const messages = $('messages');
+  messages.appendChild(node);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// --- controls -------------------------------------------------------------
+
+$('connect').onclick = () => {
+  // The gateway handshake is automatic now; the button only connects to the
+  // server. If the handshake is still in flight or failed, say so instead of
+  // silently doing nothing.
+  if (!state.authed) {
+    // The handshake takes a moment; remember the intention instead of
+    // swallowing the click. The welcome below fires it.
+    if (!state.socket) connectGateway();
+    state.connectWhenReady = true;
+    setStatus('waiting for the gateway handshake…');
+    return;
+  }
+  if (state.session != null) return;
+  state.connectWhenReady = false;
+  send({
+    command: 'connect',
+    payload: {
+      address: $('address').value.trim(),
+      nickname: $('nickname').value.trim() || 'Web User',
+      profile: 'ignored-the-gateway-picks',
+      server_password: null,
+      channel_password: null,
+      privilege_key: null,
+      default_channel: null,
+      protocol: $('protocol').value,
+    },
+  });
+};
+
+$('disconnect').onclick = () => {
+  if (state.session != null) {
+    // Voice first: `voice_stop` addresses the session being closed, and the
+    // reset below drops that id.
+    stopVoice();
+    send({ command: 'disconnect', payload: { session: state.session } });
+  }
+};
+
+$('composer').onsubmit = (event) => {
+  event.preventDefault();
+  const text = $('text').value.trim();
+  if (!text || state.session == null) return;
+  send({
+    command: 'send_message',
+    payload: {
+      session: state.session,
+      target: { kind: 'channel', id: state.ownChannelId },
+      text,
+    },
+  });
+  $('text').value = '';
+};
+
+// --- voice ----------------------------------------------------------------
+// PCM in both directions; Opus stays in Rust. The capture worklet accumulates
+// exactly 960 samples (one 20 ms frame at 48 kHz) and posts them here, and
+// this page just ships the bytes.
+
+const FRAME_INPUT = 1;
+const FRAME_OUTPUT = 2;
+
+async function startVoice() {
+  if (state.audio || state.session == null) return;
+  // Async, with several awaits before `state.audio` exists: without this
+  // guard two triggers in quick succession (a queued click plus the
+  // auto-voice on connect) both get past the check and start two voice
+  // sessions — the second sink replaces the first, and the worker ends up
+  // reporting the counters of the sink nothing is pushing into.
+  if (state.voiceStarting) return;
+  state.voiceStarting = true;
+  try {
+    await startVoiceOnce();
+  } finally {
+    state.voiceStarting = false;
+  }
+}
+
+async function startVoiceOnce() {
+
+  let context;
+  try {
+    // The one rate everything below assumes; the graph resamples the mic to
+    // it if the microphone disagrees.
+    context = new AudioContext({ sampleRate: 48000 });
+  } catch (error) {
+    say(`could not open a 48 kHz audio context: ${error}`, 'error');
+    return;
+  }
+  // Chrome's autoplay policy can leave a fresh context `suspended`; a
+  // suspended context never calls the worklets at all — frames arrive, and
+  // not one sample is rendered. Resuming costs nothing when it is already
+  // running.
+  try {
+    await context.resume();
+  } catch (error) {
+    say(`could not start the audio context: ${error}`, 'error');
+  }
+  window.nightcordStats.contextState = context.state;
+  await context.audioWorklet.addModule('pcm-worklet.js');
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+  } catch (error) {
+    say(`microphone refused: ${error}`, 'error');
+    return;
+  }
+
+  const source = context.createMediaStreamSource(stream);
+  const capture = new AudioWorkletNode(context, 'pcm-capture', {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    channelCount: 1,
+    channelCountMode: 'explicit',
+  });
+  const playback = new AudioWorkletNode(context, 'pcm-playback', {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [2],
+  });
+  playback.port.onmessage = (event) => {
+    window.nightcordStats.playedFrames = event.data.played;
+    window.nightcordStats.playedPeak = event.data.peak;
+  };
+
+  capture.port.onmessage = (event) => {
+    const frame = event.data; // Float32Array(960)
+    const bytes = new ArrayBuffer(1 + frame.length * 4);
+    const view = new DataView(bytes);
+    view.setUint8(0, FRAME_INPUT);
+    for (let i = 0; i < frame.length; i++) {
+      view.setFloat32(1 + i * 4, frame[i], true); // explicit little-endian
+    }
+    if (state.socket?.readyState === WebSocket.OPEN) {
+      state.socket.send(bytes);
+    }
+  };
+  source.connect(capture);
+  // The capture branch must reach the destination to be pulled; a zero-gain
+  // node keeps it running without echoing the microphone.
+  const silent = context.createGain();
+  silent.gain.value = 0;
+  capture.connect(silent).connect(context.destination);
+  playback.connect(context.destination);
+
+  state.audio = { context, capture, playback, stream, micLive: true };
+
+  send({ command: 'voice_start', payload: { session: state.session, input: null, output: null } });
+  $('voice-start').textContent = 'Stop voice';
+  releaseMicButton(false);
+  $('mic-toggle').classList.remove('hidden');
+}
+
+/// Shows the microphone toggle with the text for its next action.
+function releaseMicButton(released) {
+  $('mic-toggle').textContent = released
+    ? 'Use microphone'
+    : 'Release microphone (listen only)';
+}
+
+function stopVoice() {
+  const audio = state.audio;
+  if (!audio) return;
+  for (const track of audio.stream.getTracks()) track.stop();
+  audio.context.close();
+  state.audio = null;
+  send({ command: 'voice_stop' });
+  $('voice-start').textContent = 'Start voice';
+  $('mic-toggle').classList.add('hidden');
+  releaseMicButton(false);
+}
+
+// Releasing the microphone hands the capture device back to every other
+// application on this machine. Windows audio capture is shared in name only:
+// with some drivers (headsests with vendor DSPs especially) the second opener
+// is starved — the device reads "open" and produces nothing — and that
+// starves whatever the user is actually using to talk. Playback does not need
+// the microphone, so listening keeps working while the device is released.
+async function toggleMicrophone() {
+  const audio = state.audio;
+  if (!audio) return;
+
+  if (audio.micLive) {
+    for (const track of audio.stream.getTracks()) track.stop();
+    audio.micLive = false;
+    releaseMicButton(true);
+    say('microphone released; the page still hears everyone');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+    audio.stream = stream;
+    const source = audio.context.createMediaStreamSource(stream);
+    source.connect(audio.capture);
+    audio.micLive = true;
+    releaseMicButton(false);
+    say('microphone in use');
+  } catch (error) {
+    say(`microphone refused: ${error}`, 'error');
+  }
+}
+
+function handleBinary(bytes) {
+  if (!state.audio || bytes[0] !== FRAME_OUTPUT) return;
+  window.nightcordStats.outputFrames += 1;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const samples = new Float32Array((bytes.length - 1) / 4);
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] = view.getFloat32(1 + i * 4, true);
+  }
+  state.audio.playback.port.postMessage(samples, [samples.buffer]);
+}
+
+$('voice-start').onclick = () => (state.audio ? stopVoice() : startVoice());
+$('mic-toggle').onclick = () => toggleMicrophone();
+$('mute').onclick = () => {
+  state.inputMuted = !state.inputMuted;
+  send({ command: 'voice_set_input_muted', payload: { muted: state.inputMuted } });
+  $('mute').textContent = state.inputMuted ? 'Unmute' : 'Mute';
+};
+$('deafen').onclick = () => {
+  state.outputMuted = !state.outputMuted;
+  send({ command: 'voice_set_output_muted', payload: { muted: state.outputMuted } });
+  $('deafen').textContent = state.outputMuted ? 'Undeafen' : 'Deafen';
+};
+
+// Push-to-talk: the pointer going down is the key going down.
+for (const type of ['pointerdown', 'pointerup', 'pointerleave', 'pointercancel']) {
+  const btn = $('ptt');
+  btn.addEventListener(type, () => {
+    send({ command: 'voice_push_to_talk', payload: { held: type === 'pointerdown' } });
+  });
+}
+
+function updateVoice(data) {
+  const meter = document.querySelector('#meter > div');
+  meter.style.width = `${Math.min(100, Math.round((data.level ?? 0) * 140))}%`;
+  $('transmit').textContent = data.transmitting ? 'transmitting' : (data.healthy ? 'idle' : 'voice off');
+  // What the gateway itself received from the server, straight from its
+  // sink — the number that separates "nothing arrived" from "arrived and is
+  // a whisper".
+  if (typeof data.received === 'number') {
+    window.nightcordStats.serverReceived = data.received;
+    window.nightcordStats.serverPeak = data.received_peak;
+  }
+}
+
+function renderVoiceState(state_) {
+  state.inputMuted = state_.input_muted;
+  state.outputMuted = state_.output_muted;
+  $('mute').textContent = state_.input_muted ? 'Unmute' : 'Mute';
+  $('deafen').textContent = state_.output_muted ? 'Undeafen' : 'Deafen';
+}
+
+// Poll the meter while voice runs; the status is a request/answer pair like
+// every other command, not a stream.
+setInterval(() => {
+  if (state.session != null && state.audio) {
+    send({ command: 'voice_status' });
+  }
+}, 200);
+
+// --- boot -----------------------------------------------------------------
+
+// Reach the gateway immediately with the saved token: the handshake is
+// plumbing, not a step. A missing or wrong token surfaces as the status line
+// and the button falls back to a manual handshake.
+$('connect').disabled = false;
+if (params.get('token') || sessionStorage.getItem('token')) {
+  connectGateway();
+}
+</script>
