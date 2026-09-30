@@ -6,7 +6,7 @@
 // These are transient by nature: three at most, four seconds each, and clicking
 // one goes to whatever it was about.
 //
-// The look is §19's toast: a coloured background, an icon and the text, with
+// The look is §27's toast: a coloured background, an icon and the text, with
 // the three variants the specification names. The tile that used to be here —
 // the sidebar colour with a coloured stripe down the left — predates the design
 // system and had no icon at all.
@@ -69,7 +69,7 @@ class NoticeTile extends ConsumerStatefulWidget {
 class _NoticeTileState extends ConsumerState<NoticeTile> {
   /// How wide a notice is.
   ///
-  /// A layout constant, like the sidebar's width: §19 describes the colours and
+  /// A layout constant, like the sidebar's width: §27 describes the colours and
   /// the contents of a toast, not its size, and this is the width the notices
   /// have always been.
   static const double _width = 300;
@@ -117,7 +117,7 @@ class _NoticeTileState extends ConsumerState<NoticeTile> {
     return Padding(
       padding: EdgeInsets.only(top: tokens.space2),
       child: Container(
-        // §8's level 2 is the one for a popup: this floats over the page, it is
+        // §15's level 2 is the one for a popup: this floats over the page, it is
         // not a dialog. Applied as a token rather than through
         // `Material(elevation:)`, which would use Material's own shadow and
         // quietly opt out of the specification.
@@ -174,10 +174,10 @@ class _NoticeTileState extends ConsumerState<NoticeTile> {
     );
   }
 
-  /// §19's three variants, and which of them this kind is.
+  /// §27's three variants, and which of them this kind is.
   ///
   /// The specification names success, error and info. Six kinds have to land on
-  /// three looks plus warning (§2.6 defines one but §19 does not draw it), so
+  /// three looks plus warning (§8 defines one but §27 does not draw it), so
   /// the mapping is by what the notice *means*: something arrived (info),
   /// something worth noticing happened (success), something went wrong (error),
   /// someone wants your attention (warning).
@@ -215,7 +215,7 @@ class _NoticeTileState extends ConsumerState<NoticeTile> {
   };
 }
 
-/// The three parts of a toast that vary by kind (§19).
+/// The three parts of a toast that vary by kind (§27).
 class _ToastVariant {
   const _ToastVariant({
     required this.background,

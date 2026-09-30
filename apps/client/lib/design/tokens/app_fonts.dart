@@ -32,8 +32,8 @@ abstract final class AppFonts {
   /// instead of failing.
   ///
   /// Until then, text in a language we do not bundle still renders: Flutter
-  /// falls back per glyph to the system fonts, the same mechanism §8 relies on
-  /// for emoji.
+  /// falls back per glyph to the system fonts, the same mechanism §8 relies on for
+  /// emoji.
   static String forLocale(Locale locale) => switch (locale.languageCode) {
     'zh' => simplifiedChinese,
     _ => latin,

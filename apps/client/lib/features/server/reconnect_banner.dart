@@ -67,7 +67,7 @@ class _ReconnectBannerState extends ConsumerState<ReconnectBanner> {
 
     return AppBanner(
       icon: Icons.cloud_off,
-      // §2.6's warning rather than §2.7's presence-idle: a connection being
+      // §8's warning rather than §9's presence-idle: a connection being
       // retried is a state of the application, not of a person.
       iconColour: tokens.warning,
       actions: [

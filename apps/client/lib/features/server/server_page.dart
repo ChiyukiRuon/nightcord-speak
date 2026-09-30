@@ -19,7 +19,7 @@ import 'reconnect_banner.dart';
 
 /// How wide the channel sidebar is.
 ///
-/// **Note for the layout round:** §21 gives 240–280 for a channel sidebar and
+/// **Note for the layout round:** §19 gives 240–280 for a channel sidebar and
 /// warns against fixing every sidebar at its widest. This one is 288, from
 /// before the design system existed. It is left alone here because the layout
 /// is explicitly out of scope for this pass — narrowing it is a one-line change

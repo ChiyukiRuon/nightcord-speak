@@ -42,7 +42,7 @@ class CrashBanner extends ConsumerWidget {
 
     return AppBanner(
       icon: Icons.report_outlined,
-      // §2.6's warning, not §2.7's presence-idle. The two are a similar yellow
+      // §8's warning, not §9's presence-idle. The two are a similar yellow
       // and the old code used the presence one, but this is a state of the
       // *application*, not of a person.
       iconColour: tokens.warning,

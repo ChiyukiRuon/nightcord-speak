@@ -1,4 +1,4 @@
-// The voice controls pinned to the bottom of the sidebar (§21).
+// The voice controls pinned to the bottom of the sidebar (§19).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +13,7 @@ import '../settings/settings_dialog.dart';
 ///
 /// Unchanged from before the design system: §20's desktop diagram has an
 /// "optional status / input" band and gives no height for it, and 56 fits a
-/// 36px control (§26) with room around it.
+/// 36px control (§33) with room around it.
 ///
 /// Public because anything floating above the bottom of the window has to clear
 /// it — see `notice_stack.dart`.
@@ -39,9 +39,9 @@ class VoiceBar extends ConsumerWidget {
     return Container(
       height: voiceBarHeight,
       decoration: BoxDecoration(
-        // §35: a secondary area, the same step as the sidebar this bar sits at
+        // §2.2: a secondary area, the same step as the sidebar this bar sits at
         // the bottom of.
-        color: tokens.backgroundSecondary,
+        color: tokens.bgSidebar,
         border: Border(top: BorderSide(color: tokens.borderSubtle)),
       ),
       padding: EdgeInsets.symmetric(
@@ -54,7 +54,7 @@ class VoiceBar extends ConsumerWidget {
             child: Text(
               name,
               overflow: TextOverflow.ellipsis,
-              // §5.2's `bodyMedium` — 14/500, the level it names for emphasised
+              // §12.2's `bodyMedium` — 14/500, the level it names for emphasised
               // body text. One's own name in a control bar is exactly that.
               style: Theme.of(context).textTheme.titleMedium,
             ),
@@ -96,7 +96,7 @@ class VoiceBar extends ConsumerWidget {
 
 /// One round control in the voice bar.
 ///
-/// Size, icon size and hover all come from the theme's `iconButtonTheme` (§26),
+/// Size, icon size and hover all come from the theme's `iconButtonTheme` (§33),
 /// so this only decides the *tint* — which is the part that carries meaning.
 class _VoiceButton extends StatelessWidget {
   const _VoiceButton({

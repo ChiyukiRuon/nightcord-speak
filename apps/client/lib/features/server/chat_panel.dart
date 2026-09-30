@@ -136,7 +136,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     if (!_scroll.hasClients) return;
     _scroll.animateTo(
       _scroll.position.maxScrollExtent,
-      // §27's panel timing, and §27's curve for something already on screen.
+      // §34's panel timing, and §34's curve for something already on screen.
       duration: AppMotion.panel,
       curve: AppMotion.enter,
     );
@@ -177,8 +177,8 @@ class _ChatHeader extends StatelessWidget {
     final other = _privateWith(view, l10n);
 
     return Container(
-      // §35: the band above the content is a secondary area.
-      color: tokens.backgroundSecondary,
+      // §2.2: the band above the content is a secondary area.
+      color: tokens.bgSidebar,
       padding: EdgeInsets.symmetric(
         horizontal: tokens.space5,
         vertical: tokens.space3,
@@ -196,7 +196,7 @@ class _ChatHeader extends StatelessWidget {
           SizedBox(width: tokens.space2),
           Text(
             other?.name ?? channel?.name ?? l10n.chatNotInChannel,
-            // §5.2's `title`: this is the heading of the whole content area,
+            // §12.2's `title`: this is the heading of the whole content area,
             // which is what the level is for.
             style: text.titleLarge,
           ),
@@ -248,15 +248,20 @@ class _EmptyChannel extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // §9's page-level size. The icon here was 40, which is not on that
+          // §16's page-level size. The icon here was 40, which is not on that
           // scale.
-          Icon(Icons.forum_outlined, size: 32, color: tokens.textDisabled),
+          //
+          // §21 gives the empty state one colour for both halves —
+          // `textTertiary` — and says explicitly not to use primary. It used to
+          // be `textDisabled` here and `textSecondary` below, which made a
+          // placeholder that is not really disabled look like one.
+          Icon(Icons.forum_outlined, size: 32, color: tokens.textTertiary),
           SizedBox(height: tokens.space3),
           Text(
             AppLocalizations.of(context).chatEmpty,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ).textTheme.bodyMedium?.copyWith(color: tokens.textTertiary),
           ),
         ],
       ),
@@ -277,7 +282,7 @@ class _MessageTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return Padding(
-      // §13: 8px above and below gives consecutive messages 16px between them,
+      // §20: 8px above and below gives consecutive messages 16px between them,
       // which is the low end of the 16–20 it asks for. It does not distinguish
       // "same sender" from "different sender" — the view does not keep that
       // grouping, and inventing it here would mean guessing at data the core
@@ -289,7 +294,7 @@ class _MessageTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // §14's chat size.
+          // §22's chat size.
           Avatar(name: message.senderName, size: 40),
           SizedBox(width: tokens.space3),
           Expanded(
@@ -304,14 +309,14 @@ class _MessageTile extends StatelessWidget {
                       child: Text(
                         message.senderName,
                         overflow: TextOverflow.ellipsis,
-                        // §13: username 14px, `textPrimary`.
+                        // §20: username 14px, `textPrimary`.
                         style: text.titleMedium?.copyWith(color: tokens.textPrimary),
                       ),
                     ),
                     SizedBox(width: tokens.space2),
                     Text(
                       formatTimestamp(l10n, message.sentAt),
-                      // §13: time 12px, `textTertiary` — the one line of §13
+                      // §20: time 12px, `textTertiary` — the one line of §20
                       // that names both a size and a colour, and this matches
                       // both.
                       style: text.bodySmall?.copyWith(color: tokens.textTertiary),
@@ -326,7 +331,7 @@ class _MessageTile extends StatelessWidget {
                   SizedBox(height: tokens.space1),
                   SelectableText(
                     message.content,
-                    // §13: body 14px `textPrimary`. The line height comes from
+                    // §20: body 14px `textPrimary`. The line height comes from
                     // the scale rather than being set here.
                     style: text.bodyMedium?.copyWith(color: tokens.textPrimary),
                   ),
@@ -366,7 +371,7 @@ class _AttachmentCard extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
       decoration: BoxDecoration(
-        // §15: an attachment card is `#686080`, which is `surface2`.
+        // §23: an attachment card is `#696180`, which is `surface2`.
         color: tokens.surface2,
         borderRadius: AppRadius.mdAll,
       ),
@@ -378,8 +383,8 @@ class _AttachmentCard extends StatelessWidget {
             height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: tokens.backgroundPrimary,
-              // §7's `radiusXS` — "badges and small controls".
+              color: tokens.bgMain,
+              // §14's `radiusXS` — "badges and small controls".
               borderRadius: AppRadius.xsAll,
             ),
             child: Text(
@@ -388,7 +393,7 @@ class _AttachmentCard extends StatelessWidget {
               // three-letter label fits a 40px tile at 12.
               style: text.bodySmall?.copyWith(
                 fontWeight: AppTypography.bold,
-                color: tokens.textRow,
+                color: tokens.textSecondary,
               ),
             ),
           ),
@@ -400,14 +405,16 @@ class _AttachmentCard extends StatelessWidget {
                 Text(
                   attachment.name,
                   overflow: TextOverflow.ellipsis,
-                  // §15: file name 14px `textPrimary`.
+                  // §23: file name 14px `textPrimary`.
                   style: text.titleMedium?.copyWith(color: tokens.textPrimary),
                 ),
                 SizedBox(height: tokens.space1 / 2),
                 Text(
                   '${attachment.readableSize}${attachment.mimeType == null ? '' : ' · ${attachment.mimeType}'}',
-                  // §15: metadata 12px `#C0BBCD`, which is `rowText`.
-                  style: text.bodySmall?.copyWith(color: tokens.textRow),
+                  // §23: metadata 12px `#D2CCDE`, which is `textSecondary`.
+                  // (v1 named a separate `rowText` colour for this; v2 folded
+                  // it onto the existing secondary.)
+                  style: text.bodySmall?.copyWith(color: tokens.textSecondary),
                 ),
               ],
             ),
@@ -461,7 +468,7 @@ class _Composer extends StatelessWidget {
               minLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
-              // §11's colours and radius come from the theme's
+              // §18's colours and radius come from the theme's
               // `inputDecorationTheme`; only the hint is this widget's.
               decoration: InputDecoration(
                 hintText: hint,

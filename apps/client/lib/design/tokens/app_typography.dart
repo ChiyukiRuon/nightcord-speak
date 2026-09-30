@@ -1,4 +1,4 @@
-// The type scale, from `docs/UI设计与配色规范.md` §5.2 and
+// The type scale, from `docs/UI设计与配色规范.md` §12.2 and
 // `docs/UI字体规范.md` §3.
 //
 // Sizes and weights are the specifications' numbers. Two things they do not
@@ -40,7 +40,7 @@ abstract final class AppTypography {
   /// Emphasis.
   static const FontWeight bold = FontWeight.w700;
 
-  // --- Sizes (§5.2) --------------------------------------------------------
+  // --- Sizes (§12.2) --------------------------------------------------------
 
   static const double displaySize = 28;
   static const double headlineSize = 22;
@@ -52,7 +52,7 @@ abstract final class AppTypography {
 
   /// The floor from `docs/UI字体规范.md` §3: nothing in the UI is smaller.
   ///
-  /// This is where the two specifications disagree. §5.2 of the colour
+  /// This is where the two specifications disagree. §12.2 of the colour
   /// specification lists a ninth level, `overline`, at **11px** — below this
   /// floor — and marks it "极少使用" itself. The floor wins: `docs/UI字体规范.md`
   /// is the more specific document about type, and it states the limit as a
@@ -80,11 +80,11 @@ abstract final class AppTypography {
 
   /// The theme's text styles, drawn in `family`.
   ///
-  /// Material's slots do not line up one-for-one with §5.2's nine levels, so
+  /// Material's slots do not line up one-for-one with §12.2's nine levels, so
   /// each spec level lands in the slot whose *use* matches — `titleLarge` is
-  /// what `AlertDialog` draws its title with, and §17 wants a dialog title at
+  /// what `AlertDialog` draws its title with, and §25 wants a dialog title at
   /// 18/600, so that is where `title` goes. The one forced fit is `titleMedium`
-  /// carrying §5.2's `bodyMedium` (14/500): Material has no emphasis-body slot,
+  /// carrying §12.2's `bodyMedium` (14/500): Material has no emphasis-body slot,
   /// and `titleMedium` is the closest thing it has to "slightly heavier than
   /// body".
   ///

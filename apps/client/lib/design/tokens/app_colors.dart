@@ -1,4 +1,10 @@
-// The raw palette, transcribed from `docs/UI设计与配色规范.md` §2 / §3.
+// The raw palette, transcribed from `docs/UI设计与配色规范.md` §3–§10.
+//
+// That document is **v2.0**, which replaced the colours of the first version
+// wholesale: it renames the background group (`bgMain` / `bgSidebar` / `bgDeep`
+// / `bgElevated`), revalues every surface and the whole primary ramp, and adds
+// §41's rule that the old values must not appear anywhere. The old set was
+// greyer and bluer; this one is the deep purple-blue the reference UI has.
 //
 // This file is a copy of the specification, not an interpretation of it: the
 // values are meant to be compared against that document line by line, so a
@@ -19,76 +25,75 @@ import 'package:flutter/painting.dart';
 /// `abstract final` mirrors the specification's own declaration: the class is a
 /// namespace for constants and is never instantiated or extended.
 abstract final class AppColors {
-  // --- Background (§2.1) ---------------------------------------------------
+  // --- Background (§3.1) ---------------------------------------------------
   //
-  // Four steps of lightness rather than four kinds of widget: the whole layout
-  // is meant to be legible from the background alone, which is why §4.1 can
-  // say "main content is 484868, sidebar is 383060" and mean it literally.
+  // Four steps of lightness rather than four kinds of widget. §4 is explicit
+  // that the purple atmosphere comes from `bgSidebar` + `bgMain` — not from
+  // primary — so the whole layout has to be legible from these alone.
 
-  /// Main content area — the chat, and the page behind everything else.
-  static const Color backgroundPrimary = Color(0xFF484868);
+  /// Modals, context menus, deep popups.
+  static const Color bgDeep = Color(0xFF302850);
 
-  /// Sidebars and input areas.
-  static const Color backgroundSecondary = Color(0xFF383060);
+  /// Sidebars and navigation.
+  static const Color bgSidebar = Color(0xFF3F3661);
 
-  /// Modals, context menus, and anything that sits *under* the page.
-  static const Color backgroundTertiary = Color(0xFF302850);
+  /// The chat and the page behind everything else.
+  static const Color bgMain = Color(0xFF4F486E);
 
   /// Floating panels.
-  static const Color backgroundElevated = Color(0xFF50486C);
+  static const Color bgElevated = Color(0xFF554C75);
 
-  // --- Surface (§2.2) ------------------------------------------------------
+  // --- Surface (§4) --------------------------------------------------------
   //
-  // Hover, cards and active states. §2.2 is explicit that these — not borders —
-  // are how elevation is expressed; the border family exists for the few places
-  // a real divider is genuinely needed.
+  // Selection, hover and cards. §4 repeats the rule that elevation is a
+  // lightness step rather than a border.
 
-  /// Hover, and ordinary cards.
-  static const Color surface1 = Color(0xFF50486C);
+  /// Selection, hover, ordinary cards.
+  static const Color surface1 = Color(0xFF5A5278);
 
   /// Attachments, tooltips, elevated cards.
-  static const Color surface2 = Color(0xFF686080);
+  static const Color surface2 = Color(0xFF696180);
 
-  /// Active and strong-surface states.
-  static const Color surface3 = Color(0xFF78708E);
+  /// Emphasised surfaces.
+  static const Color surface3 = Color(0xFF7A7190);
 
-  // --- Primary (§2.3) ------------------------------------------------------
+  // --- Primary (§5) --------------------------------------------------------
   //
-  // §4.2 forbids using primary as a large fill. It is for buttons, links,
-  // selection, focus, progress and unread badges — roughly the 8% of the
-  // screen the ratio table in §1.2 allows.
+  // Buttons, links, selection, focus, progress, sliders, badges, unread marks.
+  // §5 forbids it as a large background.
 
-  static const Color primary = Color(0xFF887EB4);
-  static const Color primaryHover = Color(0xFF968CBD);
-  static const Color primaryPressed = Color(0xFF766CA3);
-  static const Color primaryFocus = Color(0xFFAAA2CB);
-  static const Color primaryDisabled = Color(0xFF625A72);
+  static const Color primary = Color(0xFF8C82C2);
+  static const Color primaryHover = Color(0xFF9A90CF);
+  static const Color primaryPressed = Color(0xFF786EAD);
+  static const Color primaryFocus = Color(0xFFAEA6D6);
+  static const Color primaryDisabled = Color(0xFF625A78);
 
-  // --- Text (§2.4) ---------------------------------------------------------
+  // --- Text (§6) -----------------------------------------------------------
   //
-  // Three levels of emphasis, then a disabled grey. §2.4 warns against using
-  // pure white for everything, so `textPrimary` is deliberately off-white and
-  // the levels below it are further from it than the old palette's were.
+  // Three levels of emphasis, then a disabled grey. §6 warns against using pure
+  // white everywhere.
 
   static const Color textPrimary = Color(0xFFF8F7FA);
-  static const Color textSecondary = Color(0xFFD0CBDD);
-  static const Color textTertiary = Color(0xFFA7A1B8);
-  static const Color textDisabled = Color(0xFF77718A);
+  static const Color textSecondary = Color(0xFFD2CCDE);
+  static const Color textTertiary = Color(0xFFAAA3BB);
+  static const Color textDisabled = Color(0xFF7C758E);
 
   /// Text drawn *on* a primary-coloured fill.
   static const Color textOnPrimary = Color(0xFFFFFFFF);
 
-  // --- Border (§2.5) -------------------------------------------------------
-
-  static const Color borderSubtle = Color(0xFF5B5678);
-  static const Color borderDefault = Color(0xFF68627F);
-  static const Color borderStrong = Color(0xFF79718F);
-
-  // --- Semantic (§2.6) -----------------------------------------------------
+  // --- Border (§7) ---------------------------------------------------------
   //
-  // Each has a foreground and a background half: the `*Bg` values are the
-  // toast/notice fills from §19, which is why they are dark enough to carry
-  // `textPrimary` rather than the saturated colour itself.
+  // §7 asks for these to stay quieter than the text, and prefers translucent
+  // white where a hairline is wanted at all.
+
+  static const Color borderSubtle = Color(0xFF575071);
+  static const Color borderDefault = Color(0xFF625A7C);
+  static const Color borderStrong = Color(0xFF766D8D);
+
+  // --- Semantic (§8) -------------------------------------------------------
+  //
+  // Each has a foreground and a background half: the `*Bg` values are the toast
+  // fills from §27, dark enough to carry `textPrimary`.
 
   static const Color success = Color(0xFF7FB89A);
   static const Color successBg = Color(0xFF344F48);
@@ -102,43 +107,41 @@ abstract final class AppColors {
   static const Color info = Color(0xFF82AFC5);
   static const Color infoBg = Color(0xFF394B5C);
 
-  // --- Presence (§2.7) -----------------------------------------------------
+  // --- Presence (§9) -------------------------------------------------------
 
   static const Color online = Color(0xFF8CC9A3);
   static const Color idle = Color(0xFFD0B978);
   static const Color busy = Color(0xFFC9828C);
-  static const Color offline = Color(0xFF77718A);
+  static const Color offline = Color(0xFF7C758E);
 
-  // --- Window controls (§2.8) ----------------------------------------------
+  // --- Window controls (§10) -----------------------------------------------
   //
-  // Defined because §3 defines them, but **not wired to anything**: the window
+  // Defined because §10 defines them, but **not wired to anything**: the window
   // still uses the platform's own title bar (the Windows runner creates an
-  // ordinary `WS_OVERLAPPEDWINDOW`), so nothing draws these. §2.8 also warns
-  // against letting them leak into ordinary UI. Uncomment-or-delete is a
-  // decision for whoever builds a custom chrome, not for this file.
+  // ordinary `WS_OVERLAPPEDWINDOW`), so nothing draws these. §10 also warns
+  // against letting them leak into ordinary UI.
 
   static const Color windowClose = Color(0xFFEF6F91);
   static const Color windowMinimize = Color(0xFFF1C85B);
   static const Color windowMaximize = Color(0xFF52C7D9);
 
-  // --- List-row states (§12.2, §15) ----------------------------------------
+  // --- Named by a component section, not by §11 -----------------------------
   //
-  // **Not in §3's token table.** §12.2 specifies these three by value for
-  // channel rows, and §15 reuses `rowText` for attachment metadata, but the
-  // token table never gives them names. They are named here so they have a
-  // home; if §3 ever grows them, rename to match rather than keeping both.
-  //
-  // `rowText` sits between `textSecondary` and `textTertiary` and is *not*
-  // redundant with either: §12.2 wants an unselected channel quieter than
-  // normal body text but louder than metadata, and rounding it to one of the
-  // two loses that on purpose.
+  // §11's `AppColors` block is the token list, but two sections specify a
+  // colour of their own that never made it into it. They live here so they have
+  // a home and one spelling; if §11 ever grows them, rename to match rather
+  // than keeping both.
 
-  /// Unselected channel names, and attachment metadata.
-  static const Color rowText = Color(0xFFC0BBCD);
+  /// A channel row under the pointer (§19).
+  ///
+  /// Its own value rather than `surface1`: §19 measures the hover step against
+  /// the *sidebar*, which is a step darker than the rest of the page, so a
+  /// surface-sized jump would be twice as loud as the design intends.
+  static const Color channelHoverBg = Color(0xFF51496F);
 
-  /// A channel row under the pointer.
-  static const Color rowHoverBg = Color(0xFF443C68);
-
-  /// A channel row's name under the pointer.
-  static const Color rowHoverText = Color(0xFFE8E5F0);
+  /// The message composer and every other text field (§18).
+  ///
+  /// Deliberately darker than `bgSidebar` — the input reads as cut *into* the
+  /// window rather than laid on top of it.
+  static const Color inputBg = Color(0xFF3A3260);
 }

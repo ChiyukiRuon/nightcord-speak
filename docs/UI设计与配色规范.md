@@ -1,267 +1,400 @@
-# UI Design System
+# 跨平台通讯客户端 UI Design System（修订版）
 
-> 适用平台：Web / Windows / macOS / iOS / Android
-> 技术栈建议：Flutter
-> 视觉基准：深色、低饱和蓝紫色、柔和层级、轻量桌面通讯客户端
-> 设计目标：统一品牌视觉，同时遵循桌面端与移动端各自的交互习惯。
+> 版本：v2.0\
+> 适用平台：Web / Windows / macOS / iOS / Android\
+> 技术栈：Flutter\
+> 视觉基准：用户提供的 TeamSpeak / Nightcord 风格参考界面\
+> 核心风格：深紫蓝、低饱和、柔和、低对比层级、轻量通讯客户端
 
----
+------------------------------------------------------------------------
 
-## 1. 设计原则
+## 1. 修订说明
 
-### 1.1 核心关键词
+本版本以参考界面的**实际视觉关系**作为主要基准，修正上一版偏灰、偏蓝的问题。
 
-- Muted Purple：低饱和蓝紫
-- Soft Dark：柔和深色，而不是纯黑
-- Layered：通过明度建立层级
-- Quiet UI：减少强烈边框、阴影和高饱和色
-- Content First：聊天内容优先
-- Cross Platform：视觉 Token 统一，交互方式按平台适配
+上一版的问题主要是：
 
-### 1.2 总体视觉比例
+-   Main Background 过于灰蓝
+-   Sidebar 与 Main 的色相差异不够明确
+-   Surface 偏灰
+-   Primary 偏灰紫
+-   整体缺少参考图中明显的「紫蓝色」氛围
 
-建议视觉占比：
+本版本的核心调整：
 
-  类型           占比 说明
+``` text
+旧 Main Background
+#484868
 
----
-
-  Background      70% 页面、Sidebar、大面积区域
-  Surface         15% 卡片、输入框、附件、悬浮层
-  Primary          8% 交互、选中、Focus
-  Semantic         2% 成功、警告、错误、信息
-  Other            5% 文字、Icon、分割线等
-
-**禁止使用 Primary 大面积铺满页面。**
-
----
-
-# 2. Color System
-
-## 2.1 Background
-
-  Token                   HEX         用途
-
----
-
-  `backgroundPrimary`     `#484868`   主内容区
-  `backgroundSecondary`   `#383060`   Sidebar、输入区域
-  `backgroundTertiary`    `#302850`   Modal、Context Menu、深层背景
-  `backgroundElevated`    `#50486C`   Floating Panel
-
-层级关系：
-
-```text
-#302850  Deep
-#383060  Secondary
-#484868  Primary
-#50486C  Elevated
+新 Main Background
+#4F486E
 ```
 
----
+``` text
+旧 Sidebar
+#383060
 
-## 2.2 Surface
+新 Sidebar
+#3F3661
+```
+
+``` text
+旧 Primary
+#887EB4
+
+新 Primary
+#8C82C2
+```
+
+**后续开发只使用本版本 Token，不再使用上一版颜色。**
+
+------------------------------------------------------------------------
+
+# 2. 设计目标
+
+## 2.1 核心关键词
+
+-   Deep Purple Blue
+-   Muted Purple
+-   Soft Dark
+-   Layered
+-   Quiet UI
+-   Content First
+-   Cross Platform
+
+视觉目标：
+
+> 保持参考图中深沉、柔和、偏紫的整体氛围，同时通过明度建立 UI 层级。
+
+------------------------------------------------------------------------
+
+## 2.2 最重要的颜色关系
+
+整个 UI 的核心不是 Primary，而是背景色本身。
+
+``` text
+Deep
+#302850
+   ↓
+Sidebar
+#3F3661
+   ↓
+Main
+#4F486E
+   ↓
+Surface
+#5A5278
+   ↓
+Elevated
+#696180
+   ↓
+Strong Surface
+#7A7190
+   ↓
+Primary
+#8C82C2
+   ↓
+Text
+#F8F7FA
+```
+
+因此：
+
+**不要使用高饱和紫色作为大面积背景。**
+
+参考图的紫色氛围主要来自：
+
+``` text
+#3F3661
++
+#4F486E
+```
+
+而不是来自 Primary。
+
+------------------------------------------------------------------------
+
+# 3. Core Color Palette
+
+## 3.1 Background
+
+  Token          HEX         用途
+  -------------- ----------- ---------------------------------
+  `bgDeep`       `#302850`   Modal、Context Menu、深层 Popup
+  `bgSidebar`    `#3F3661`   Sidebar、Navigation
+  `bgMain`       `#4F486E`   主聊天区、页面背景
+  `bgElevated`   `#554C75`   Floating Panel
+
+### 使用规则
+
+``` text
+Sidebar → #3F3661
+Main    → #4F486E
+Modal   → #302850
+```
+
+不要：
+
+``` text
+Main → #000000
+Sidebar → #000000
+```
+
+------------------------------------------------------------------------
+
+# 4. Surface
 
   Token        HEX         用途
+  ------------ ----------- ------------------------------------
+  `surface1`   `#5A5278`   Selected、Hover、普通 Card
+  `surface2`   `#696180`   Attachment、Tooltip、Elevated Card
+  `surface3`   `#7A7190`   强调 Surface
 
----
+核心关系：
 
-  `surface1`   `#50486C`   Hover、普通 Card
-  `surface2`   `#686080`   Attachment、Tooltip、Elevated Card
-  `surface3`   `#78708E`   Active、Strong Surface
+``` text
+#4F486E  Main
+   ↓
+#5A5278  Surface 1
+   ↓
+#696180  Surface 2
+   ↓
+#7A7190  Surface 3
+```
 
-不要通过大量 Border 制造层级，优先使用 Surface 明度变化。
+优先通过 Surface 明度建立层级，不要依赖粗边框。
 
----
+------------------------------------------------------------------------
 
-## 2.3 Primary
+# 5. Primary
 
-  Token               HEX         状态
-
----
-
-  `primary`           `#887EB4`   Normal
-  `primaryHover`      `#968CBD`   Hover
-  `primaryPressed`    `#766CA3`   Pressed
-  `primaryFocus`      `#AAA2CB`   Focus
-  `primaryDisabled`   `#625A72`   Disabled
+  Token               HEX         用途
+  ------------------- ----------- ----------
+  `primary`           `#8C82C2`   Normal
+  `primaryHover`      `#9A90CF`   Hover
+  `primaryPressed`    `#786EAD`   Pressed
+  `primaryFocus`      `#AEA6D6`   Focus
+  `primaryDisabled`   `#625A78`   Disabled
 
 Primary 用于：
 
-- Button
-- Link
-- Selected
-- Focus
-- Active Icon
-- Progress
-- Slider
-- Badge
-- 未读状态
+-   Button
+-   Link
+-   Selected Icon
+-   Focus Ring
+-   Progress
+-   Slider
+-   Active State
+-   Badge
+-   未读提示
 
----
+**Primary 不用于大面积页面背景。**
 
-## 2.4 Text
+------------------------------------------------------------------------
+
+# 6. Text
 
   Token             HEX         用途
-
----
-
+  ----------------- ----------- ------------------------
   `textPrimary`     `#F8F7FA`   标题、用户名、主要消息
-  `textSecondary`   `#D0CBDD`   时间、辅助信息
-  `textTertiary`    `#A7A1B8`   Placeholder、Metadata
-  `textDisabled`    `#77718A`   Disabled
+  `textSecondary`   `#D2CCDE`   时间、辅助信息
+  `textTertiary`    `#AAA3BB`   Placeholder、Metadata
+  `textDisabled`    `#7C758E`   Disabled
   `textOnPrimary`   `#FFFFFF`   Primary Button
 
-不要默认使用纯白 `#FFFFFF` 作为所有文字。
+## 使用规则
 
----
+不要让所有文字都使用：
 
-## 2.5 Border
+``` text
+#FFFFFF
+```
+
+推荐：
+
+``` text
+标题 / 用户名 / 消息
+#F8F7FA
+
+时间 / 辅助信息
+#D2CCDE
+
+Placeholder
+#AAA3BB
+
+Disabled
+#7C758E
+```
+
+------------------------------------------------------------------------
+
+# 7. Border
 
   Token             HEX         用途
-
----
-
-  `borderSubtle`    `#5B5678`   弱分割线
-  `borderDefault`   `#68627F`   默认边框
-  `borderStrong`    `#79718F`   强调边框
+  ----------------- ----------- ----------
+  `borderSubtle`    `#575071`   弱分割线
+  `borderDefault`   `#625A7C`   普通边框
+  `borderStrong`    `#766D8D`   强调边框
 
 推荐优先使用透明白：
 
-```dart
+``` dart
 Colors.white.withValues(alpha: 0.08)
 Colors.white.withValues(alpha: 0.12)
 Colors.white.withValues(alpha: 0.18)
 ```
 
----
+边框应该弱于文字，不应成为视觉焦点。
 
-## 2.6 Semantic Colors
+------------------------------------------------------------------------
 
-### Success
+# 8. Semantic Colors
 
-```text
-success     #7FB89A
-successBg   #344F48
+整体 UI 使用低饱和状态色。
+
+## Success
+
+``` text
+success
+#7FB89A
+
+successBg
+#344F48
 ```
 
-### Warning
+## Warning
 
-```text
-warning     #D0B071
-warningBg   #554B3A
+``` text
+warning
+#D0B071
+
+warningBg
+#554B3A
 ```
 
-### Error
+## Error
 
-```text
-error       #CF858D
-errorBg     #533C48
+``` text
+error
+#CF858D
+
+errorBg
+#533C48
 ```
 
-### Info
+## Info
 
-```text
-info        #82AFC5
-infoBg      #394B5C
+``` text
+info
+#82AFC5
+
+infoBg
+#394B5C
 ```
 
-语义颜色应保持低饱和，避免破坏整体紫色氛围。
+状态色只在需要表达状态时使用。
 
----
+------------------------------------------------------------------------
 
-## 2.7 Presence
+# 9. Presence
 
-用于语音服务器、频道、好友、成员列表：
+用于 TeamSpeak / 语音服务器 / 用户列表：
 
   Token       HEX         状态
-
----
-
+  ----------- ----------- ------
   `online`    `#8CC9A3`   在线
   `idle`      `#D0B978`   离开
   `busy`      `#C9828C`   忙碌
-  `offline`   `#77718A`   离线
+  `offline`   `#7C758E`   离线
 
-Presence Dot 推荐直径：
+Presence Dot：
 
-- Desktop：8px
-- Mobile：8px
-- 高密度列表：6px
-
----
-
-## 2.8 Window Controls
-
-仅用于桌面窗口控制：
-
-```text
-close       #EF6F91
-minimize    #F1C85B
-maximize    #52C7D9
+``` text
+Desktop: 8px
+Mobile: 8px
+Compact: 6px
 ```
 
-不要把这三个颜色扩散到普通 UI。
+颜色不能作为唯一状态提示；需要时同时提供文本或辅助语义。
 
----
+------------------------------------------------------------------------
 
-# 3. Flutter Color Tokens
+# 10. Window Controls
 
-推荐建立统一的 `AppColors`：
+仅用于 Desktop：
 
-```dart
+``` text
+Close
+#EF6F91
+
+Minimize
+#F1C85B
+
+Maximize
+#52C7D9
+```
+
+这些颜色不要扩散到普通 UI。
+
+------------------------------------------------------------------------
+
+# 11. Flutter AppColors
+
+推荐统一定义：
+
+``` dart
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
   // Background
-  static const backgroundPrimary =
-      Color(0xFF484868);
-  static const backgroundSecondary =
-      Color(0xFF383060);
-  static const backgroundTertiary =
+  static const bgDeep =
       Color(0xFF302850);
-  static const backgroundElevated =
-      Color(0xFF50486C);
+  static const bgSidebar =
+      Color(0xFF3F3661);
+  static const bgMain =
+      Color(0xFF4F486E);
+  static const bgElevated =
+      Color(0xFF554C75);
 
   // Surface
   static const surface1 =
-      Color(0xFF50486C);
+      Color(0xFF5A5278);
   static const surface2 =
-      Color(0xFF686080);
+      Color(0xFF696180);
   static const surface3 =
-      Color(0xFF78708E);
+      Color(0xFF7A7190);
 
   // Primary
   static const primary =
-      Color(0xFF887EB4);
+      Color(0xFF8C82C2);
   static const primaryHover =
-      Color(0xFF968CBD);
+      Color(0xFF9A90CF);
   static const primaryPressed =
-      Color(0xFF766CA3);
+      Color(0xFF786EAD);
   static const primaryFocus =
-      Color(0xFFAAA2CB);
+      Color(0xFFAEA6D6);
   static const primaryDisabled =
-      Color(0xFF625A72);
+      Color(0xFF625A78);
 
   // Text
   static const textPrimary =
       Color(0xFFF8F7FA);
   static const textSecondary =
-      Color(0xFFD0CBDD);
+      Color(0xFFD2CCDE);
   static const textTertiary =
-      Color(0xFFA7A1B8);
+      Color(0xFFAAA3BB);
   static const textDisabled =
-      Color(0xFF77718A);
+      Color(0xFF7C758E);
   static const textOnPrimary =
       Color(0xFFFFFFFF);
 
   // Border
   static const borderSubtle =
-      Color(0xFF5B5678);
+      Color(0xFF575071);
   static const borderDefault =
-      Color(0xFF68627F);
+      Color(0xFF625A7C);
   static const borderStrong =
-      Color(0xFF79718F);
+      Color(0xFF766D8D);
 
   // Semantic
   static const success =
@@ -292,9 +425,9 @@ abstract final class AppColors {
   static const busy =
       Color(0xFFC9828C);
   static const offline =
-      Color(0xFF77718A);
+      Color(0xFF7C758E);
 
-  // Window
+  // Desktop Window
   static const windowClose =
       Color(0xFFEF6F91);
   static const windowMinimize =
@@ -304,122 +437,62 @@ abstract final class AppColors {
 }
 ```
 
----
+------------------------------------------------------------------------
 
-# 4. Color Usage Rules
+# 12. Typography
 
-## 4.1 背景
+## 12.1 字体
 
-主内容区：
+UI 字体必须优先满足：
 
-```text
-#484868
-```
+-   简体中文
+-   繁体中文
+-   日文
+-   韩文
+-   英文
+-   数字
+-   常用符号
 
-Sidebar：
+推荐项目内置字体并配置 fallback。
 
-```text
-#383060
-```
+字体应该保持：
 
-Modal / Popup：
+-   清晰
+-   中性
+-   高可读性
+-   多语言 Glyph 完整
 
-```text
-#302850
-```
+不要使用装饰性字体作为全局 UI 字体。
 
-不要使用：
+------------------------------------------------------------------------
 
-```text
-#000000
-```
+## 12.2 Type Scale
 
-作为整个 App 的主背景。
+  Token            Size   Weight 用途
+  -------------- ------ -------- -----------------
+  `display`          28      700 特殊页面标题
+  `headline`         22      700 页面标题
+  `title`            18      600 Section
+  `bodyLarge`        16      400 大正文
+  `body`             14      400 默认正文
+  `bodyMedium`       14      500 强调正文
+  `label`            13      500 Button / Label
+  `caption`          12      400 时间 / Metadata
+  `overline`         11      600 极少使用
 
----
+聊天消息默认：
 
-## 4.2 Primary 使用规则
-
-推荐：
-
-```text
-Button
-Link
-Selected
-Focus
-Active
-Progress
-Unread
-```
-
-不推荐：
-
-```text
-整块页面背景
-大面积 Card
-大量装饰
-```
-
----
-
-# 5. Typography
-
-## 5.1 字体策略
-
-跨平台 UI 推荐优先选择能够覆盖：
-
-- 简体中文
-- 繁体中文
-- 日文
-- 韩文
-- 英文
-- 数字
-
-的统一字体。
-
-字体选择原则：
-
-1. UI 字体优先于装饰字体
-2. 中文、日文、韩文需要完整 Glyph Coverage
-3. 数字宽度和标点风格需要统一
-4. Windows / macOS / Linux / iOS / Android
-   不应因为系统字体差异产生明显跳动
-
-建议使用项目内置字体，并配置 fallback。
-
----
-
-## 5.2 Type Scale
-
-  Token            Size Weight   用途
-
----
-
-  `display`          28 700      特殊页面标题
-  `headline`         22 700      页面标题
-  `title`            18 600      Section 标题
-  `bodyLarge`        16 400      主要正文
-  `body`             14 400      默认正文
-  `bodyMedium`       14 500      强调正文
-  `label`            13 500      Button / Label
-  `caption`          12 400      时间、Metadata
-  `overline`         11 600      极少使用
-
-聊天软件默认正文推荐：
-
-```text
+``` text
 14px
 ```
 
-移动端可根据设备密度和系统字体缩放适当调整。
+------------------------------------------------------------------------
 
----
+# 13. Spacing
 
-# 6. Spacing System
+采用 4px Grid：
 
-使用 4px 基础网格。
-
-```text
+``` text
 4
 8
 12
@@ -432,12 +505,10 @@ Unread
 64
 ```
 
-推荐：
+推荐 Token：
 
   Token         Value
-
----
-
+  ----------- -------
   `space1`          4
   `space2`          8
   `space3`         12
@@ -449,578 +520,212 @@ Unread
   `space9`         48
   `space10`        64
 
----
+------------------------------------------------------------------------
 
-# 7. Radius System
-
-推荐：
+# 14. Radius
 
   Token             Value 用途
-
----
-
-  `radiusXS`            4 Badge、小控件
+  --------------- ------- ---------------
+  `radiusXS`            4 Badge
   `radiusSM`            6 Input
   `radiusMD`            8 Card
   `radiusLG`           12 Dialog
-  `radiusXL`           16 大型 Card
+  `radiusXL`           16 大 Card
   `radiusRound`       999 Avatar / Pill
-
-整体不要使用过度圆润的组件。
-
-桌面端推荐：
-
-```text
-Input       6~8px
-Card        8px
-Dialog      12px
-Button      6~8px
-```
-
----
-
-# 8. Elevation / Shadow
-
-这个设计不依赖强阴影。
 
 推荐：
 
-### Level 0
-
-```text
-无阴影
+``` text
+Input: 6~8px
+Card: 8px
+Dialog: 12px
+Button: 6~8px
+Avatar: 999px
 ```
 
-普通聊天区域。
+不要让所有组件都使用 16\~24px 大圆角。
 
-### Level 1
+------------------------------------------------------------------------
 
-```text
+# 15. Elevation
+
+整体设计不依赖强阴影。
+
+## Level 0
+
+``` text
+No Shadow
+```
+
+Main / Sidebar / 普通消息。
+
+## Level 1
+
+``` text
 0 2px 8px rgba(0, 0, 0, 0.12)
 ```
 
 Card / Attachment。
 
-### Level 2
+## Level 2
 
-```text
+``` text
 0 4px 16px rgba(0, 0, 0, 0.18)
 ```
 
 Dropdown / Popup。
 
-### Level 3
+## Level 3
 
-```text
+``` text
 0 8px 32px rgba(0, 0, 0, 0.24)
 ```
 
 Dialog / Modal。
 
-**避免使用明显的发光阴影。**
+不要使用紫色 Glow 作为普通组件阴影。
 
----
+------------------------------------------------------------------------
 
-# 9. Icon System
+# 16. Icon
 
 推荐：
 
-- 默认 20px
-- 小图标 16px
-- 大图标 24px
-- 页面级 Icon 28\~32px
+``` text
+Small: 16px
+Default: 20px
+Large: 24px
+Page: 28~32px
+```
 
-Icon 颜色：
+颜色：
 
-```text
+``` text
 Primary Icon
 #F8F7FA
 
 Secondary Icon
-#D0CBDD
+#D2CCDE
 
-Inactive Icon
-#A7A1B8
+Inactive
+#AAA3BB
 
-Disabled Icon
-#77718A
+Disabled
+#7C758E
 
-Active Icon
-#887EB4
+Active
+#8C82C2
 ```
 
-Icon 不要默认使用纯白。
+------------------------------------------------------------------------
 
----
+# 17. Button
 
-# 10. Button
+## Primary
 
-## 10.1 Primary Button
-
-```text
-Background: #887EB4
-Text:       #FFFFFF
-Hover:      #968CBD
-Pressed:    #766CA3
-Disabled:   #625A72
+``` text
+Background: #8C82C2
+Text: #FFFFFF
+Hover: #9A90CF
+Pressed: #786EAD
+Disabled: #625A78
 ```
 
 高度：
 
-```text
+``` text
 Desktop: 36~40px
-Mobile:  44~48px
+Mobile: 44~48px
 ```
 
----
+## Secondary
 
-## 10.2 Secondary Button
-
-```text
-Background: #50486C
-Text:       #F8F7FA
-Border:     #68627F
+``` text
+Background: #5A5278
+Text: #F8F7FA
+Border: #625A7C
 ```
 
 Hover：
 
-```text
-#686080
+``` text
+#696180
 ```
 
----
+## Ghost
 
-## 10.3 Ghost Button
+Normal：
 
-默认：
-
-```text
+``` text
 Background: transparent
-Text: #D0CBDD
+Text: #D2CCDE
 ```
 
 Hover：
 
-```text
-Background: #50486C
+``` text
+Background: #5A5278
 Text: #F8F7FA
 ```
 
-适合 Toolbar。
+------------------------------------------------------------------------
 
----
+# 18. Input
 
-# 11. Input
+参考图中的消息输入框应保持较深、偏紫的样式。
 
-默认：
+``` text
+Background
+#3A3260
 
-```text
-Background: #383060
-Border: #5B5678
-Text: #F8F7FA
-Placeholder: #A7A1B8
+Border
+#625A7C
+
+Text
+#F8F7FA
+
+Placeholder
+#AAA3BB
 ```
 
 Focus：
 
-```text
-Border: #887EB4
+``` text
+Border
+#8C82C2
 ```
 
 Error：
 
-```text
-Border: #CF858D
+``` text
+Border
+#CF858D
 ```
 
 Disabled：
 
-```text
-Background: #302850
-Text: #77718A
-```
-
----
-
-# 12. Sidebar
-
-## 12.1 Desktop
-
-推荐宽度：
-
-```text
-280px ~ 320px
-```
-
-如果存在 Server / Channel / Member 多级导航：
-
-```text
-Server Rail
-      +
-Channel Sidebar
-      +
-Main Content
-```
-
----
-
-## 12.2 Channel Item
-
-### Normal
-
-```text
-Background: transparent
-Text: #C0BBCD
-```
-
-### Hover
-
-```text
-Background: #443C68
-Text: #E8E5F0
-```
-
-### Selected
-
-```text
-Background: #50486C
-Text: #F8F7FA
-```
-
-### Disabled
-
-```text
-Text: #77718A
-```
-
----
-
-# 13. Chat Message
-
-推荐使用无气泡消息布局。
-
-```text
-Avatar
-
-Username        Time
-Message content
-Message content
-```
-
-不要默认给每条消息添加：
-
-```text
-Card
-Border
-Shadow
-```
-
----
-
-## Message 间距
-
-同一用户连续消息：
-
-```text
-4~8px
-```
-
-不同用户：
-
-```text
-16~20px
-```
-
-时间：
-
-```text
-12px
-#A7A1B8
-```
-
-用户名：
-
-```text
-14px
-#F8F7FA
-```
-
-正文：
-
-```text
-14px
-#F8F7FA
-```
-
----
-
-# 14. Avatar
-
-尺寸建议：
-
-  场景              Size
-
----
-
-  Compact             28
-  Default             36
-  Chat                40
-  Profile             64
-  Large Profile       96
-
-Avatar 默认圆形：
-
-```text
-radius: 999
-```
-
-Presence Dot：
-
-```text
-8px
-```
-
----
-
-# 15. Attachment
-
-附件 Card：
-
-```text
-Background: #686080
-Radius: 8px
-```
-
-文件名：
-
-```text
-#F8F7FA
-14px
-```
-
-文件 Metadata：
-
-```text
-#C0BBCD
-12px
-```
-
-Hover：
-
-```text
-#78708E
-```
-
-下载 Icon：
-
-```text
-#F8F7FA
-```
-
----
-
-# 16. Tooltip
-
-背景：
-
-```text
+``` text
+Background
 #302850
+Text
+#7C758E
 ```
 
-文字：
+------------------------------------------------------------------------
 
-```text
-#F8F7FA
+# 19. Sidebar
+
+## Desktop Width
+
+普通 Sidebar：
+
+``` text
+240~320px
 ```
 
-Radius：
+多级语音客户端：
 
-```text
-6px
-```
-
-Padding：
-
-```text
-8px 10px
-```
-
-Desktop 推荐延迟：
-
-```text
-300~500ms
-```
-
-Mobile 不依赖 Tooltip。
-
----
-
-# 17. Modal / Dialog
-
-Background：
-
-```text
-#302850
-```
-
-Border：
-
-```text
-#68627F
-```
-
-Radius：
-
-```text
-12px
-```
-
-Shadow：
-
-```text
-Level 3
-```
-
-Overlay：
-
-```text
-rgba(10, 8, 20, 0.55)
-```
-
-标题：
-
-```text
-18px / 600
-```
-
-正文：
-
-```text
-14px / 400
-```
-
----
-
-# 18. Context Menu
-
-Background：
-
-```text
-#302850
-```
-
-Item Height：
-
-```text
-36px
-```
-
-Horizontal Padding：
-
-```text
-12px
-```
-
-Normal：
-
-```text
-transparent
-```
-
-Hover：
-
-```text
-#50486C
-```
-
-Danger：
-
-```text
-#CF858D
-```
-
----
-
-# 19. Toast / Notification
-
-### Success
-
-```text
-Background: #344F48
-Icon: #7FB89A
-Text: #F8F7FA
-```
-
-### Error
-
-```text
-Background: #533C48
-Icon: #CF858D
-Text: #F8F7FA
-```
-
-### Info
-
-```text
-Background: #394B5C
-Icon: #82AFC5
-Text: #F8F7FA
-```
-
----
-
-# 20. Desktop Layout
-
-适用于：
-
-- Windows
-- macOS
-- Web Desktop
-
-推荐：
-
-```text
-┌───────────────────────────────────────────────────────────┐
-│ Window / App Header                                       │
-├──────────────┬────────────────────────────────────────────┤
-│              │                                            │
-│ Server       │                                            │
-│ / Channel    │              Main Content                  │
-│ Sidebar      │                                            │
-│              │                                            │
-│              │                                            │
-├──────────────┴────────────────────────────────────────────┤
-│ Optional Status / Input                                   │
-└───────────────────────────────────────────────────────────┘
-```
-
-推荐最小窗口：
-
-```text
-Width: 960px
-Height: 640px
-```
-
-推荐舒适窗口：
-
-```text
-Width: 1280px+
-Height: 720px+
-```
-
----
-
-# 21. Desktop Sidebar Width
-
-推荐：
-
-```text
-240px ~ 320px
-```
-
-如果是多级结构：
-
-```text
+``` text
 Server Rail:
 64~72px
 
@@ -1031,22 +736,366 @@ Member Sidebar:
 220~280px
 ```
 
-不要把所有 Sidebar 都固定成极宽布局。
+------------------------------------------------------------------------
 
----
+## Sidebar Background
 
-# 22. Mobile Layout
+``` text
+#3F3661
+```
 
-适用于：
+------------------------------------------------------------------------
 
-- iOS
-- Android
+## Channel Item
 
-移动端不要强行复制桌面 Sidebar。
+### Normal
+
+``` text
+Background: transparent
+Text: #D2CCDE
+```
+
+### Hover
+
+``` text
+Background: #51496F
+Text: #F8F7FA
+```
+
+### Selected
+
+``` text
+Background: #5A5278
+Text: #F8F7FA
+```
+
+### Disabled
+
+``` text
+Text: #7C758E
+```
+
+Selected Item 不使用高饱和 Primary 背景。
+
+------------------------------------------------------------------------
+
+# 20. Chat Message
+
+参考界面采用**无气泡消息**。
 
 推荐：
 
-```text
+``` text
+Avatar
+
+Username       Time
+Message
+Message
+```
+
+默认不要给每条消息添加：
+
+``` text
+Card
+Border
+Shadow
+```
+
+------------------------------------------------------------------------
+
+## Message Spacing
+
+同一用户连续消息：
+
+``` text
+4~8px
+```
+
+不同用户：
+
+``` text
+16~20px
+```
+
+Username：
+
+``` text
+14px / 500
+#F8F7FA
+```
+
+Time：
+
+``` text
+12px / 400
+#AAA3BB
+```
+
+Message：
+
+``` text
+14px / 400
+#F8F7FA
+```
+
+------------------------------------------------------------------------
+
+# 21. Empty State
+
+参考图中的：
+
+``` text
+还没有消息
+```
+
+属于弱视觉内容。
+
+Icon：
+
+``` text
+#AAA3BB
+```
+
+Text：
+
+``` text
+#AAA3BB
+```
+
+不要使用 Primary。
+
+推荐布局：
+
+``` text
+        Icon
+
+      还没有消息
+```
+
+居中显示。
+
+------------------------------------------------------------------------
+
+# 22. Avatar
+
+  场景              Size
+  --------------- ------
+  Compact           28px
+  Default           36px
+  Chat              40px
+  Profile           64px
+  Large Profile     96px
+
+Avatar：
+
+``` text
+Radius: 999
+```
+
+Presence Dot：
+
+``` text
+8px
+```
+
+------------------------------------------------------------------------
+
+# 23. Attachment
+
+参考图中的文件附件：
+
+``` text
+Background
+#696180
+
+Radius
+8px
+```
+
+文件名：
+
+``` text
+#F8F7FA
+14px
+```
+
+Metadata：
+
+``` text
+#D2CCDE
+12px
+```
+
+Hover：
+
+``` text
+#7A7190
+```
+
+------------------------------------------------------------------------
+
+# 24. Tooltip
+
+``` text
+Background
+#302850
+
+Text
+#F8F7FA
+
+Radius
+6px
+
+Padding
+8px 10px
+```
+
+Desktop Tooltip：
+
+``` text
+Delay: 300~500ms
+```
+
+Mobile 不依赖 Tooltip。
+
+------------------------------------------------------------------------
+
+# 25. Modal / Dialog
+
+``` text
+Background
+#302850
+
+Border
+#625A7C
+
+Radius
+12px
+```
+
+Overlay：
+
+``` text
+rgba(10, 8, 20, 0.55)
+```
+
+Shadow：
+
+``` text
+Elevation Level 3
+```
+
+------------------------------------------------------------------------
+
+# 26. Context Menu
+
+``` text
+Background
+#302850
+Radius
+8px
+```
+
+Item：
+
+``` text
+Height: 36px
+Horizontal Padding: 12px
+```
+
+Hover：
+
+``` text
+#5A5278
+```
+
+Danger：
+
+``` text
+#CF858D
+```
+
+------------------------------------------------------------------------
+
+# 27. Toast
+
+## Success
+
+``` text
+Background: #344F48
+Icon: #7FB89A
+Text: #F8F7FA
+```
+
+## Error
+
+``` text
+Background: #533C48
+Icon: #CF858D
+Text: #F8F7FA
+```
+
+## Info
+
+``` text
+Background: #394B5C
+Icon: #82AFC5
+Text: #F8F7FA
+```
+
+------------------------------------------------------------------------
+
+# 28. Desktop Layout
+
+适用于：
+
+-   Windows
+-   macOS
+-   Desktop Web
+
+推荐：
+
+``` text
+┌───────────────────────────────────────────────────────────┐
+│ Header                                                    │
+├──────────────┬────────────────────────────────────────────┤
+│              │                                            │
+│ Server /     │                                            │
+│ Channel      │              Main Content                  │
+│ Sidebar      │                                            │
+│              │                                            │
+│              │                                            │
+├──────────────┴────────────────────────────────────────────┤
+│ Optional Status / Input                                   │
+└───────────────────────────────────────────────────────────┘
+```
+
+最小窗口：
+
+``` text
+960 × 640
+```
+
+舒适尺寸：
+
+``` text
+1280 × 720+
+```
+
+------------------------------------------------------------------------
+
+# 29. Mobile Layout
+
+适用于：
+
+-   iOS
+-   Android
+
+不要直接复制 Desktop Sidebar。
+
+推荐：
+
+``` text
 ┌───────────────────────┐
 │ Header                │
 ├───────────────────────┤
@@ -1057,38 +1106,32 @@ Member Sidebar:
 ├───────────────────────┤
 │ Message Input         │
 ├───────────────────────┤
-│ Channels / Navigation │
+│ Navigation            │
 └───────────────────────┘
 ```
 
-导航可以使用：
+可以使用：
 
-- Bottom Navigation
-- Drawer
-- Modal Sheet
-- Full Screen Channel Selector
+-   Bottom Navigation
+-   Drawer
+-   Modal Sheet
+-   Full Screen Channel Selector
 
----
+------------------------------------------------------------------------
 
-# 23. Responsive Breakpoints
+# 30. Responsive Breakpoints
 
-建议：
-
-  Breakpoint      类型
-
----
-
+  Width           Layout
+  --------------- -----------------------------
   `< 600px`       Mobile
   `600~839px`     Large Mobile / Small Tablet
   `840~1199px`    Tablet / Compact Desktop
   `1200~1599px`   Desktop
   `>= 1600px`     Large Desktop
 
-不要仅根据平台判断布局。
+优先使用 Width 判断布局，而不是直接判断操作系统。
 
-例如：
-
-```dart
+``` dart
 if (width < 600) {
   // Mobile
 } else if (width < 1200) {
@@ -1098,280 +1141,319 @@ if (width < 600) {
 }
 ```
 
-比：
+------------------------------------------------------------------------
 
-```dart
-if (Platform.isWindows) {}
-```
-
-更合理。
-
----
-
-# 24. Platform Adaptation
+# 31. Platform Adaptation
 
 ## Web
 
-重点：
+支持：
 
-- Mouse Hover
-- Keyboard Navigation
-- Context Menu
-- Responsive Layout
-- Browser Window 尺寸变化
-- URL / Deep Link
-
----
+-   Mouse Hover
+-   Keyboard Navigation
+-   Context Menu
+-   Responsive Layout
+-   Browser Resize
+-   Deep Link
 
 ## Windows
 
-重点：
+支持：
 
-- Hover
-- Right Click
-- Keyboard Shortcut
-- Window Resize
-- Native Window Controls
-- Compact Density
-
----
+-   Hover
+-   Right Click
+-   Keyboard Shortcut
+-   Window Resize
+-   Native Window Controls
+-   Compact Density
 
 ## macOS
 
-重点：
+支持：
 
-- Mouse / Trackpad
-- Keyboard Shortcut
-- Command Key
-- Context Menu
-- 更宽松的窗口间距
-- 原生窗口行为
-
----
+-   Mouse / Trackpad
+-   Command Shortcut
+-   Context Menu
+-   Window Resize
+-   更宽松的窗口间距
 
 ## iOS
 
 重点：
 
-- Touch
-- Safe Area
-- Dynamic Type
-- Swipe
-- Bottom Sheet
-- Navigation Stack
-- 44px 左右最小触控区域
-
----
+-   Touch
+-   Safe Area
+-   Dynamic Type
+-   Swipe
+-   Bottom Sheet
+-   Navigation Stack
+-   44px 最小触控区域
 
 ## Android
 
 重点：
 
-- Touch
-- Back Gesture
-- System Navigation
-- Edge-to-edge
-- Bottom Sheet
-- Material Accessibility
+-   Touch
+-   Back Gesture
+-   System Navigation
+-   Edge-to-edge
+-   Bottom Sheet
+-   Accessibility
 
----
+------------------------------------------------------------------------
 
-# 25. Touch Target
+# 32. Touch Target
 
-移动端交互控件：
+移动端：
 
-```text
+``` text
 Minimum: 44 × 44px
 Recommended: 48 × 48px
 ```
 
-即使 Icon 本身只有：
+即使 Icon：
 
-```text
+``` text
 20px
 ```
 
-也应该放进：
+也应放进：
 
-```text
-48 × 48px
+``` text
+44~48px
 ```
 
 的点击区域。
 
----
+------------------------------------------------------------------------
 
-# 26. Desktop Density
+# 33. Desktop Density
 
-桌面端可以更紧凑：
+桌面端推荐：
 
-```text
+``` text
 Button: 36~40px
 Input: 36~40px
 List Item: 36~44px
-Toolbar Icon: 32~36px
+Toolbar Icon Area: 32~36px
 ```
 
-但不要为了"信息密度"压缩到无法点击。
+不要为了增加信息密度而牺牲点击体验。
 
----
+------------------------------------------------------------------------
 
-# 27. Motion
-
-动画应该短、轻、稳定。
-
-推荐：
+# 34. Motion
 
   类型        Duration
-
----
-
+  ------- ------------
   Hover     100\~150ms
   Press      80\~120ms
   Fade      150\~200ms
   Panel     200\~250ms
   Modal     200\~280ms
 
-推荐 Curve：
+推荐：
 
-```text
+``` text
 easeOut
 easeInOut
 ```
 
 避免：
 
-- 弹跳过度
-- 长时间动画
-- 大范围缩放
-- 高亮闪烁
+-   长动画
+-   强烈 Bounce
+-   大范围缩放
+-   高频闪烁
+-   Glow Animation
 
-聊天客户端应保持安静。
+------------------------------------------------------------------------
 
----
-
-# 28. Hover / Press / Focus
+# 35. Focus / Hover / Press
 
 ## Hover
 
-仅 Desktop / Web。
+只针对 Desktop / Web。
 
-推荐：
+推荐通过：
 
-```text
+``` text
 Surface 明度 +5~10%
 ```
 
 例如：
 
-```text
-#50486C
+``` text
+#5A5278
 →
-#686080
+#696180
 ```
-
----
 
 ## Pressed
 
-推荐：
+降低 Surface 明度，或使用：
 
-```text
-Surface 明度降低
-```
-
-或：
-
-```text
-Primary
-#887EB4
+``` text
+#8C82C2
 →
-#766CA3
+#786EAD
 ```
-
----
 
 ## Focus
 
-必须明显，但不要刺眼：
-
-```text
-#AAA2CB
+``` text
+#AEA6D6
 ```
 
-推荐 Focus Ring：
+推荐：
 
-```text
-2px
+``` text
+2px Focus Ring
 ```
 
----
+------------------------------------------------------------------------
 
-# 29. Accessibility
+# 36. Accessibility
 
 颜色不能作为唯一状态提示。
 
-例如：
+错误：
 
-错误不能只使用：
-
-```text
-红色
+``` text
+仅使用红色
 ```
 
-还应该：
+正确：
 
-```text
+``` text
 红色 Icon
 +
 错误文字
 +
-可访问性语义
+Semantics
 ```
 
-同理：
+在线状态同理：
 
-在线状态：
-
-```text
+``` text
 绿色 Dot
 +
-"Online"
+Online
 ```
 
-在适当场景提供文本语义。
+支持：
 
----
+-   Screen Reader
+-   Keyboard Navigation
+-   Focus State
+-   Text Scaling
+-   高对比需求
+-   Reduced Motion
 
-# 30. Dark Theme
+------------------------------------------------------------------------
 
-该设计系统默认以 Dark Theme 为主。
+# 37. Dark Theme
 
-推荐不要简单通过：
+本 Design System 默认 Dark Theme。
 
-```dart
-Color.lerp(...)
+不要简单：
+
+``` dart
+Color.lerp(dark, white, 0.5)
 ```
 
-自动生成 Light Theme。
+生成 Light Theme。
 
-Light Theme 应该重新定义：
+Light Theme 应重新定义：
 
-- Background
-- Surface
-- Border
-- Text
-- Primary Contrast
+-   Background
+-   Surface
+-   Border
+-   Text
+-   Primary Contrast
 
-因为深色 UI 的色彩关系不能直接反转。
+Dark Theme 与 Light Theme 应共享语义 Token，而不是简单反转颜色。
 
----
+------------------------------------------------------------------------
 
-# 31. Flutter Theme 架构
+# 38. Material 3
 
-推荐：
+推荐架构：
 
-```text
+``` text
+Material 3
+      ↓
+Flutter Theme
+      ↓
+App Design Tokens
+      ↓
+Custom Widgets
+```
+
+Material 3 负责：
+
+-   Accessibility
+-   Focus
+-   Widget State
+-   Keyboard
+-   Semantics
+-   基础组件行为
+
+本 Design System 负责：
+
+-   颜色
+-   间距
+-   圆角
+-   字体
+-   Surface
+-   视觉密度
+-   布局风格
+
+不要直接使用 Material 3 默认 Purple Scheme。
+
+------------------------------------------------------------------------
+
+# 39. AppTheme 基础实现
+
+``` dart
+ThemeData buildAppTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+
+    scaffoldBackgroundColor:
+        AppColors.bgMain,
+
+    colorScheme: const ColorScheme.dark(
+      primary: AppColors.primary,
+      onPrimary: AppColors.textOnPrimary,
+
+      surface: AppColors.bgMain,
+      onSurface: AppColors.textPrimary,
+
+      error: AppColors.error,
+      onError: AppColors.textOnPrimary,
+    ),
+
+    dividerColor:
+        AppColors.borderSubtle,
+  );
+}
+```
+
+非 Material 标准 Token 推荐通过：
+
+``` dart
+ThemeExtension
+```
+
+统一管理。
+
+------------------------------------------------------------------------
+
+# 40. 推荐项目结构
+
+``` text
 lib/
 ├── theme/
 │   ├── app_colors.dart
@@ -1400,260 +1482,171 @@ lib/
     └── profile/
 ```
 
----
+------------------------------------------------------------------------
 
-# 32. Material 3 使用策略
+# 41. 禁止事项
 
-推荐：
+## 禁止 1：纯黑大面积背景
 
-```text
-Material 3
-      ↓
-Flutter Theme
-      ↓
-App Design Tokens
-      ↓
-Custom Widgets
+``` text
+#000000
 ```
 
-不要直接使用 Material 3 默认颜色。
+不作为主 Background。
 
-Material 3 主要负责：
+## 禁止 2：高饱和紫色大面积使用
 
-- Accessibility
-- Widget State
-- Focus
-- Keyboard
-- Semantics
-- 基础组件行为
+Primary 只用于交互。
 
-视觉由本 Design System 控制。
+## 禁止 3：每条消息都做气泡
 
----
+默认采用无气泡聊天。
 
-# 33. AppTheme 基本结构
+## 禁止 4：过重边框
 
-```dart
-ThemeData buildAppTheme() {
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
+不要用高对比 1px Border 到处描边。
 
-    scaffoldBackgroundColor:
-        AppColors.backgroundPrimary,
+## 禁止 5：强烈阴影
 
-    colorScheme: const ColorScheme.dark(
-      primary: AppColors.primary,
-      onPrimary: AppColors.textOnPrimary,
+不要让 Card 看起来像悬浮在页面上。
 
-      surface: AppColors.backgroundPrimary,
-      onSurface: AppColors.textPrimary,
+## 禁止 6：过度圆角
 
-      error: AppColors.error,
-      onError: AppColors.textOnPrimary,
-    ),
+不要所有组件都使用 16\~24px。
 
-    dividerColor:
-        AppColors.borderSubtle,
-  );
-}
-```
+## 禁止 7：平台布局完全一致
 
-实际项目中建议继续通过 `ThemeExtension` 扩展 Surface、Presence、Border
-等非标准 Material Token。
+颜色和设计语言统一，布局与交互按平台适配。
 
----
+## 禁止 8：使用上一版颜色
 
-# 34. 禁止事项
+开发中不得继续使用：
 
-## 不要
-
-```text
-纯黑大背景 #000000
-```
-
-## 不要
-
-```text
-纯白文字遍布所有区域
-```
-
-## 不要
-
-```text
-高饱和紫色大面积使用
-```
-
-## 不要
-
-```text
-每个 Card 都加明显阴影
-```
-
-## 不要
-
-```text
-每条聊天消息都做成气泡
-```
-
-## 不要
-
-```text
-大量 1px 高对比边框
-```
-
-## 不要
-
-```text
-Windows / iOS / Android 强行使用完全相同的布局
-```
-
----
-
-# 35. 推荐的最终视觉层级
-
-```text
-#302850
-│
-├── Modal
-├── Context Menu
-└── Deep Surface
-
-#383060
-│
-├── Sidebar
-├── Input
-└── Secondary Area
-
+``` text
 #484868
-│
-├── Main Background
-└── Chat
-
+#383060
 #50486C
-│
-├── Hover
-├── Card
-└── Selected
-
 #686080
-│
-├── Attachment
-├── Tooltip
-└── Elevated Surface
-
-#78708E
-│
-└── Strong Active Surface
-
 #887EB4
-│
-├── Primary
-├── Active
-├── Focus
-└── Interaction
-
-#F8F7FA
-│
-└── Primary Text
 ```
 
----
+作为本 Design System 的核心 Token。
 
-# 36. Design System 的核心规则
+应使用：
 
-最终只需要记住以下十条：
-
-1. **主背景使用 `#484868`。**
-2. **Sidebar 使用 `#383060`。**
-3. **Primary 使用 `#887EB4`，不要大面积使用。**
-4. **文字以 `#F8F7FA / #D0CBDD / #A7A1B8` 建立三级层级。**
-5. **Surface 优先使用明度差，而不是粗边框。**
-6. **聊天消息默认不使用气泡。**
-7. **桌面端支持 Hover / Focus / Right Click / Keyboard。**
-8. **移动端优先 Touch / Safe Area / Gesture / Bottom Sheet。**
-9. **颜色 Token 在所有平台统一，布局和交互按照平台适配。**
-10. **Material 3 负责 Flutter 组件行为，App Design System 负责视觉。**
-
----
-
-# 37. 推荐项目最终结构
-
-```text
-Design System
-│
-├── Colors
-│   ├── Background
-│   ├── Surface
-│   ├── Primary
-│   ├── Text
-│   ├── Border
-│   ├── Semantic
-│   └── Presence
-│
-├── Typography
-│   ├── Display
-│   ├── Headline
-│   ├── Title
-│   ├── Body
-│   ├── Label
-│   └── Caption
-│
-├── Layout
-│   ├── Spacing
-│   ├── Radius
-│   ├── Elevation
-│   └── Breakpoints
-│
-├── Components
-│   ├── Button
-│   ├── Input
-│   ├── Sidebar
-│   ├── Channel
-│   ├── Message
-│   ├── Avatar
-│   ├── Attachment
-│   ├── Dialog
-│   ├── Tooltip
-│   └── Toast
-│
-└── Platform
-    ├── Web
-    ├── Windows
-    ├── macOS
-    ├── iOS
-    └── Android
+``` text
+#4F486E
+#3F3661
+#5A5278
+#696180
+#8C82C2
 ```
 
----
+------------------------------------------------------------------------
 
-## Final Principle
+# 42. Final Palette
 
-这套设计系统不是要求五个平台"长得完全一样"。
+这是开发人员最常用的一张表：
 
-正确目标是：
+  Category     Token               HEX
+  ------------ ------------------- -----------
+  Background   `bgDeep`            `#302850`
+  Background   `bgSidebar`         `#3F3661`
+  Background   `bgMain`            `#4F486E`
+  Background   `bgElevated`        `#554C75`
+  Surface      `surface1`          `#5A5278`
+  Surface      `surface2`          `#696180`
+  Surface      `surface3`          `#7A7190`
+  Primary      `primary`           `#8C82C2`
+  Primary      `primaryHover`      `#9A90CF`
+  Primary      `primaryPressed`    `#786EAD`
+  Primary      `primaryFocus`      `#AEA6D6`
+  Primary      `primaryDisabled`   `#625A78`
+  Text         `textPrimary`       `#F8F7FA`
+  Text         `textSecondary`     `#D2CCDE`
+  Text         `textTertiary`      `#AAA3BB`
+  Text         `textDisabled`      `#7C758E`
+  Border       `borderSubtle`      `#575071`
+  Border       `borderDefault`     `#625A7C`
+  Border       `borderStrong`      `#766D8D`
+  Success      `success`           `#7FB89A`
+  Warning      `warning`           `#D0B071`
+  Error        `error`             `#CF858D`
+  Info         `info`              `#82AFC5`
+  Online       `online`            `#8CC9A3`
+  Idle         `idle`              `#D0B978`
+  Busy         `busy`              `#C9828C`
+  Offline      `offline`           `#7C758E`
 
-> **五个平台拥有同一种视觉语言，但拥有符合各自平台习惯的交互方式。**
+------------------------------------------------------------------------
 
-也就是：
+# 43. 最终视觉规则
 
-```text
-                 ONE DESIGN LANGUAGE
+只需要记住：
+
+1.  **Main = `#4F486E`**
+2.  **Sidebar = `#3F3661`**
+3.  **Deep = `#302850`**
+4.  **Selected / Surface = `#5A5278`**
+5.  **Elevated = `#696180`**
+6.  **Primary = `#8C82C2`**
+7.  **Primary 不做大面积背景**
+8.  **文字以 `#F8F7FA / #D2CCDE / #AAA3BB` 分层**
+9.  **聊天默认无气泡**
+10. **使用明度而不是强边框制造层级**
+11. **桌面支持 Hover / Focus / Right Click / Keyboard**
+12. **移动端支持 Touch / Safe Area / Gesture**
+13. **五个平台共享 Color / Typography / Spacing / Radius Token**
+14. **布局和交互根据平台适配**
+15. **本 v2.0 文档是唯一颜色规范来源**
+
+------------------------------------------------------------------------
+
+# 44. Design Philosophy
+
+最终目标不是让：
+
+``` text
+Web
+Windows
+macOS
+iOS
+Android
+```
+
+拥有完全相同的布局。
+
+而是让它们拥有：
+
+``` text
+同一种颜色语言
++
+同一种字体语言
++
+同一种间距语言
++
+同一种组件语言
++
+符合平台习惯的交互
+```
+
+最终结构：
+
+``` text
+                    Design System
                          │
-          ┌──────────────┼──────────────┐
-          │              │              │
-       Desktop         Web           Mobile
-          │              │              │
-     Windows/macOS      Web        iOS/Android
-          │              │              │
-          └──────────────┼──────────────┘
-                         │
-                   SAME COLOR TOKENS
-                   SAME TYPOGRAPHY
-                   SAME SPACING
-                   SAME BRAND
+              ┌──────────┴──────────┐
+              │                     │
+        Shared Tokens          Platform UX
+              │                     │
+      ┌───────┼───────┐      ┌──────┼──────┐
+      │       │       │      │      │      │
+    Color   Type   Layout   Web  Desktop Mobile
+                              │      │      │
+                              └──────┼──────┘
+                                     │
+                         Web / Win / macOS /
+                            iOS / Android
 ```
 
-这样后续无论继续扩展
-TeamSpeak、文字聊天、语音频道、文件传输、好友系统还是服务器管理，这套
-Design System 都可以继续复用。
+**统一的是视觉语言，不是强制统一所有平台的交互。**

@@ -187,12 +187,12 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
               children: [
                 Row(
                   children: [
-                    // §9's page-level size, in §2.3's primary.
+                    // §16's page-level size, in §5's primary.
                     Icon(Icons.bubble_chart, color: tokens.primary, size: 32),
                     SizedBox(width: tokens.space3),
                     Text(
                       'Nightcord Speak',
-                      // §5.2's `headline`: this is a page title. Not `display`
+                      // §12.2's `headline`: this is a page title. Not `display`
                       // (28) — that is for the rare special screen, and 28 next
                       // to a 32px mark would make the mark look like an
                       // accident.
@@ -277,7 +277,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 ),
                 SizedBox(height: tokens.space3),
 
-                // §10.1's colours, height and radius all come from the theme.
+                // §17.1's colours, height and radius all come from the theme.
                 FilledButton(
                   onPressed: _connecting ? null : _connect,
                   child: _connecting
@@ -361,7 +361,7 @@ class _SavedServerRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       dense: true,
       // Icon colour and size come from the theme's `listTileTheme` and
-      // `iconTheme` (§9): 20px, `textSecondary`.
+      // `iconTheme` (§16): 20px, `textSecondary`.
       leading: const Icon(Icons.dns_outlined),
       title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
       subtitle: Text(
@@ -416,7 +416,7 @@ class _NameDialogState extends State<_NameDialog> {
     final l10n = AppLocalizations.of(context);
 
     // Background, border, radius and shadow come from the theme's
-    // `dialogTheme` (§17) — this used to name the sidebar colour, which was
+    // `dialogTheme` (§25) — this used to name the sidebar colour, which was
     // neither the modal colour nor the right one.
     return AlertDialog(
       title: Text(l10n.connectSaveServerTitle),

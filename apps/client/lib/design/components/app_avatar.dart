@@ -9,12 +9,12 @@
 // widget with no feature knowledge, used by both the chat and the member list,
 // which is the definition of a component.
 //
-// **The gradient constants are not from either specification.** §14 gives the
+// **The gradient constants are not from either specification.** §22 gives the
 // avatar's sizes, its shape and its presence dot, and stops there — there is no
 // rule for a name-derived colour, because the specification assumes a real
 // picture. The saturation and lightness below are the values this app already
 // had. They are kept because the mark has to stay legible *and* distinguishable
-// per person; §1.1's "avoid high saturation" is about the chrome, and a
+// per person; §2.1's "avoid high saturation" is about the chrome, and a
 // generated identity mark is not chrome.
 
 import 'package:flutter/material.dart';
@@ -30,7 +30,7 @@ class Avatar extends StatelessWidget {
   /// The display name the mark is derived from.
   final String name;
 
-  /// Diameter in logical pixels. §14's sizes are 28 (compact), 36 (default),
+  /// Diameter in logical pixels. §22's sizes are 28 (compact), 36 (default),
   /// 40 (chat) and 64/96 (profile).
   final double size;
 
@@ -62,7 +62,7 @@ class Avatar extends StatelessWidget {
         style: TextStyle(
           fontSize: size * 0.42,
           fontWeight: AppTypography.semibold,
-          // The initial sits *on* a saturated fill, which is the case §2.4's
+          // The initial sits *on* a saturated fill, which is the case §6's
           // `textOnPrimary` is for — its warning against pure white is about
           // text on a background, not text on a colour.
           color: dimmed ? AppColors.textDisabled : AppColors.textOnPrimary,

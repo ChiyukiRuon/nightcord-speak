@@ -29,7 +29,7 @@ import '../shortcuts/chord_field.dart';
 
 /// How wide the dialog is.
 ///
-/// A layout constant. §17 describes a dialog's colours, radius, shadow and
+/// A layout constant. §25 describes a dialog's colours, radius, shadow and
 /// overlay, not its size, and this is the width the settings have always been.
 const double _dialogWidth = 480;
 
@@ -146,7 +146,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     final connected = view?.isConnected ?? false;
 
     // Background, border, radius, shadow and the overlay colour all come from
-    // the theme's `dialogTheme` (§17). This used to name the sidebar colour,
+    // the theme's `dialogTheme` (§25). This used to name the sidebar colour,
     // which was neither the modal colour nor one this design system has.
     return AlertDialog(
       title: Text(l10n.settingsTitle),
@@ -445,9 +445,9 @@ class _SectionHeading extends StatelessWidget {
 
 /// The rule between two sections.
 ///
-/// `space7` (32) is both §8's reading rhythm here and what this dialog already
+/// `space7` (32) is both §15's reading rhythm here and what this dialog already
 /// used; on a long scrolling form a line earns its place, which is not true of
-/// the rest of the app (§2.2).
+/// the rest of the app (§4).
 class _SectionDivider extends StatelessWidget {
   const _SectionDivider();
 
@@ -494,7 +494,7 @@ class _DeviceInUse extends StatelessWidget {
             padding: EdgeInsets.only(top: tokens.space1),
             child: Text(
               l10n.settingsMicFellBack,
-              // §2.6's warning: the device is not the one that was asked for,
+              // §8's warning: the device is not the one that was asked for,
               // but the app is still working.
               style: text.bodySmall?.copyWith(color: tokens.warning),
             ),
@@ -541,7 +541,7 @@ class _LevelMeter extends StatelessWidget {
               height: 10,
               decoration: BoxDecoration(
                 // A groove has to be *lighter* than the dialog it is cut into:
-                // §35 puts the dialog at the darkest step, so the track is the
+                // §2.2 puts the dialog at the darkest step, so the track is the
                 // one above it.
                 color: tokens.surface1,
                 borderRadius: AppRadius.xsAll,
@@ -640,7 +640,7 @@ class _NotificationSection extends StatelessWidget {
     );
   }
 
-  // The switch's colours come from the theme's `switchTheme` (§2.3: primary
+  // The switch's colours come from the theme's `switchTheme` (§5: primary
   // when it is on); only the label style is this widget's.
   Widget _switch(
     BuildContext context,
@@ -692,7 +692,7 @@ class _SensitivitySlider extends StatelessWidget {
             ),
           ],
         ),
-        // Track, thumb and overlay come from the theme's `sliderTheme` (§2.3
+        // Track, thumb and overlay come from the theme's `sliderTheme` (§5
         // lists sliders as a primary-coloured control).
         Slider(
           value: value.clamp(0.0, 1.0),

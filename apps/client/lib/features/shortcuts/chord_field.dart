@@ -165,12 +165,12 @@ class _ChordFieldState extends State<ChordField> {
                 ),
                 constraints: const BoxConstraints(minWidth: 170),
                 decoration: BoxDecoration(
-                  // §11's input colours: this is a field, even though it takes
+                  // §18's input colours: this is a field, even though it takes
                   // keystrokes rather than characters.
-                  color: tokens.backgroundSecondary,
+                  color: tokens.bgSidebar,
                   borderRadius: AppRadius.smAll,
                   border: Border.all(
-                    // §11: the border turns primary on focus, which is exactly
+                    // §18: the border turns primary on focus, which is exactly
                     // what recording is.
                     color: _recording ? tokens.primary : tokens.borderSubtle,
                   ),

@@ -19,7 +19,7 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     text,
-    // `label` (13/500) is §5.2's level for labels. The two copies this
+    // `label` (13/500) is §12.2's level for labels. The two copies this
     // replaces drew it in what the old theme called `titleSmall` — 12/700 with
     // letter spacing — which is a size below the scale's `label` and a weight
     // nothing else in the app uses. A section heading is a label; this is the

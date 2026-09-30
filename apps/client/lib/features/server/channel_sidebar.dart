@@ -51,9 +51,9 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
     final tokens = DesignTokens.of(context);
 
     return Container(
-      // §35: the sidebar is the `#383060` step — one below the page it sits
+      // §2.2: the sidebar is the `#3F3661` step — one below the page it sits
       // beside, which is how the boundary is drawn instead of with a border.
-      color: tokens.backgroundSecondary,
+      color: tokens.bgSidebar,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -176,7 +176,7 @@ class _ServerHeader extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // §9's large size, and §2.3's primary for the brand mark.
+              // §16's large size, and §5's primary for the brand mark.
               Icon(Icons.bubble_chart, color: tokens.primary, size: 24),
               SizedBox(width: tokens.space2),
               Expanded(
@@ -195,7 +195,7 @@ class _ServerHeader extends ConsumerWidget {
   }
 
   /// Lists every session, so several servers can be connected at once and
-  /// switched between without disconnecting any of them (§16).
+  /// switched between without disconnecting any of them (§24).
   void _showSwitcher(
     BuildContext context,
     WidgetRef ref,
@@ -206,7 +206,7 @@ class _ServerHeader extends ConsumerWidget {
 
     showModalBottomSheet<void>(
       context: context,
-      // Colour and radius come from the theme's `bottomSheetTheme` (§17/§35):
+      // Colour and radius come from the theme's `bottomSheetTheme` (§25/§2.2):
       // a sheet is a modal, and this is the app's only one.
       builder: (sheetContext) {
         final l10n = AppLocalizations.of(sheetContext);
@@ -334,7 +334,7 @@ class _CategoryRow extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 // Was 11px/700 — under the floor the font specification sets,
-                // and a weight nothing else in the app used. §5.2's `label` is
+                // and a weight nothing else in the app used. §12.2's `label` is
                 // the level for this, and it reads as a heading at 13/500
                 // because of where it sits and what it is next to, not because
                 // it is shouting.
@@ -352,7 +352,7 @@ class _CategoryRow extends StatelessWidget {
 
 /// One channel in the tree.
 ///
-/// Stateful for one reason: §12.2 gives a hovered channel row a different text
+/// Stateful for one reason: §19 gives a hovered channel row a different text
 /// colour as well as a different background, and the text colour needs to know
 /// about the pointer. `InkWell` tracks hover for its own background but does
 /// not expose it.
@@ -390,11 +390,11 @@ class _ChannelRowState extends State<_ChannelRow> {
     final text = Theme.of(context).textTheme;
     final row = widget.row;
 
-    // §12.2's three states, in order of precedence: selected beats hovered,
+    // §19's three states, in order of precedence: selected beats hovered,
     // hovered beats resting.
     final contentColour = widget.selected
         ? tokens.textPrimary
-        : (_hovered ? tokens.textRowHover : tokens.textRow);
+        : (_hovered ? tokens.textPrimary : tokens.textSecondary);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -410,7 +410,7 @@ class _ChannelRowState extends State<_ChannelRow> {
           child: InkWell(
             onTap: widget.onTap,
             borderRadius: AppRadius.smAll,
-            hoverColor: tokens.rowHoverBg,
+            hoverColor: tokens.channelHoverBg,
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: tokens.space2,
@@ -440,7 +440,7 @@ class _ChannelRowState extends State<_ChannelRow> {
                     child: Text(
                       row.channel.name,
                       overflow: TextOverflow.ellipsis,
-                      // §12.2 gives the selected row `textPrimary`; weight is
+                      // §19 gives the selected row `textPrimary`; weight is
                       // not specified, so the emphasis level carries it — 14/500
                       // against the resting 14/400.
                       style: widget.selected
@@ -506,7 +506,7 @@ class _MemberRow extends StatelessWidget {
     // an icon next to a talking name is one more thing to read when the eye is
     // already on the name.
     //
-    // `online` rather than the old green: §2.7 is the presence family and this
+    // `online` rather than the old green: §9 is the presence family and this
     // is a state of a person. A muted red would have been the wrong family —
     // nothing has gone wrong.
     final nameColour = speaking
@@ -524,7 +524,7 @@ class _MemberRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // §14's compact size.
+            // §22's compact size.
             Avatar(name: member.name, size: 28, dimmed: dimmed),
             SizedBox(width: tokens.space2),
             Expanded(

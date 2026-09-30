@@ -16,7 +16,7 @@ class UnreadDot extends StatelessWidget {
 
   /// Diameter in logical pixels.
   ///
-  /// 8 is §2.7's desktop presence size, which this borrows because it is the
+  /// 8 is §9's desktop presence size, which this borrows because it is the
   /// same job at the same distance. `UnreadDot` is not a presence dot — it says
   /// "unread", not "online" — but it is the same size of signal beside the same
   /// kind of name.

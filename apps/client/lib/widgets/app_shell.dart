@@ -76,8 +76,8 @@ void _showError(BuildContext context, ClientError error) {
             ),
         ],
       ),
-      // §19's error variant for something that cannot be retried, and the
-      // theme's default (also §19) for something that can — the retry banner
+      // §27's error variant for something that cannot be retried, and the
+      // theme's default (also §27) for something that can — the retry banner
       // already said so, and a red bar over a recoverable hiccup reads worse
       // than the hiccup.
       //

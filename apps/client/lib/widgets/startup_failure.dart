@@ -87,7 +87,7 @@ class _FailureScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    // §9 puts a page-level icon at 28–32.
+                    // §16 puts a page-level icon at 28–32.
                     Icon(Icons.error_outline, color: tokens.error, size: 28),
                     const SizedBox(width: AppSpacing.space3),
                     Text(l10n.startupFailureTitle, style: text.headlineMedium),
@@ -128,7 +128,7 @@ class _FailureScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.space3),
                   OutlinedButton.icon(
                     onPressed: () => revealDirectory(directory),
-                    // §9's small icon size, and the button's own height (§26)
+                    // §16's small icon size, and the button's own height (§33)
                     // comes from the theme.
                     icon: const Icon(Icons.folder_open, size: 16),
                     label: Text(l10n.openLogFolder),

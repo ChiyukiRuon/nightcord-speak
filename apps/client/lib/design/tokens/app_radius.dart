@@ -1,6 +1,6 @@
-// Corner radii, from `docs/UI设计与配色规范.md` §7.
+// Corner radii, from `docs/UI设计与配色规范.md` §14.
 //
-// §7 closes with "整体不要使用过度圆润的组件" — the scale stops at 16 on
+// §14 closes with "整体不要使用过度圆润的组件" — the scale stops at 16 on
 // purpose, and `round` is for things that are circles rather than for anything
 // large and soft.
 

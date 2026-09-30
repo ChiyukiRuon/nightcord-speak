@@ -22,12 +22,12 @@ class StateBadge extends StatelessWidget {
   /// The glyph.
   final IconData icon;
 
-  /// What it is drawn in. §2.6's semantic colours, in practice.
+  /// What it is drawn in. §8's semantic colours, in practice.
   final Color colour;
 
   /// What it means, for the pointer and for a screen reader.
   ///
-  /// §29 is why this is not optional: colour must never be the only carrier of
+  /// §36 is why this is not optional: colour must never be the only carrier of
   /// a state, and on a member row the tooltip is the only other channel there
   /// is. It doubles as the accessibility label through `Tooltip`'s semantics.
   final String tooltip;
@@ -42,8 +42,8 @@ class StateBadge extends StatelessWidget {
       padding: const EdgeInsets.only(left: AppSpacing.space1),
       child: Icon(
         icon,
-        // §9's small size. The badge it replaces drew at 14, which is not on
-        // §9's scale at all; 16 is the step below the 20px default.
+        // §16's small size. The badge it replaces drew at 14, which is not on
+        // §16's scale at all; 16 is the step below the 20px default.
         size: 16,
         color: colour,
       ),

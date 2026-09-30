@@ -1,4 +1,4 @@
-// The 4px grid, from `docs/UI设计与配色规范.md` §6.
+// The 4px grid, from `docs/UI设计与配色规范.md` §13.
 //
 // Every gap, inset and gap between sections is one of these ten numbers. The
 // point is not the numbers themselves but that a reviewer can tell a deliberate

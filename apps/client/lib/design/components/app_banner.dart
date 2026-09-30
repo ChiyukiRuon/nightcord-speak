@@ -26,7 +26,7 @@ class AppBanner extends StatelessWidget {
   /// The glyph at the left.
   final IconData icon;
 
-  /// What the glyph is drawn in — §2.6's warning or error, in practice.
+  /// What the glyph is drawn in — §8's warning or error, in practice.
   final Color iconColour;
 
   /// The message. Usually a `Column` of a line and an optional second one.
@@ -40,9 +40,9 @@ class AppBanner extends StatelessWidget {
     final tokens = DesignTokens.of(context);
 
     return Material(
-      // §35 puts a secondary area — a band between the page and its content —
-      // at `#383060`, which is the same step as the sidebar.
-      color: tokens.backgroundSecondary,
+      // §2.2 puts a secondary area — a band between the page and its content —
+      // at `#3F3661`, which is the same step as the sidebar.
+      color: tokens.bgSidebar,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(

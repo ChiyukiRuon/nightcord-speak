@@ -1,16 +1,16 @@
 // The tokens, reachable from a `BuildContext`.
 //
-// `docs/UI设计与配色规范.md` §33 asks for a `ThemeExtension` carrying the tokens
-// Material has no slot for — presence, subtle borders, row states, spacing,
-// radii, shadows. This is that, and it is also the *only* thing widgets should
-// read: `AppColors` is the palette the theme is built from, not an API.
+// `docs/UI设计与配色规范.md` §39 asks for a `ThemeExtension` carrying the tokens
+// Material has no slot for. This is that, and it is also the *only* thing
+// widgets should read: `AppColors` is the palette the theme is built from, not
+// an API.
 //
-// The extension has no fields. The design is dark-only (§30 is explicit that a
+// The extension has no fields. The design is dark-only (§37 is explicit that a
 // light theme must be designed rather than derived), so every value is a
 // compile-time constant and there is nothing for a theme to vary — see `lerp`
 // below. Keeping the indirection anyway means a future light theme, or a test
 // that wants different colours, has exactly one place to intervene, and it is
-// the shape §33 asked for.
+// the shape §39 asked for.
 
 import 'package:flutter/material.dart';
 
@@ -35,20 +35,27 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   static DesignTokens of(BuildContext context) =>
       Theme.of(context).extension<DesignTokens>() ?? const DesignTokens();
 
-  // --- Background (§2.1) ---------------------------------------------------
+  // --- Background (§3.1) ---------------------------------------------------
 
-  Color get backgroundPrimary => AppColors.backgroundPrimary;
-  Color get backgroundSecondary => AppColors.backgroundSecondary;
-  Color get backgroundTertiary => AppColors.backgroundTertiary;
-  Color get backgroundElevated => AppColors.backgroundElevated;
+  /// Modals, context menus, deep popups.
+  Color get bgDeep => AppColors.bgDeep;
 
-  // --- Surface (§2.2) ------------------------------------------------------
+  /// Sidebars and navigation.
+  Color get bgSidebar => AppColors.bgSidebar;
+
+  /// The chat and the page behind everything else.
+  Color get bgMain => AppColors.bgMain;
+
+  /// Floating panels.
+  Color get bgElevated => AppColors.bgElevated;
+
+  // --- Surface (§4) --------------------------------------------------------
 
   Color get surface1 => AppColors.surface1;
   Color get surface2 => AppColors.surface2;
   Color get surface3 => AppColors.surface3;
 
-  // --- Text (§2.4) ---------------------------------------------------------
+  // --- Text (§6) -----------------------------------------------------------
 
   Color get textPrimary => AppColors.textPrimary;
   Color get textSecondary => AppColors.textSecondary;
@@ -56,19 +63,13 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   Color get textDisabled => AppColors.textDisabled;
   Color get textOnPrimary => AppColors.textOnPrimary;
 
-  /// An unselected channel name, and attachment metadata (§12.2, §15).
-  Color get textRow => AppColors.rowText;
-
-  /// A channel row's name under the pointer (§12.2).
-  Color get textRowHover => AppColors.rowHoverText;
-
-  // --- Border (§2.5) -------------------------------------------------------
+  // --- Border (§7) ---------------------------------------------------------
 
   Color get borderSubtle => AppColors.borderSubtle;
   Color get borderDefault => AppColors.borderDefault;
   Color get borderStrong => AppColors.borderStrong;
 
-  // --- Primary and the states around it (§2.3, §12.2, §28) -----------------
+  // --- Primary and the states around it (§5, §19, §35) ---------------------
 
   Color get primary => AppColors.primary;
   Color get primaryHover => AppColors.primaryHover;
@@ -76,14 +77,13 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   Color get primaryFocus => AppColors.primaryFocus;
   Color get primaryDisabled => AppColors.primaryDisabled;
 
-  /// A channel row under the pointer (§12.2).
-  ///
-  /// Darker than `surface1`, unlike every other hover in the system: §12.2
-  /// measures this one against the *sidebar*, which is a step darker than the
-  /// rest of the page.
-  Color get rowHoverBg => AppColors.rowHoverBg;
+  /// A channel row under the pointer (§19).
+  Color get channelHoverBg => AppColors.channelHoverBg;
 
-  // --- Semantic (§2.6) -----------------------------------------------------
+  /// The message composer and every other text field (§18).
+  Color get inputBg => AppColors.inputBg;
+
+  // --- Semantic (§8) -------------------------------------------------------
 
   Color get success => AppColors.success;
   Color get successBg => AppColors.successBg;
@@ -94,7 +94,7 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   Color get info => AppColors.info;
   Color get infoBg => AppColors.infoBg;
 
-  // --- Presence (§2.7) -----------------------------------------------------
+  // --- Presence (§9) -------------------------------------------------------
 
   Color get online => AppColors.online;
   Color get idle => AppColors.idle;
@@ -135,7 +135,7 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   /// Returns `this`, because there is nothing to interpolate.
   ///
   /// Every token is a constant and the app ships one theme, so a lerp between
-  /// two `DesignTokens` would be interpolating a value with itself. §30 is why
+  /// two `DesignTokens` would be interpolating a value with itself. §37 is why
   /// there is no second theme to blend towards: it says a light theme has to be
   /// designed rather than derived by `Color.lerp`, and dark is the only one
   /// this client has.
