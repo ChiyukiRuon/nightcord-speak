@@ -266,11 +266,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the voice bar disconnects the session', (tester) async {
-    // The button sits in the bottom bar, right of one's own name. It ends the
-    // connection *and* forgets the session, so what it calls matters: it is the
-    // same `SessionsNotifier.disconnect` the reconnect banner uses, and this
-    // checks the tap reaches it rather than only that the icon is drawn.
+  testWidgets('the voice bar asks before disconnecting', (tester) async {
+    // The button ends the session *and* forgets it, so the channel tree and
+    // the conversation go with it — which is why it asks. This checks the
+    // asking: the tap alone must change nothing.
     final transport = _SilentTransport();
     final container = _container(view: _view(), transport: transport);
 
@@ -282,6 +281,35 @@ void main() {
     expect(find.byIcon(Icons.link_off), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.link_off));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(transport.calls, isEmpty, reason: 'it disconnected without asking');
+    expect(container.read(sessionsProvider), contains(1));
+
+    // Backing out leaves everything where it was.
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextButton)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(transport.calls, isEmpty);
+    expect(container.read(sessionsProvider), contains(1));
+  });
+
+  testWidgets('confirming the dialog disconnects the session', (tester) async {
+    final transport = _SilentTransport();
+    final container = _container(view: _view(), transport: transport);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.link_off));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)),
+    );
     await tester.pumpAndSettle();
 
     expect(transport.calls, contains('disconnect:1'));

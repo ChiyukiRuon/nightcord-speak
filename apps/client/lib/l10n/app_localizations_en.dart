@@ -373,6 +373,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceDisconnect => 'Disconnect from the server';
 
   @override
+  String get voiceDisconnectConfirmTitle => 'Disconnect?';
+
+  @override
+  String get voiceDisconnectConfirmBody =>
+      'This ends the session. The channel tree and the conversation are cleared with it.';
+
+  @override
   String get voiceMuteMic => 'Mute microphone';
 
   @override

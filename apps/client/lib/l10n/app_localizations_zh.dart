@@ -361,6 +361,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceDisconnect => '断开连接';
 
   @override
+  String get voiceDisconnectConfirmTitle => '断开连接？';
+
+  @override
+  String get voiceDisconnectConfirmBody => '这次会话会结束，频道树和聊天记录都会一起清掉。';
+
+  @override
   String get voiceMuteMic => '静音麦克风';
 
   @override

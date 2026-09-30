@@ -752,6 +752,18 @@ abstract class AppLocalizations {
   /// **'Disconnect from the server'**
   String get voiceDisconnect;
 
+  /// Title of the dialog that asks before closing a server connection
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect?'**
+  String get voiceDisconnectConfirmTitle;
+
+  /// Says what is actually lost, which is the reason the dialog exists
+  ///
+  /// In en, this message translates to:
+  /// **'This ends the session. The channel tree and the conversation are cleared with it.'**
+  String get voiceDisconnectConfirmBody;
+
   /// Tooltip of the microphone button while open
   ///
   /// In en, this message translates to:

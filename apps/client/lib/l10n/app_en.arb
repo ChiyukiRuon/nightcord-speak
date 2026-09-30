@@ -512,6 +512,14 @@
   "@voiceDisconnect": {
     "description": "Tooltip of the button that closes the current server connection"
   },
+  "voiceDisconnectConfirmTitle": "Disconnect?",
+  "@voiceDisconnectConfirmTitle": {
+    "description": "Title of the dialog that asks before closing a server connection"
+  },
+  "voiceDisconnectConfirmBody": "This ends the session. The channel tree and the conversation are cleared with it.",
+  "@voiceDisconnectConfirmBody": {
+    "description": "Says what is actually lost, which is the reason the dialog exists"
+  },
   "@voiceUnmuteMic": {
     "description": "Tooltip of the microphone button while muted"
   },

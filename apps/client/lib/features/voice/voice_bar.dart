@@ -50,33 +50,40 @@ class VoiceBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
+          // The name and the disconnect button travel together: the button sits
+          // immediately to the right of the name, and the rest of the expanded
+          // space is empty, which is what keeps the voice controls pinned to the
+          // right edge. A plain `Expanded(Text)` with the button after it would
+          // put the button out at the right-hand cluster instead, a whole bar's
+          // width away from the thing it belongs to.
           Expanded(
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              // §12.2's `bodyMedium` — 14/500, the level it names for emphasised
-              // body text. One's own name in a control bar is exactly that.
-              style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    // §12.2's `bodyMedium` — 14/500, the level it names for
+                    // emphasised body text. One's own name in a control bar is
+                    // exactly that.
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                SizedBox(width: tokens.space1),
+                // Ends the session, so it asks first — `disconnect` also
+                // forgets the view, and the channel tree and the conversation
+                // go with it. That is more than a stray click should cost, even
+                // beside a button this deliberately placed.
+                _VoiceButton(
+                  icon: Icons.link_off,
+                  tooltip: l10n.voiceDisconnect,
+                  // Nothing to disconnect from while the core is still
+                  // retrying, and the banner already offers it for that case.
+                  enabled: online,
+                  onPressed: () => _confirmDisconnect(context, ref),
+                ),
+              ],
             ),
-          ),
-          // Sits between the name and the microphone on purpose: it ends the
-          // session, so it should not be the thing next to the button pressed
-          // twenty times an hour. The same call the reconnect banner's 「断开」
-          // makes — there is one definition of what disconnecting does.
-          //
-          // No confirmation. `disconnect` also forgets the session, so the
-          // channel tree and the conversation go with it, and that is a heavier
-          // consequence than the one click suggests. It is left unguarded to
-          // match the banner, which has asked for no confirmation since it was
-          // written; a dialog here is a one-line change if it turns out to be
-          // too easy to hit.
-          _VoiceButton(
-            icon: Icons.link_off,
-            tooltip: l10n.voiceDisconnect,
-            // Nothing to disconnect from while the core is still retrying —
-            // and the banner already offers it for that case.
-            enabled: online,
-            onPressed: () => ref.read(sessionsProvider.notifier).disconnect(session),
           ),
           _VoiceButton(
             icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
@@ -110,6 +117,45 @@ class VoiceBar extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Asks, then closes the connection.
+  ///
+  /// The dialog says what is actually lost rather than "are you sure": a
+  /// disconnect ends the session *and* forgets it, so the channel tree and the
+  /// conversation go too. Naming that is the entire reason to ask.
+  ///
+  /// This button is the one control in the bar that cannot be undone by
+  /// pressing it again. Muting, deafening and opening settings are all
+  /// reversible in place; this is not.
+  Future<void> _confirmDisconnect(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+
+    // Read before the await, not after: the answer arrives an arbitrary number
+    // of frames later, and `ref` belongs to a widget that may be gone by then.
+    final sessions = ref.read(sessionsProvider.notifier);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.voiceDisconnectConfirmTitle),
+        content: Text(l10n.voiceDisconnectConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          // The verb the reconnect banner already uses for the same act, so
+          // there is one word for it in the app.
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.bannerDisconnect),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed ?? false) sessions.disconnect(session);
   }
 }
 
