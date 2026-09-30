@@ -1392,6 +1392,11 @@ HashMap<SessionId, Session>
 
 # 48. Web 支持
 
+> **修订（2026-09-30）：** Web 前端改为 **Flutter Web**（与 Native 同一套 UI 代码），
+> 不再是 React——目标定为「电脑端 Web/macOS/Windows 高度一致、移动 Web/iOS/Android
+> 高度一致、全平台统一视觉、组件最大化复用」。网关、传输抽象与语音分阶段的完整决定
+> 见 `AGENTS.md`「前端架构：Flutter 六端一致」。下面这张 React 图保留为历史记录。
+
 第二阶段再做。
 
 架构：
@@ -2217,6 +2222,10 @@ TS Server
 ---
 
 # 79. 最终架构
+
+> **修订（2026-09-30）：** 下图中的 React 已由 Flutter Web 取代（见 §48 修订注与
+> `AGENTS.md`「前端架构」）。Web 与 Native 共用同一份 UI 代码，只是传输不同
+> （FFI / WebSocket 网关）。其余不变。
 
 最终希望达到：
 

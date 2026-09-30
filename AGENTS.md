@@ -98,6 +98,71 @@ macOS / Android / iOS。
 | `ts-protocol-ts3/ts6`  | 声明协议、承载各自扩展                | 复制适配层                      |
 | `ts-core`              | facade + 后端选择                     | 泄漏协议概念                    |
 | `ts-ffi`               | C ABI + JSON，句柄而非指针            | 阻塞 Dart UI 线程               |
+| `ts-wire`              | 命令与事件的 JSON 词汇（前端唯一一份） | 承载任何行为/传输              |
+| `ts-gateway`           | WebSocket 前端：一 core、N 浏览器连接  | 复制 core（与桌面共用同一套）    |
+
+### 前端架构：Flutter 六端一致（2026-09-30 定）
+
+**取代 `DEVELOPMENT.md` §48/§79 的「React Web + Flutter Native」**——见该节修订注。
+
+> **原则（用户拍板）**：Flutter 统一承担所有平台 UI。共享 Design System、业务组件、
+> 状态管理、Models 与交互逻辑；Desktop/Mobile 仅通过 Adaptive Shell 做布局差异。
+> 平台相关能力通过 Capability/Backend 接口隔离。Native 使用 FFI，Web 使用 WebSocket
+> Gateway。Rust Core、TS3/TS6 Protocol 与 Session 层**完全不因 UI 平台而复制**。
+> Web 语音的 PCM-over-WebSocket 仅作为第一阶段可验证实现，**不作为最终传输格式**。
+
+不是「100% 全等」，是**最大化复用**：共享组件与行为模型；允许按形态调整布局，不追求逐
+widget 全等。
+
+**两个产品族**——按 viewport / 输入能力判定 `LayoutClass`，**不按 OS 判断**（iPad 横屏、
+Windows 窄窗口都不该被操作系统粗暴分类）：
+
+| 族 | 平台 | Shell |
+| --- | --- | --- |
+| Desktop | Windows / macOS / Desktop Web | `DesktopShell`：侧栏 + 聊天 + 底部语音栏 |
+| Mobile | iOS / Android / Mobile Web | `MobileShell`：抽屉 / 底部导航 |
+
+两族继续共享：Design System、业务组件、状态层、Models、l10n。
+
+**三层 UI**（差异只允许出现在第三层）：
+
+1. `design/`——tokens、theme、通用控件；**六端全共享**。
+2. `features/`——业务组件（频道树、聊天、用户列表……）；**共享**，禁止散落
+   `Platform.isX` / `kIsWeb` 分支。
+3. `layout/`——`DesktopShell` / `MobileShell` / `adaptive_shell.dart`；布局差异在这里。
+
+**平台能力 = 接口 + 各平台实现**，UI 不感知：
+
+| 接口 | Native | Web |
+| --- | --- | --- |
+| `ClientTransport`（命令与事件） | `EmbeddedTransport`（FFI ↔ 内嵌 core） | `RemoteTransport`（WebSocket ↔ 网关） |
+| `VoiceBackend` | Rust 引擎（cpal） | Web Audio worklet ↔ 网关 |
+| `NotificationBackend` | `local_notifier` | Notification API |
+| `SecureStorage` | 文件(0600) / Keychain / Keystore | 浏览器存储（弱一档） |
+| `HotkeyBackend` | 系统级热键 | 不支持（降级为页面内快捷键） |
+
+**Transport 不绑平台**：命名按能力（内嵌 / 远程）而不是按 OS——将来桌面连远程网关
+（NAS、云端）同属 `RemoteTransport`。`ClientTransport` 是 providers 之下的**唯一协议
+边界**；UI 与状态层不知道下面是 FFI 还是 WebSocket。
+
+**网关不得复制 Core**（现状即是）：桌面与网关共用同一套 `ts-core`/`ts-session`/
+`ts-protocol`/`ts-audio`；TS3/TS6 的行为永远只修一遍。
+
+**目标目录**（渐进到位，不搞一次性大搬家）：
+
+```text
+apps/client/lib/
+├── app/
+├── core/{transport, voice, state}      # ClientTransport / VoiceBackend / 共享状态
+├── design/{tokens, theme, components}  # 全平台共享
+├── features/*                          # 业务组件，共享
+└── layout/{desktop_shell, mobile_shell, adaptive_shell}.dart
+tools/web-debug/                        # 现调试页迁入：诊断/协议验证，不做产品 UI
+```
+
+**路线**：① `ClientTransport` 抽象（进行中）→ ② `VoiceBackend` 抽象 → ③
+`flutter build web` + Cloudflare Pages → ④ 移动平台脚手架 + `MobileShell` → ⑤
+三条一致性要求逐项走查。
 
 ---
 
@@ -190,8 +255,8 @@ cd apps/client && flutter gen-l10n
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 326 个
-cd apps/client && flutter analyze && flutter test                  # 132 个
+cargo test  --workspace --all-features                             # 355 个
+cd apps/client && flutter analyze && flutter test                  # 138 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -207,6 +272,10 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 ### 3.6 提交
 
 - 一次提交只做一件事；提交信息说清 **为什么**，不只是改了什么。
+- 格式用 [Conventional Commits](https://www.conventionalcommits.org/)：
+  `type(scope): 简述`。`type` 取 `feat` / `fix` / `refactor` / `docs` / `test` /
+  `chore`；`scope` 写受影响的那一块（`gateway`、`client`、`audio`、`ffi`、
+  `logging`……）。**语言用中文**（§4.1）。
 - 改动 API、修 bug、定决策，同步更新本文档对应小节。
 - 未经要求不要提交/推送。
 
@@ -216,8 +285,12 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 
 ### 4.1 语言
 
-- **代码注释、文档注释、提交信息用英文**（Rust 生态惯例）。
-- **与用户交流、本文档、`docs/` 用中文。**
+- **代码注释、文档注释用英文**（Rust 生态惯例）。
+- **与用户交流、本文档、`docs/`、提交信息用中文。**
+
+> 提交信息这条曾写着「用英文」，但仓库从 `Initial commit` 起就是这么写的：
+> 十条提交全是中文。规则与实际不一致时，改的是规则——除非打算把历史也重写一遍。
+> 格式见 §3.6。
 
 ### 4.2 注释
 
@@ -271,7 +344,7 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
 | M0.6     | Production Client               | ✅ **全部完成** |
-| Phase 7  | Web Gateway                     | ⏳ 未开始   |
+| Phase 7  | Web Gateway                     | 🚧 进行中   |
 
 §90 的实际顺序：
 
@@ -280,16 +353,26 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 ⑤ TS3 Backend ✅     ⑥ TS3 Headless CLI ✅  ⑦ TS3 Voice ✅
 ⑧ Flutter FFI ✅     ⑨ Flutter UI ✅
 ⑩ TS6 Backend ✅     ⑪ Multi Session ✅
-⑫ Web Gateway ⏳     ⑬ Web Client ⏳        ⑭ 扩展功能 ⏳
+⑫ Web Gateway 🚧     ⑬ Web Client ⏳        ⑭ 扩展功能 ⏳
 ```
+
+**Phase 7 当前到哪**（详细设计见 [`docs/gateway.md`](docs/gateway.md)）：
+
+- [x] `ts-wire` —— 命令与事件词汇从 `ts-ffi` 搬出，两个前端共用一份
+- [x] `ts-gateway` + `nightcord-gateway` —— 鉴权、扇出、语音桥、内嵌调试页
+- [x] `ClientTransport` 接口 + `ConnectRequest` 搬进 `models/`
+- [ ] `VoiceBackend` 抽象 → `flutter build web` → `MobileShell`（`AGENTS.md`「前端架构」的路线）
+
+> **§5.3 / §5.4 尚未补上 Phase 7 的实测记录**——哪些是真跑过的、哪些只有单测，
+> 要由做那一轮的人填，不在这里替它下结论。
 
 ### 5.2 规模
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **18,129 行**，14 crates + CLI |
-| Dart | **11,763 行**，48 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **326 Rust + 132 Dart**，全绿  |
+| Rust | **21,065 行**，16 crates + CLI + gateway |
+| Dart | **12,181 行**，50 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **355 Rust + 138 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -517,6 +600,13 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 
 > **M0.6 至此全部完成。** 下一站是 Phase 7（Web Gateway，§71）。
 
+### Phase 7 欠账（见 [`docs/gateway.md`](docs/gateway.md)）
+
+- [ ] 网关没有 TLS，也没有每访客身份与会话归属；多标签页同权是写明的 v1 行为
+- [ ] 语音是 PCM over WebSocket（第一阶段），最终要换成浏览器侧编解码
+- [ ] 调试页（`crates/ts-gateway/web/`）要按目标目录迁进 `tools/web-debug/`，
+      产品 UI 是 Flutter Web，尚未开始
+
 ### 其他
 
 - [ ] TS3 成功换频道的验证（需要多频道服务器）
@@ -564,6 +654,8 @@ cd apps/client && flutter analyze && flutter test                  # 132 个
 | `docs/shortcuts.md`        | 快捷键：为什么系统级、物理键与 HID 码的代价、旧 PTT 的卡住 bug |
 | `docs/localization.md`     | 本地化：工具与文件、语言如何决定、无 context 组句、什么不本地化、加语言/加文案 |
 | `docs/crash.md`            | 崩溃上报：三类信号、标记语义、为什么不解析符号、Dart 侧的关窗路径、边界与触发法 |
+| `docs/gateway.md`          | Web 网关：为什么不是托管服务、三层协议、安全边界、身份档、语音分阶段 |
+| `docs/UI设计与配色规范.md` | UI 设计系统：颜色 / 字体 / 间距 token 与组件规范（Flutter 六端共用） |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

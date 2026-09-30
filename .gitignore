@@ -27,3 +27,11 @@ desktop.ini
 *.identity
 /run/
 /logs/
+
+# --- Debugging leftovers ---------------------------------------------------
+# Where the browser-automation tool drops its page snapshots and console logs
+# when driving the gateway's debug page. Artifacts of a session, not of the
+# repository — and one of them per tool call.
+.playwright-mcp/
+# Screenshots taken at the repository root during a smoke test.
+/*.png
