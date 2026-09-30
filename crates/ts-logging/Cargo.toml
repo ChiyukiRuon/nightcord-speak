@@ -1,0 +1,14 @@
+[package]
+name = "ts-logging"
+description = "The process-wide tracing subscriber: one log file per day, one place to look after a bug."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# No internal dependency, on purpose: the log directory is passed in by the
+# caller, so this crate stays a leaf that any front-end can reuse.
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true

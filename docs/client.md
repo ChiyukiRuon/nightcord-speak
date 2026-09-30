@@ -93,13 +93,27 @@ let Some(active) = voice.as_mut() else {
 回归测试：`muting_before_voice_starts_succeeds`、
 `choosing_a_mode_before_voice_starts_succeeds`（`crates/ts-ffi`）。
 
-### 仍然存在的缺口：错误只走 UI，不落日志
+### 已补上：错误不再只走 UI
 
 上面那个 bug 之所以难查，是因为**应用的错误只以 SnackBar 出现，不写日志**。
 SnackBar 几秒后自动消失，线索随之消失——我当时就是这样丢掉它的。
 
-这正是 §87（Milestone 0.6）里 "logging" 一项要补的东西。在那之前，
-若再看到红色提示，**请记下文字**。
+这一项已经做完（Milestone 0.6 的第一项）。现在：
+
+- 每个**用户可见的失败**都会落到 `<应用数据目录>/logs/nightcord.log.<日期>`，
+  收口点在 `FfiEvent::failed`，所以新加命令不可能绕过；
+- 错误 SnackBar **直接显示日志路径**并带「打开日志」按钮（10 秒）；
+- 语音栏 ⚙ → 设置 → 日志一节可以随时打开日志文件夹；
+- `NIGHTCORD_LOG=debug` 可以临时提高详细程度。
+
+完整说明见 [`docs/logging.md`](logging.md)。
+
+另外**顺带修掉**一处相关的缺陷：核心主动报的 `ErrorEvent`（握手失败、掉线、重连）
+此前在 `server_view.dart` 被归入「不参与渲染」直接 `break`，既没有提示也没进 SnackBar
+——频道树就那么僵着。现在它同样走 `lastErrorProvider`，于是自动获得提示与日志。
+
+> 遗留的观感问题（未修）：可重试错误（如网络类）用 Material 3 的默认 SnackBar 底色，
+> 在深色主题下是**浅色**的，看起来有点像 bug。这是改动之前就有的行为，本次没动。
 
 ---
 
@@ -161,6 +175,10 @@ Windows PowerShell 默认是 DPI-unaware，被系统虚拟化到 96 DPI：
 | `NIGHTCORD_AUTO_CONNECT` | 启动即连接。**逗号分隔多个地址**可一次连上多台，用于演练多会话 |
 | `NIGHTCORD_NICKNAME` | 连接用的昵称 |
 | `NIGHTCORD_PROFILE` | 身份档名。TS3 会拒绝同一身份的第二条连接，所以脚本化重跑必须换档名 |
+| `NIGHTCORD_LOG` | 日志级别（如 `debug`）。优先于 `RUST_LOG` |
+| `NIGHTCORD_LOG_DIR` | 覆盖日志目录；设为空字符串则只写 stderr 不落文件，便于测试不污染 `%APPDATA%` |
+
+后两个对 CLI 同样生效，见 [`docs/logging.md`](logging.md)。
 
 局域网地址不需要任何环境变量——`nightcord` 分支已把私有地址设为默认允许
 （见 [`docs/tsclientlib-fork.md`](tsclientlib-fork.md)）。

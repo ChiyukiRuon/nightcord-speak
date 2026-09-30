@@ -8,12 +8,41 @@
 // once, so there is no second reader to consult — an earlier version of these
 // tests polled the queue directly and silently lost results to the stream.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/ffi/native.dart';
 import 'package:nightcord_client/ffi/rust_client.dart';
 import 'package:nightcord_client/models/events.dart';
 
 import 'test_support.dart';
+
+/// Polls [check] until it holds, or gives up after a few seconds.
+///
+/// The log writer is asynchronous by design — that is what keeps it off the
+/// audio thread — so the file is not written the instant `logToCore` returns.
+Future<bool> _pollUntil(bool Function() check) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (DateTime.now().isBefore(deadline)) {
+    if (check()) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  return false;
+}
+
+/// Whether any file under [directory] contains [needle].
+bool _logFilesContain(Directory directory, String needle) {
+  if (!directory.existsSync()) return false;
+  for (final entry in directory.listSync()) {
+    if (entry is! File) continue;
+    try {
+      if (entry.readAsStringSync().contains(needle)) return true;
+    } on FileSystemException {
+      // Being written to as we read it; the next pass will do.
+    }
+  }
+  return false;
+}
 
 void main() {
   group('library loading', () {
@@ -104,6 +133,46 @@ void main() {
       final second = awaitCommand(client, 'audio_devices');
       client.requestAudioDevices('output');
       expect((await second).ok, isTrue);
+    });
+  });
+
+  group('logging', () {
+    test('the log directory is reported without a client', () {
+      // No `RustClient` is started here on purpose: the startup-failure screen
+      // has none, and it is the screen that most needs the path.
+      final directory = coreLogDirectory();
+
+      // Null is a legitimate answer where the platform gives no writable root,
+      // but this build targets desktops, where there always is one — and if
+      // that ever stopped being true the UI's button would silently vanish.
+      expect(directory, isNotNull, reason: 'no log directory on a desktop platform');
+      expect(
+        Directory(directory!).existsSync(),
+        isTrue,
+        reason: 'the core should have created the directory it reports',
+      );
+    });
+
+    test('a line forwarded from Dart reaches the file the UI points at', () async {
+      // The whole chain, across the ABI. Without it the UI could offer a path
+      // to a file that never receives anything the app forwards to it — which
+      // is worse than no path at all, because it looks like an answer.
+      final directory = coreLogDirectory();
+      expect(directory, isNotNull);
+
+      final marker = 'dart-forwarded-${DateTime.now().microsecondsSinceEpoch}';
+      logToCore('error', marker);
+
+      final found = await _pollUntil(() => _logFilesContain(Directory(directory!), marker));
+      expect(found, isTrue, reason: '$marker never reached $directory');
+    });
+
+    test('an awkward line is accepted rather than thrown', () {
+      // Called from error handlers, where raising a second error would replace
+      // a reportable failure with a confusing one.
+      expect(() => logToCore('not a level', '记录下来'), returnsNormally);
+      expect(() => logToCore('error', ''), returnsNormally);
+      expect(() => logToCore('error', '换行\n也要能记'), returnsNormally);
     });
   });
 

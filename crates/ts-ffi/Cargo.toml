@@ -16,6 +16,8 @@ crate-type = ["cdylib", "rlib"]
 ts-audio.workspace = true
 ts-core.workspace = true
 ts-events.workspace = true
+ts-identity.workspace = true
+ts-logging.workspace = true
 ts-model.workspace = true
 ts-protocol.workspace = true
 ts-session.workspace = true
@@ -24,3 +26,8 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+# Only for tests: they install a subscriber that captures records into a
+# buffer, which is how the "the UI saw it, so the log has it" rule is checked.
+tracing-subscriber.workspace = true

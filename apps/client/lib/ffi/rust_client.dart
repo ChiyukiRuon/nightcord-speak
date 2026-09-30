@@ -14,6 +14,67 @@ import '../models/events.dart';
 import 'bindings.dart';
 import 'native.dart';
 
+/// The directory the core writes its logs to, or `null` when records only reach
+/// stderr or the core cannot be reached at all.
+///
+/// A free function rather than a [RustClient] member, unlike [RustClient.version]:
+/// the screen that reports a core which *failed to start* is the one that most
+/// needs this path and has no client to ask. Nothing here is session-scoped, so
+/// there is no reason to require one.
+///
+/// Returns the path whether or not the files exist yet, which is what makes it
+/// useful on that screen — the log may only be written by the next run.
+String? coreLogDirectory() {
+  final bindings = _reachCore();
+  if (bindings == null) return null;
+
+  final raw = bindings.logDir();
+  try {
+    final text = raw.toDartString();
+    return text.isEmpty ? null : text;
+  } finally {
+    // The core handed ownership over and expects it back.
+    bindings.freeString(raw);
+  }
+}
+
+/// Records a line in the core's log, if there is one to record it in.
+///
+/// Never throws, and never reports that it could not. It is called from error
+/// handlers — including the handler for a core that never started — where
+/// raising a second failure would replace a reportable problem with a
+/// confusing one. A log line that does not appear is a smaller loss than an
+/// error handler that crashes.
+///
+/// `level` is one of `trace`, `debug`, `info`, `warn`, `error`.
+void logToCore(String level, String message) {
+  final bindings = _reachCore();
+  if (bindings == null) return;
+
+  final levelText = level.toNativeUtf8();
+  try {
+    final messageText = message.toNativeUtf8();
+    try {
+      bindings.log(levelText, messageText);
+    } finally {
+      calloc.free(messageText);
+    }
+  } finally {
+    calloc.free(levelText);
+  }
+}
+
+/// The bound core, or `null` if it cannot be loaded.
+///
+/// Swallows the failure rather than propagating it: see [logToCore].
+NightcordBindings? _reachCore() {
+  try {
+    return NativeLibrary.load();
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Everything needed to open a connection.
 ///
 /// Mirrors `ts_core::ConnectRequest`. The identity is deliberately absent: the

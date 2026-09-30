@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
+import '../settings/settings_dialog.dart';
 
 /// Who we are, and the buttons that control our microphone and speakers.
 class VoiceBar extends ConsumerWidget {
@@ -73,11 +74,13 @@ class VoiceBar extends ConsumerWidget {
           ),
           _VoiceButton(
             icon: Icons.settings,
-            tooltip: '音频设置',
-            enabled: online,
+            tooltip: '设置',
+            // Unlike the two buttons above, settings do not need a live
+            // connection — and the log folder it offers is most wanted exactly
+            // when the connection is not working.
             onPressed: () => showDialog<void>(
               context: context,
-              builder: (_) => _AudioSettingsDialog(session: session),
+              builder: (_) => SettingsDialog(session: session),
             ),
           ),
         ],
@@ -120,136 +123,6 @@ class _VoiceButton extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       padding: const EdgeInsets.all(6),
       icon: Icon(icon, color: tint),
-    );
-  }
-}
-
-/// Picks the input and output devices.
-class _AudioSettingsDialog extends ConsumerStatefulWidget {
-  const _AudioSettingsDialog({required this.session});
-
-  final int session;
-
-  @override
-  ConsumerState<_AudioSettingsDialog> createState() => _AudioSettingsDialogState();
-}
-
-class _AudioSettingsDialogState extends ConsumerState<_AudioSettingsDialog> {
-  String? _input;
-  String? _output;
-  bool _started = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Enumeration touches real hardware on the core's thread, so the lists
-    // arrive through `audioDevicesProvider` rather than as a return value.
-    // Asking again on open also picks up a headset plugged in since last time.
-    final client = ref.read(rustClientProvider);
-    client.requestAudioDevices('input');
-    client.requestAudioDevices('output');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final devices = ref.watch(audioDevicesProvider);
-    final voice = ref.watch(sessionsProvider)[widget.session]?.voice ?? const VoiceState();
-
-    return AlertDialog(
-      backgroundColor: AppColors.sidebar,
-      title: const Text('音频设置'),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '选择后点「开始语音」才会打开设备。设备列表由 Rust 核心枚举。',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _input,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: '麦克风'),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('系统默认')),
-                  ...(devices['input'] ?? const <AudioDevice>[]).map(
-                    (d) => DropdownMenuItem(
-                      value: d.id,
-                      child: Text(
-                        d.isDefault ? '${d.name}（默认）' : d.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _input = value),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _output,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: '扬声器'),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('系统默认')),
-                  ...(devices['output'] ?? const <AudioDevice>[]).map(
-                    (d) => DropdownMenuItem(
-                      value: d.id,
-                      child: Text(
-                        d.isDefault ? '${d.name}（默认）' : d.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _output = value),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<VoiceActivationMode>(
-                initialValue: voice.mode,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: '传输方式'),
-                items: [
-                  for (final mode in VoiceActivationMode.values)
-                    DropdownMenuItem(value: mode, child: Text(mode.label)),
-                ],
-                onChanged: (mode) {
-                  if (mode == null) return;
-                  ref.read(rustClientProvider).setVoiceMode(mode);
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '按键说话：按住 Ctrl + Shift + P（全局快捷键在后续阶段加入）。',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
-          onPressed: _started
-              ? null
-              : () {
-                  ref.read(rustClientProvider).voiceStart(
-                        widget.session,
-                        inputDevice: _input,
-                        outputDevice: _output,
-                      );
-                  setState(() => _started = true);
-                },
-          child: const Text('开始语音'),
-        ),
-      ],
     );
   }
 }

@@ -85,9 +85,38 @@ impl FfiEvent {
         }
     }
 
+    /// Reports that events were dropped before the front-end could read them.
+    ///
+    /// Logged as well as forwarded. A front-end that fell behind is *rendering
+    /// a stale tree*, and that is the kind of thing a user reports later as
+    /// "it just showed the wrong people" — with no other trace of when it
+    /// started.
+    #[must_use]
+    pub(crate) fn lagged(missed: u64) -> Self {
+        tracing::warn!(missed, "the front-end fell behind; events were dropped");
+        Self::Lagged { missed }
+    }
+
     /// A command that failed.
+    ///
+    /// This is deliberately also the one place a UI-visible failure is written
+    /// to the log. [`crate::client::NightcordClient::report_failure`], `report`
+    /// and `reject` all funnel through here, and between them they cover every
+    /// command the ABI accepts — so recording at construction makes "if the
+    /// user saw it, the log has it" a property of the type instead of a rule
+    /// that a dozen call sites have to remember and a new command can quietly
+    /// opt out of.
     #[must_use]
     pub(crate) fn failed(command: &str, session: Option<SessionId>, error: ClientError) -> Self {
+        tracing::error!(
+            command,
+            // The bare number, not `Some(SessionId(3))`: these lines get
+            // grepped, and the wrapper is noise in a search.
+            session = ?session.map(SessionId::get),
+            %error,
+            "command failed"
+        );
+
         Self::CommandResult {
             command: command.to_string(),
             session,
@@ -112,8 +141,104 @@ pub enum CommandOutcome {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::sync::{Arc, Mutex};
+
+    use tracing_subscriber::fmt::MakeWriter;
+    use ts_model::{ChannelId, ClientId, MessageTarget, PermissionError, ProtocolError};
+
     use super::*;
-    use ts_model::{ChannelId, ClientId, MessageTarget, ProtocolError};
+
+    /// A writer that keeps everything logged through it in memory.
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl io::Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .expect("the capture buffer is never poisoned")
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'writer> MakeWriter<'writer> for Capture {
+        type Writer = Self;
+
+        fn make_writer(&'writer self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    /// Runs `body` and returns everything it logged.
+    ///
+    /// Scoped to the current thread rather than installed globally, so these
+    /// tests neither depend on nor disturb whatever subscriber the test binary
+    /// has, and so they do not race each other.
+    fn logged(body: impl FnOnce()) -> String {
+        let capture = Capture::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(capture.clone())
+            .with_ansi(false)
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, body);
+
+        let bytes = capture.0.lock().expect("the capture buffer").clone();
+        String::from_utf8(bytes).expect("the log output is UTF-8")
+    }
+
+    #[test]
+    fn a_failed_command_is_logged_and_not_only_shown() {
+        // The gap this milestone exists to close: a failure reached the user as
+        // a snack bar and left nothing behind when it faded, so a report could
+        // only repeat whatever someone happened to read in time.
+        let text = logged(|| {
+            let _ = FfiEvent::failed(
+                "join_channel",
+                Some(SessionId::new(4)),
+                ClientError::Permission(PermissionError::MissingPermission { permission: 218 }),
+            );
+        });
+
+        assert!(text.contains("join_channel"), "no command name: {text}");
+        assert!(text.contains("session=Some(4)"), "no session: {text}");
+        // §4.4: the actionable part of the message has to survive, not just
+        // "permission denied".
+        assert!(
+            text.contains("missing permission #218"),
+            "no detail: {text}"
+        );
+    }
+
+    #[test]
+    fn a_failure_with_no_session_says_so_rather_than_naming_one() {
+        // `audio_devices` is not scoped to a session. Logging a session id
+        // would be a lie about which connection was involved, and worse than
+        // logging none.
+        let text = logged(|| {
+            let _ = FfiEvent::failed("audio_devices", None, ClientError::Timeout);
+        });
+
+        assert!(text.contains("session=None"), "got {text}");
+    }
+
+    #[test]
+    fn dropping_events_is_logged_as_well_as_forwarded() {
+        // A UI that fell behind is drawing a stale tree; without this line
+        // there is no record of when that started.
+        let text = logged(|| {
+            let _ = FfiEvent::lagged(42);
+        });
+
+        assert!(text.contains("42"), "no count: {text}");
+        assert!(text.contains("dropped"), "got {text}");
+    }
 
     #[test]
     fn a_forwarded_event_keeps_its_own_shape() {

@@ -17,7 +17,6 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::error::RecvError;
-use tracing_subscriber::EnvFilter;
 use ts_core::{Client, ConnectRequest};
 use ts_events::{ClientEvent, SessionEvent};
 use ts_identity::IdentityStore;
@@ -188,15 +187,16 @@ impl Voice {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // The same filter the Flutter client writes its file with, from one
+    // definition: our own crates at info, the protocol library only when
+    // something is wrong, because its per-packet logging is far too loud for
+    // output meant to be read by a person. `NIGHTCORD_LOG` overrides it, and
+    // `RUST_LOG` still works for anyone who reaches for that first.
+    //
+    // A terminal is the right destination here, unlike the GUI: this program's
+    // whole output is the terminal, and a developer running it is watching one.
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            // Our own crates at info; the protocol library only when something
-            // is wrong. Its per-packet logging is far too loud for a program
-            // whose output is meant to be read by a person.
-            EnvFilter::new(
-                "info,tsclientlib=warn,tsproto=warn,tsproto_packets=warn,ts_bookkeeping=warn",
-            )
-        }))
+        .with_env_filter(ts_logging::env_filter())
         .init();
 
     match run().await {

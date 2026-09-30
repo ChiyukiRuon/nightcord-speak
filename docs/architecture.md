@@ -12,14 +12,15 @@
 | --- | --- | --- | --- |
 | 0 | `ts-model` | **无** | 领域模型、地址解析、统一错误。整个项目的契约 |
 | 1 | `ts-events` | model | 事件与 `EventBus` |
-| 1 | `ts-identity` | model | 身份持久化（不碰密码学） |
+| 1 | `ts-identity` | model | 身份持久化（不碰密码学）；应用数据目录 |
+| 1 | `ts-logging` | **无**（仅外部 tracing 三件套） | 进程级 subscriber：文件、轮转、filter |
 | 2 | `ts-protocol` | model, identity | 能力拆分的 trait + `Backend` |
 | 3 | `ts-session` | model, events, protocol | `Session` / `SessionManager` |
 | 3 | `ts-audio` | model, protocol | 设备、采集、编码、播放、VAD |
 | 4 | `ts-protocol-tsclient` | model, events, identity, protocol, **tsclientlib** | 唯一知道 `tsclientlib` 的地方 |
 | 5 | `ts-protocol-ts3` / `ts-protocol-ts6` | model, events, identity, protocol, tsclient | 声明「我是谁」+ 各自扩展 |
 | 6 | `ts-core` | model, events, identity, protocol, ts3, ts6, session | facade + 后端选择 |
-| 7 | `ts-ffi` | core, session, audio, model, events, protocol | C ABI / JSON 出口 |
+| 7 | `ts-ffi` | core, session, audio, identity, logging, model, events, protocol | C ABI / JSON / 日志出口 |
 | 7 | `apps/cli` | core, session, audio, identity, model, events, protocol | 无头客户端 |
 
 `ts-audio` 与 `ts-session` 同层：都只依赖 model + protocol，**互不依赖**。
@@ -42,6 +43,16 @@ wire 处理放在 `ts-protocol-tsclient`，上面两个 crate 各自只声明「
 
 `ts-identity` 只依赖 `ts-model`；它把身份当作「生命周期与存储」问题，不碰密码学，
 所以不依赖任何协议库。
+
+**`ts-identity` 为什么连应用数据目录一起管**：`app_data_root()` 是全项目唯一知道
+「本应用的每用户目录在哪」的地方（Windows 的 `%APPDATA%`、macOS 的
+`Application Support`、Linux 的 XDG 各家不同）。身份是最先需要它的使用者，日志随后，
+设置与书签以后。让它公开，是为了避免出现第二份平台路径逻辑——加 Android 时只改一处。
+
+**`ts-logging` 为什么不依赖任何内部 crate**：日志目录是**参数**，由调用方（`ts-ffi`）
+用 `app_data_root()` 算好传进来。这样它保持叶子身份，CLI（写 stderr）和 Flutter 客户端
+（写文件）能共用同一份默认 filter 与「供应商库压到 warn」的判断，而不会各存一份慢慢漂移。
+细节见 [`docs/logging.md`](logging.md)。
 
 ---
 

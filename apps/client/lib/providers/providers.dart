@@ -70,6 +70,15 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         view.apply(event);
         state = {...state, session: view};
 
+        // The core's own errors — a failed handshake, a dropped connection, a
+        // refused reconnect — used to stop here: `ServerView` keeps no error
+        // state, so nothing was drawn and nothing was said. The channel tree
+        // simply froze. They are not tied to a command the user issued, so
+        // they have to be surfaced from here rather than from a command result.
+        if (event is ErrorEvent) {
+          ref.read(lastErrorProvider.notifier).report(event.error);
+        }
+
       case CommandResultEvent(:final result):
         _applyCommandResult(result);
 

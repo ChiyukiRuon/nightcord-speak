@@ -117,7 +117,7 @@ impl IdentityStore {
     /// where the sandbox location is only known to the app.
     pub fn platform_default() -> Result<Self, IdentityError> {
         Ok(Self::new(
-            platform_data_root()
+            app_data_root()
                 .ok_or(IdentityError::NoStorageRoot)?
                 .join(IDENTITY_DIR),
         ))
@@ -268,15 +268,28 @@ fn restrict_permissions(_path: &Path) -> Result<(), IdentityError> {
     Ok(())
 }
 
-/// The per-user application data directory for this platform (§32).
+/// The per-user directory this application keeps all of its state in (§32).
+///
+/// Identity storage was the first tenant and still shapes this function —
+/// `identity/` is what [`IdentityStore::platform_default`] appends — but the
+/// directory belongs to the *application*, not to identities: logs live beside
+/// it, and settings and bookmarks will follow. Exporting it keeps one
+/// definition of where that is, so porting to another platform cannot leave a
+/// second caller behind.
+///
+/// Returns `None` where the path is only knowable by the host application:
+/// Android and iOS, whose sandboxes the OS hands to the app rather than
+/// announcing in the environment.
 #[cfg(target_os = "windows")]
-fn platform_data_root() -> Option<PathBuf> {
+#[must_use]
+pub fn app_data_root() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|base| PathBuf::from(base).join(APP_DIR_DISPLAY_NAME))
 }
 
-/// The per-user application data directory for this platform (§32).
+/// See the Windows definition above.
 #[cfg(target_os = "macos")]
-fn platform_data_root() -> Option<PathBuf> {
+#[must_use]
+pub fn app_data_root() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
         PathBuf::from(home)
             .join("Library")
@@ -285,14 +298,15 @@ fn platform_data_root() -> Option<PathBuf> {
     })
 }
 
-/// The per-user application data directory for this platform (§32).
+/// See the Windows definition above.
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "android",
     target_os = "ios"
 )))]
-fn platform_data_root() -> Option<PathBuf> {
+#[must_use]
+pub fn app_data_root() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
@@ -302,7 +316,8 @@ fn platform_data_root() -> Option<PathBuf> {
 /// Report no root on mobile: the sandbox path is only known to the host app, so
 /// it must call [`IdentityStore::new`] with the path it was given.
 #[cfg(any(target_os = "android", target_os = "ios"))]
-fn platform_data_root() -> Option<PathBuf> {
+#[must_use]
+pub fn app_data_root() -> Option<PathBuf> {
     None
 }
 

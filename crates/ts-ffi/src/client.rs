@@ -88,7 +88,7 @@ impl EventQueue {
             // Rebuilt rather than pushed: the queue was emptied above, and
             // mutating it again would race a concurrent push.
             let mut batch = Vec::with_capacity(drained.len() + 1);
-            batch.push(FfiEvent::Lagged { missed: dropped });
+            batch.push(FfiEvent::lagged(dropped));
             batch.extend(drained);
             batch
         } else {
@@ -275,7 +275,7 @@ async fn run(
                 Ok(event) => events.push(FfiEvent::client(event.session, event.event)),
                 // Reported, not swallowed: a UI that silently misses
                 // `ChannelRemoved` keeps drawing a channel that is gone.
-                Err(RecvError::Lagged(missed)) => events.push(FfiEvent::Lagged { missed }),
+                Err(RecvError::Lagged(missed)) => events.push(FfiEvent::lagged(missed)),
                 Err(RecvError::Closed) => {}
             },
 

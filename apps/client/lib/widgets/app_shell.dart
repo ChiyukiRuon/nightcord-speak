@@ -9,7 +9,10 @@ import '../features/connect/connect_page.dart';
 import '../features/server/server_page.dart';
 import '../features/voice/voice_bar.dart';
 import '../ffi/rust_client.dart';
+import '../models/events.dart';
 import '../providers/providers.dart';
+import '../theme/app_theme.dart';
+import '../util/reveal.dart';
 
 /// An address to connect to on launch, from the environment.
 ///
@@ -29,6 +32,52 @@ const String _profileVar = 'NIGHTCORD_PROFILE';
 
 /// The default nickname when none was given.
 const String _defaultNickname = 'Nightcord User';
+
+/// Shows a failure, with the way to the log it was written to.
+///
+/// The path is here because the snack bar used to be the *only* copy of the
+/// error: it faded after a few seconds and took the evidence with it, which is
+/// exactly how bug ③ became hard to chase. Naming the file while the message is
+/// still on screen is the difference between a report and a guess.
+void _showError(BuildContext context, ClientError error) {
+  final logDirectory = coreLogDirectory();
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+
+  messenger.showSnackBar(
+    SnackBar(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(error.message),
+          if (logDirectory != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '日志：$logDirectory',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+        ],
+      ),
+      backgroundColor: error.isRetryable ? null : Colors.red.shade900,
+      // Long enough to actually press the button — the default four seconds is
+      // not, and the reason to show it at all is that someone acts on it.
+      duration: const Duration(seconds: 10),
+      action: logDirectory == null
+          ? null
+          : SnackBarAction(
+              label: '打开日志',
+              onPressed: () => revealDirectory(logDirectory),
+            ),
+    ),
+  );
+}
 
 /// The root of the app.
 class AppShell extends ConsumerStatefulWidget {
@@ -98,12 +147,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // during a rebuild.
     ref.listen(lastErrorProvider, (_, error) {
       if (error == null) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(error.message),
-          backgroundColor: error.isRetryable ? null : Colors.red.shade900,
-        ),
-      );
+      _showError(context, error);
     });
 
     if (active == null) return const ConnectPage();

@@ -1,6 +1,6 @@
 // Raw `dart:ffi` declarations for the Rust core.
 //
-// Hand-written rather than generated: there are eighteen functions and the
+// Hand-written rather than generated: there are twenty functions and the
 // signatures are the contract, so a generator would add a build step and a
 // dependency without removing much work.
 //
@@ -25,6 +25,14 @@ typedef _DestroyDart = void Function(Handle handle);
 
 typedef _VersionC = Pointer<Utf8> Function();
 typedef _VersionDart = Pointer<Utf8> Function();
+
+// --- logging ---------------------------------------------------------------
+
+typedef _LogDirC = Pointer<Utf8> Function();
+typedef _LogDirDart = Pointer<Utf8> Function();
+
+typedef _LogC = Void Function(Pointer<Utf8> level, Pointer<Utf8> message);
+typedef _LogDart = void Function(Pointer<Utf8> level, Pointer<Utf8> message);
 
 // --- commands --------------------------------------------------------------
 
@@ -110,6 +118,8 @@ class NightcordBindings {
     : create = library.lookupFunction<_CreateC, _CreateDart>('nightcord_create'),
       destroy = library.lookupFunction<_DestroyC, _DestroyDart>('nightcord_destroy'),
       version = library.lookupFunction<_VersionC, _VersionDart>('nightcord_version'),
+      logDir = library.lookupFunction<_LogDirC, _LogDirDart>('nightcord_log_dir'),
+      log = library.lookupFunction<_LogC, _LogDart>('nightcord_log'),
       connect = library.lookupFunction<_ConnectC, _ConnectDart>('nightcord_connect'),
       disconnect = library.lookupFunction<_DisconnectC, _DisconnectDart>('nightcord_disconnect'),
       joinChannel = library.lookupFunction<_JoinChannelC, _JoinChannelDart>(
@@ -154,6 +164,18 @@ class NightcordBindings {
 
   /// The library version. The returned pointer is static and must not be freed.
   final Pointer<Utf8> Function() version;
+
+  /// The directory log files are written to, or an empty string when records
+  /// only reach stderr. Takes no handle, so it answers even when the core
+  /// failed to start. Free the result with [freeString].
+  final Pointer<Utf8> Function() logDir;
+
+  /// Records a line from Dart. `level` is one of `trace`, `debug`, `info`,
+  /// `warn`, `error`; anything else is recorded as `info`.
+  ///
+  /// Takes no handle: this is the call an error handler makes, and it must work
+  /// whatever state the core is in.
+  final void Function(Pointer<Utf8>, Pointer<Utf8>) log;
 
   /// Sends a serialised `ConnectRequest`.
   final void Function(Handle, Pointer<Utf8>) connect;

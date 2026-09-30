@@ -7,7 +7,9 @@
 import 'package:flutter/material.dart';
 
 import '../ffi/native.dart';
+import '../ffi/rust_client.dart';
 import '../theme/app_theme.dart';
+import '../util/reveal.dart';
 
 /// A minimal app that explains why the core is missing.
 class StartupFailureApp extends StatelessWidget {
@@ -76,6 +78,32 @@ class StartupFailureApp extends StatelessWidget {
                         height: 1.4,
                         color: AppColors.textMuted,
                       ),
+                    ),
+                  ],
+                  if (coreLogDirectory() case final directory?) ...[
+                    const SizedBox(height: 24),
+                    const Text('日志', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    // A core that failed to start still wrote a reason down —
+                    // if the library could be loaded far enough to have one.
+                    const Text(
+                      '本次启动的记录（若有）在这个文件里：',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      directory,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => revealDirectory(directory),
+                      icon: const Icon(Icons.folder_open, size: 18),
+                      label: const Text('打开日志文件夹'),
                     ),
                   ],
                 ],

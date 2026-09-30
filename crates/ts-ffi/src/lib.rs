@@ -28,6 +28,7 @@ mod audio;
 mod client;
 mod command;
 mod event;
+mod logging;
 mod string;
 
 use std::ffi::c_char;
@@ -87,6 +88,11 @@ fn parse_mode(text: &str) -> Option<VoiceActivationMode> {
 /// null as fatal rather than passing it to anything else.
 #[unsafe(no_mangle)]
 pub extern "C" fn nightcord_create() -> *mut NightcordClient {
+    // Before the core rather than after it. "The core could not start" is the
+    // failure a user is most likely to report, and a line about it written
+    // after the thing that failed has already given up is a line nobody reads.
+    install_logging();
+
     match NightcordClient::new() {
         Ok(client) => Box::into_raw(Box::new(client)),
         Err(error) => {
@@ -126,6 +132,84 @@ pub extern "C" fn nightcord_version() -> *const c_char {
     concat!("nightcord ", env!("CARGO_PKG_VERSION"), "\0")
         .as_ptr()
         .cast()
+}
+
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+
+/// The `tracing` target every line forwarded from Dart carries.
+///
+/// Gives a reader one word to search for to separate "what the UI reported"
+/// from "what the core did".
+const UI_TARGET: &str = "nightcord_ui";
+
+/// Installs the process-wide subscriber, on the first call only.
+///
+/// Idempotent because `tracing` allows exactly one global subscriber, and
+/// because both [`nightcord_create`] and [`nightcord_log_dir`] have to agree on
+/// where records go — whichever runs first decides, and the other reads back
+/// the same answer.
+fn install_logging() -> ts_logging::Sink {
+    ts_logging::init(logging::desired_dir().as_deref())
+}
+
+/// The directory log files are written to.
+///
+/// Empty when records only reach stderr: on Android and iOS, whose sandbox path
+/// the host application has to pass in, or when `NIGHTCORD_LOG_DIR` asks for no
+/// file. The UI reads the empty string as "do not offer to open a folder".
+///
+/// Takes **no handle** on purpose. The screen that reports a core which failed
+/// to start has no handle to pass, and that is exactly when the path is worth
+/// showing.
+///
+/// The caller owns the result and must pass it to [`nightcord_free_string`].
+#[unsafe(no_mangle)]
+pub extern "C" fn nightcord_log_dir() -> *mut c_char {
+    let dir = match install_logging() {
+        ts_logging::Sink::File(dir) => dir.to_string_lossy().into_owned(),
+        ts_logging::Sink::Stderr => String::new(),
+    };
+    into_c_string(dir)
+}
+
+/// Records a line sent by the front-end.
+///
+/// The UI owns failures the core cannot see — an exception thrown while
+/// building a widget, an event batch it could not parse — and those are exactly
+/// the ones a user reports. Forwarding them is what makes one file the whole
+/// story rather than half of it.
+///
+/// `level` is one of `trace`, `debug`, `info`, `warn`, `error`, in any case.
+/// Anything else, including null, is recorded as `info` rather than dropped:
+/// the caller is our own code, so a mistake in *how* it called should not take
+/// the message down with it. A null message is the one thing ignored, because
+/// then there is nothing to record.
+///
+/// # Safety
+///
+/// Both pointers must be null, or point at NUL-terminated UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_log(level: *const c_char, message: *const c_char) {
+    let Some(message) = (unsafe { from_c_str(message) }) else {
+        return;
+    };
+
+    // Matched as text rather than through `Level`: the ABI's vocabulary is the
+    // contract Dart codes against, so it is defined here where it can be read
+    // and tested, not inherited from whatever words `tracing` happens to accept.
+    let level = (unsafe { from_c_str(level) })
+        .map(|text| text.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match level.as_str() {
+        "error" => tracing::error!(target: UI_TARGET, "{}", message),
+        "warn" => tracing::warn!(target: UI_TARGET, "{}", message),
+        "debug" => tracing::debug!(target: UI_TARGET, "{}", message),
+        "trace" => tracing::trace!(target: UI_TARGET, "{}", message),
+        _ => tracing::info!(target: UI_TARGET, "{}", message),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -556,6 +640,51 @@ mod tests {
             nightcord_free_string(raw);
 
             nightcord_destroy(handle);
+        }
+    }
+
+    #[test]
+    fn the_log_directory_can_be_asked_for_without_a_client() {
+        // No handle, deliberately: the screen that reports a core which failed
+        // to start has none to pass, and that is exactly when the path is worth
+        // showing.
+        let raw = nightcord_log_dir();
+        assert!(!raw.is_null(), "the caller would dereference NULL");
+
+        // Safety: `raw` came from `nightcord_log_dir` and is freed once.
+        unsafe {
+            let text = from_c_str(raw).expect("a string");
+
+            // Empty is a legitimate answer — mobile has no root, and an empty
+            // `NIGHTCORD_LOG_DIR` asks for no file — but it must be empty for
+            // exactly those reasons, not because the path was lost.
+            assert_eq!(
+                text.is_empty(),
+                logging::desired_dir().is_none(),
+                "reported {text:?} for {:?}",
+                logging::desired_dir()
+            );
+
+            nightcord_free_string(raw);
+        }
+    }
+
+    #[test]
+    fn a_line_forwarded_from_the_ui_is_recorded_whatever_is_in_it() {
+        // This is called from an error handler, so a panic here would turn a
+        // reportable failure into a silent one. Null pointers, an unknown
+        // level, and bytes that are not UTF-8 all have to be survivable
+        // no-ops or best-effort records.
+        let not_utf8: &[u8] = b"\xff\xfe not utf-8\0";
+
+        // Safety: every pointer is null or NUL-terminated, and outlives the
+        // call.
+        unsafe {
+            nightcord_log(std::ptr::null(), std::ptr::null());
+            nightcord_log(c"error".as_ptr(), std::ptr::null());
+            nightcord_log(not_utf8.as_ptr().cast(), c"still recorded".as_ptr());
+            nightcord_log(c"LOUD".as_ptr(), c"an unknown level".as_ptr());
+            nightcord_log(std::ptr::null(), c"no level at all".as_ptr());
         }
     }
 

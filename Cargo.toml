@@ -18,6 +18,7 @@ ts-core = { path = "crates/ts-core" }
 ts-events = { path = "crates/ts-events" }
 ts-ffi = { path = "crates/ts-ffi" }
 ts-identity = { path = "crates/ts-identity" }
+ts-logging = { path = "crates/ts-logging" }
 ts-model = { path = "crates/ts-model" }
 ts-protocol = { path = "crates/ts-protocol" }
 ts-protocol-ts3 = { path = "crates/ts-protocol-ts3" }
@@ -37,6 +38,12 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"
+# `tracing-appender` is what makes the log file safe to write to from the audio
+# callback: `non_blocking` hands records to a writer thread through a bounded
+# channel and *drops* them when it is full rather than blocking the caller.
+# Rotating and pruning the files by hand would mean handling midnight rollover
+# and cleanup; this crate is maintained by the `tracing` project itself.
+tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # --- protocol backends -----------------------------------------------------

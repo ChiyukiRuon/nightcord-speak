@@ -89,7 +89,8 @@ macOS / Android / iOS。
 | `ts-events`            | 事件与 `EventBus`                     | 知道协议                        |
 | `ts-protocol`          | 能力拆分的 trait + `Backend`          | 出现 `ts3`/`ts6` 字样           |
 | `ts-session`           | `Session` / `SessionManager`          | 知道具体协议                    |
-| `ts-identity`          | 身份持久化                            | 碰密码学（由 backend 提供生成） |
+| `ts-identity`          | 身份持久化、应用数据目录              | 碰密码学（由 backend 提供生成） |
+| `ts-logging`           | 进程级 subscriber：文件、轮转、filter | 自己找目录（由调用方传入）      |
 | `ts-audio`             | 设备、采集、编码、播放、VAD           | 依赖协议库                      |
 | `ts-protocol-tsclient` | **唯一**允许知道 `tsclientlib` 的地方 | 出现具体协议判断                |
 | `ts-protocol-ts3/ts6`  | 声明协议、承载各自扩展                | 复制适配层                      |
@@ -178,8 +179,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 245 个
-cd apps/client && flutter analyze && flutter test                  # 36 个
+cargo test  --workspace --all-features                             # 264 个
+cd apps/client && flutter analyze && flutter test                  # 42 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -258,7 +259,7 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | ⏳ 未开始   |
+| M0.6     | Production Client               | 🚧 logging 已完成，其余未开始 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -275,9 +276,9 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **12,962 行**，11 crates + CLI |
-| Dart | **4,224 行**，20 文件          |
-| 测试 | **245 Rust + 36 Dart**，全绿   |
+| Rust | **14,026 行**，12 crates + CLI |
+| Dart | **4,676 行**，23 文件          |
+| 测试 | **264 Rust + 42 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -313,6 +314,18 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 | **多会话**                      | ✅ TS3 + TS6 同时在线，切换器均显示「已连接」 |
 | 150% 显示缩放                   | ✅ 渲染正常                                   |
 
+**Logging（M0.6 第一项）**
+
+| 项                          | 结果                                                                       |
+|-----------------------------|----------------------------------------------------------------------------|
+| 日志落盘                    | ✅ `%APPDATA%\Nightcord Speak\logs\nightcord.log.<日期>`，每日轮转保留 7 份 |
+| **「UI 可见 ⇒ 必落日志」**  | ✅ 实测：连 `127.0.0.1:9` 失败，SnackBar 里那句话与日志里那行是同一个错误    |
+| 错误 SnackBar 显示路径+按钮 | ✅ 截图确认（路径 + 「打开日志」）                                          |
+| 设置对话框（音频 + 日志）   | ✅ 截图确认，路径为真实目录，「打开日志文件夹」按钮就位                        |
+| Dart 错误经 FFI 转发        | ✅ `dart-forwarded-…` 以 `ERROR nightcord_ui` 落盘（也是 Dart 集成测试）     |
+| 未知 level / 空消息 / 中文  | ✅ 按 info 记或不记，均不 panic                                             |
+| CLI 行为不变                | ✅ 仍写 stderr；`RUST_LOG` 生效，`NIGHTCORD_LOG` 优先级更高                  |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -323,7 +336,7 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 
 ## 6. 过程中修掉的真 bug
 
-三个都是「**前端对 core 的认知与实际不符**」，都只有真正跑起来才暴露——
+四个都是「**前端对 core 的认知与实际不符**」，都只有真正跑起来才暴露——
 单元测试全绿、CLI 也正常。
 
 | # | 症状                           | 根因                                                    | 修法                                                          |
@@ -331,6 +344,7 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 | ① | 两台在线服务器都显示「未连接」 | `ConnectedEvent` 不设连接状态；后端只在重连时发状态事件 | 前端由 `connected` 事件置位；后端把状态变更与事件发布**绑定** |
 | ② | 聊天输入框始终禁用             | 权限提示缺失被当成「拒绝」（hints 是**可选**的）        | 缺失 = 未知 = 放行；服务器仍是权威                            |
 | ③ | 启动语音前按静音弹红错         | 无引擎时报 `NoInputDevice`——既不该报错，解释也是错的    | 记成 **intent**，`start_voice` 时应用                         |
+| ④ | 核心主动报的错误**完全不显示** | `ErrorEvent` 被 `server_view.dart` 归入「不参与渲染」而 `break` 掉，既没提示也没 SnackBar——握手失败、掉线、重连拒绝时频道树就那么僵着。日志里有，用户看不到 | `providers.dart` 里让它也走 `lastErrorProvider`，于是自动获得提示与日志（做 logging 时顺带发现） |
 
 ③ 由用户指出。**教训**：错误只以 SnackBar 出现、不落日志，线索几秒就没了——
 这正是 M0.6 的 logging 要补的。
@@ -341,18 +355,22 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 
 ### 立刻
 
-- [ ] **仓库至今零提交**（`HEAD` 不存在）。13k 行 Rust + 4k 行 Dart 全部未跟踪。
+- [x] ~~仓库零提交~~ —— 已有 `Initial commit`。
+- [ ] `效果图.png`（1.9 MB，设计参考图）仍是未跟踪状态。要么提交，要么写进
+      `.gitignore`；现在它挂在 `git status` 里当噪音。
 
 ### M0.6 — Production Client（§87）
 
 按建议顺序：
 
-- [ ] **logging**（最先做）——错误现在只走 UI，不落日志，导致 bug ③ 难查。
+- [x] **logging**（最先做）——见 [`docs/logging.md`](docs/logging.md)。落盘、轮转、
+      「UI 可见 ⇒ 必落日志」的不变式、设置里的入口，都已实测。
 - [ ] 重连（`ReconnectPolicy` 已在 `ts-model` 就位，未接）
-- [ ] 设置界面
+- [ ] 设置界面 —— **已有落点**：`lib/features/settings/settings_dialog.dart`，
+      目前是音频与日志两节，其余项往这里加
 - [ ] 书签 / 服务器列表
 - [ ] 通知
-- [ ] 设备管理（界面已有雏形）
+- [ ] 设备管理（设置对话框里已有雏形）
 - [ ] 快捷键（目前 PTT 用 `Focus`，非全局）
 - [ ] 本地化
 - [ ] 崩溃上报
@@ -363,6 +381,12 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 - [ ] `Session::poke()` —— trait、事件、权限位都在，只缺这个方法
 - [ ] kick / ban 同上
 - [ ] 音质人耳确认
+- [ ] 未连接时够不到设置：语音栏只存在于服务器页，所以「打开日志文件夹」在连接页
+      无处可点（出错时仍有 SnackBar 按钮兜底）。若要补，落点是 `AppShell`——
+      两个分支唯一共同经过的地方。
+- [ ] 可重试错误的 SnackBar 底色：`backgroundColor` 对 `isRetryable` 传 `null`，
+      于是走 Material 3 的 `inverseSurface`，在深色主题下是**浅色**的，看着像 bug。
+      改动前就有的行为，做 logging 时注意到但没动。
 - [ ] **CI 缺 Flutter job**：`.github/workflows/ci.yml` 只跑 Rust，`flutter analyze`
       与 `flutter test` 没进 CI。注意 Dart 测试会加载真实的 Rust 动态库，
       所以这个 job 必须先 `cargo build` 并把 DLL 放到测试能找到的位置。
@@ -389,6 +413,7 @@ cd apps/client && flutter analyze && flutter test                  # 36 个
 | `docs/ts3.md`              | TS3 backend：actor 模式、快照 diff、权限、局限             |
 | `docs/ts6.md`              | TS6：实测结论、共享适配层、`stream` 归 Phase 8             |
 | `docs/audio.md`            | 音频管线、线程模型、收发格式差异、已知取舍                 |
+| `docs/logging.md`          | 日志：位置、轮转、环境变量、「UI 可见即落日志」的不变式     |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 
