@@ -31,8 +31,8 @@ Linux     $XDG_CONFIG_HOME/nightcord-speak/logs/（或 ~/.config/…）
 - **每日轮转，保留 7 份**，最旧的自动删除。上限存在的原因很简单：无上限的日志
   最终会变成用户的问题，而有用的部分永远在最近那一端。
 - 目录由 `ts_identity::app_data_root()` 给出——身份存在它下面的 `identity/`，
-  日志在 `logs/`，设置在 `settings.json`，以后的书签也在这里。平台路径的知识只有
-  这一份——见 [`docs/settings.md`](settings.md)。
+  日志在 `logs/`，设置在 `settings.json`，书签在 `bookmarks.json`。平台路径的知识只有
+  这一份——见 [`docs/settings.md`](settings.md) 与 [`docs/bookmarks.md`](bookmarks.md)。
 - 文件里**不写 ANSI 转义**：它是给人用编辑器打开的，不是给终端渲染的。
 
 ### 环境变量

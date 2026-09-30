@@ -523,6 +523,87 @@ pub unsafe extern "C" fn nightcord_update_settings(
     }
 }
 
+/// Asks for the saved servers (§40).
+///
+/// The answer arrives as a `command_result` named `bookmarks`, whose `data` is
+/// `{"version": 1, "servers": [...]}`. Same shape as `settings` and for the same
+/// reason: the core owns the file, and a second cache here could disagree with
+/// it.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_bookmarks(handle: *mut NightcordClient) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::BookmarksGet);
+}
+
+/// Replaces the saved servers.
+///
+/// `bookmarks_json` is a serialised `BookmarkList`, complete rather than partial.
+/// A malformed one is rejected without touching what is stored, so a bad write
+/// cannot cost the user their address book.
+///
+/// The outcome arrives as a `command_result` named `bookmarks_update`. The entries
+/// carry server passwords, so the reply to [`nightcord_bookmarks`] does too —
+/// nothing here logs either (§44).
+///
+/// # Safety
+///
+/// `handle` must be live, and `bookmarks_json` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_update_bookmarks(
+    handle: *mut NightcordClient,
+    bookmarks_json: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(bookmarks_json) }) else {
+        reject(client, "bookmarks_update", "no bookmarks provided");
+        return;
+    };
+
+    if let Some(servers) =
+        parse_json::<ts_settings::BookmarkList>(client, "bookmarks_update", &text)
+    {
+        client.send(Command::BookmarksUpdate(Box::new(servers)));
+    }
+}
+
+/// Saves a server from what the connect screen collected.
+///
+/// `request_json` is a serialised `NewBookmark`: a name, and the address as the
+/// user typed it. The core parses it — the same parser a connection uses, so an
+/// entry that saves is an entry that connects — and normalises what it stores.
+///
+/// The answer arrives as a `command_result` named `bookmark_add` whose `data` is
+/// the list as it now stands, so the caller does not have to ask again.
+///
+/// # Safety
+///
+/// `handle` must be live, and `request_json` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_add_bookmark(
+    handle: *mut NightcordClient,
+    request_json: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(request_json) }) else {
+        reject(client, "bookmark_add", "no bookmark provided");
+        return;
+    };
+
+    if let Some(bookmark) = parse_json::<ts_settings::NewBookmark>(client, "bookmark_add", &text) {
+        client.send(Command::BookmarksAdd(Box::new(bookmark)));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
@@ -579,6 +660,19 @@ mod tests {
             let json = serde_json::to_value(mode).unwrap();
             assert_eq!(json.as_str(), Some(text), "{mode:?} serialises as {json}");
         }
+    }
+
+    #[test]
+    fn a_malformed_servers_update_is_refused_rather_than_stored() {
+        // The user's address book must survive a caller sending nonsense.
+        let client = NightcordClient::new().expect("start the core");
+        reject(&client, "bookmarks_update", "malformed request");
+
+        let batch: serde_json::Value =
+            serde_json::from_str(&client.poll_events()).expect("valid JSON");
+
+        assert_eq!(batch[0]["command"], "bookmarks_update");
+        assert_eq!(batch[0]["outcome"]["status"], "failed");
     }
 
     #[test]

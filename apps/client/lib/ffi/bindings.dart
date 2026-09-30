@@ -1,6 +1,6 @@
 // Raw `dart:ffi` declarations for the Rust core.
 //
-// Hand-written rather than generated: there are twenty-one functions and the
+// Hand-written rather than generated: there are twenty-four functions and the
 // signatures are the contract, so a generator would add a build step and a
 // dependency without removing much work.
 //
@@ -114,6 +114,15 @@ typedef _SettingsGetDart = void Function(Handle handle);
 typedef _SettingsUpdateC = Void Function(Handle handle, Pointer<Utf8> settingsJson);
 typedef _SettingsUpdateDart = void Function(Handle handle, Pointer<Utf8> settingsJson);
 
+typedef _BookmarksGetC = Void Function(Handle handle);
+typedef _BookmarksGetDart = void Function(Handle handle);
+
+typedef _BookmarksUpdateC = Void Function(Handle handle, Pointer<Utf8> bookmarksJson);
+typedef _BookmarksUpdateDart = void Function(Handle handle, Pointer<Utf8> bookmarksJson);
+
+typedef _BookmarkAddC = Void Function(Handle handle, Pointer<Utf8> requestJson);
+typedef _BookmarkAddDart = void Function(Handle handle, Pointer<Utf8> requestJson);
+
 /// The bound C functions.
 ///
 /// Built by [NativeLibrary] once the shared library is loaded.
@@ -162,6 +171,13 @@ class NightcordBindings {
       ),
       settingsUpdate = library.lookupFunction<_SettingsUpdateC, _SettingsUpdateDart>(
         'nightcord_update_settings',
+      ),
+      bookmarksGet = library.lookupFunction<_BookmarksGetC, _BookmarksGetDart>('nightcord_bookmarks'),
+      bookmarksUpdate = library.lookupFunction<_BookmarksUpdateC, _BookmarksUpdateDart>(
+        'nightcord_update_bookmarks',
+      ),
+      bookmarkAdd = library.lookupFunction<_BookmarkAddC, _BookmarkAddDart>(
+        'nightcord_add_bookmark',
       );
 
   /// Starts the core. Returns `null` on failure, which is fatal.
@@ -234,4 +250,18 @@ class NightcordBindings {
 
   /// Replaces the preferences. The answer arrives as `settings_update`.
   final void Function(Handle, Pointer<Utf8>) settingsUpdate;
+
+  /// Asks for the saved servers. The answer arrives as a `bookmarks`
+  /// `CommandResult` whose `data` is `{"version": 1, "bookmarks": [...]}`.
+  ///
+  /// The entries carry server passwords, so unlike the rest of this file the
+  /// payload is a credential. Nothing here logs it.
+  final void Function(Handle) bookmarksGet;
+
+  /// Replaces the saved servers. The answer arrives as `bookmarks_update`.
+  final void Function(Handle, Pointer<Utf8>) bookmarksUpdate;
+
+  /// Saves a server from a raw address. The answer arrives as `bookmark_add`,
+  /// carrying the list as it now stands.
+  final void Function(Handle, Pointer<Utf8>) bookmarkAdd;
 }

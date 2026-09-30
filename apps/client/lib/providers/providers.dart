@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../ffi/rust_client.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
+import '../models/bookmarks.dart';
 import '../models/settings.dart';
 import '../state/server_view.dart';
 
@@ -147,6 +148,10 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 }
 
 /// The audio devices the core last reported, by direction.
+final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(
+  BookmarksNotifier.new,
+);
+
 final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
   SettingsNotifier.new,
 );
@@ -230,6 +235,54 @@ class SettingsNotifier extends Notifier<Settings?> {
     if (data == null) return;
 
     state = Settings.fromJson(data);
+  }
+}
+
+/// The saved servers (§40).
+///
+/// Null until the core has answered once, like [settingsProvider] and for the
+/// same reason: the core owns the file, and a list drawn from anything else
+/// could disagree with what is stored.
+class BookmarksNotifier extends Notifier<BookmarkList?> {
+  @override
+  BookmarkList? build() {
+    ref.listen(eventStreamProvider, (_, next) {
+      final event = next.value;
+      if (event is CommandResultEvent) _collect(event.result);
+    });
+    return null;
+  }
+
+  /// Asks the core for the address book.
+  void refresh() => ref.read(rustClientProvider).requestBookmarks();
+
+  /// Records an edit, and sends it to the core to be stored.
+  ///
+  /// Applied locally first so the list does not flicker while the round trip
+  /// happens; a failed write is reported like any other command failure, and
+  /// the next `bookmarks` result puts the truth back.
+  void update(BookmarkList bookmarks) {
+    state = bookmarks;
+    ref.read(rustClientProvider).updateBookmarks(bookmarks);
+  }
+
+  /// Saves a server from what the connect screen collected.
+  ///
+  /// Sent rather than applied locally, unlike [update]: the core parses the
+  /// address, so it — not this class — decides what the entry becomes. The
+  /// answer carries the list as it now stands.
+  void add(NewBookmark bookmark) => ref.read(rustClientProvider).addBookmark(bookmark);
+
+  void _collect(CommandResult result) {
+    // `bookmark_add` answers with the same payload as a plain request, so the
+    // screen that just saved something gets the list without asking again.
+    if (result.command != 'bookmarks' && result.command != 'bookmark_add') return;
+    if (!result.ok) return;
+
+    final data = result.data;
+    if (data == null) return;
+
+    state = BookmarkList.fromJson(data);
   }
 }
 

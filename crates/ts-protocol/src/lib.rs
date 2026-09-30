@@ -24,7 +24,7 @@ mod voice;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
-pub use config::{Bookmark, ConnectionConfig};
+pub use config::ConnectionConfig;
 pub use dialect::Dialect;
 pub use traits::{
     AudioSink, Backend, ChannelOperations, ClientOperations, Connection, Messaging, NoVoice,

@@ -29,6 +29,9 @@
 与 `identity/`、`logs/` 并列。目录本身来自 `ts_identity::app_data_root()`
 ——全项目唯一知道「本应用的每用户目录在哪」的地方，见 `docs/architecture.md`。
 
+> 书签在**另一个文件** `bookmarks.json` 里，因为它含服务器密码而这个文件不含。
+> 见 [`docs/bookmarks.md`](bookmarks.md)。
+
 格式是**给人看的 JSON**：字段都有默认值，所以删掉一行就是重置那一项；出现未知字段
 会被忽略而不是报错（旧版本遇到新文件也能读）。保存用「临时文件 + 重命名」，
 中断的保存不会留下一个半截的文件——那会是一次静默的「设置全部丢失」。
@@ -75,9 +78,12 @@
 
 ```
 WARN ts_core::client: using default settings
-     error="the settings file is malformed: key must be a string at line 1 column 3"
+     error="C:\Users\...\Nightcord Speak\settings.json: key must be a string at line 1 column 3"
      path="C:\Users\...\Nightcord Speak\settings.json"
 ```
+
+消息里带着**文件名**，因为同一个错误类型也服务于书签文件——一句写着
+「settings file」的文案在书签出错时是指向错误的。
 
 已实测：把文件写成 `{ this is not json at all`，应用照常启动、照常连上服务器，
 文件原样不动。

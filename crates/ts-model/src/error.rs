@@ -268,9 +268,13 @@ pub enum SettingsError {
         message: String,
     },
     /// The file exists but could not be parsed.
-    #[error("the settings file is malformed: {message}")]
+    ///
+    /// The message carries the file it was wrong *in*: this error is returned
+    /// for both of the files this crate's stores own, and a message that named
+    /// one of them would be actively misleading about the other.
+    #[error("{message}")]
     Malformed {
-        /// Why it could not be parsed.
+        /// What was wrong, and in which file.
         message: String,
     },
     /// No platform data directory could be determined.

@@ -11,6 +11,7 @@ import 'package:ffi/ffi.dart';
 
 import '../models/domain.dart';
 import '../models/events.dart';
+import '../models/bookmarks.dart';
 import '../models/settings.dart';
 import 'bindings.dart';
 import 'native.dart';
@@ -106,6 +107,21 @@ class ConnectRequest {
   final String? privilegeKey;
   final String? defaultChannel;
   final ProtocolKind protocol;
+
+  /// Builds a request from a saved server, filling the gaps from the settings.
+  ///
+  /// **This is the only definition of that rule.** A bookmark wins where it has
+  /// an opinion — the address, and a nickname it was saved with — and the
+  /// settings supply the rest. Both places that connect from a bookmark go
+  /// through here, because two copies of "which one wins" is exactly how they
+  /// end up disagreeing.
+  factory ConnectRequest.fromBookmark(Bookmark bookmark, Settings settings) => ConnectRequest(
+    address: bookmark.address,
+    nickname: bookmark.nickname ?? settings.connection.nickname,
+    profile: settings.connection.profile,
+    serverPassword: bookmark.serverPassword,
+    protocol: bookmark.protocol,
+  );
 
   Map<String, dynamic> toJson() => {
     'address': address,
@@ -244,6 +260,28 @@ class RustClient {
   /// edits them. The answer arrives as `settings_update`.
   void updateSettings(Settings settings) =>
       _withJson(settings.toJson(), (json) => _bindings.settingsUpdate(_handle, json));
+
+  /// Asks for the saved servers. The answer arrives as a `bookmarks`
+  /// [CommandResult] whose `data` is the list.
+  void requestBookmarks() => _bindings.bookmarksGet(_handle);
+
+  /// Replaces the saved servers, and writes them down.
+  ///
+  /// The entries carry server passwords, so this argument — and the one that
+  /// comes back from [requestBookmarks] — is a credential. It goes no further
+  /// than the core's file.
+  void updateBookmarks(BookmarkList bookmarks) =>
+      _withJson(bookmarks.toJson(), (json) => _bindings.bookmarksUpdate(_handle, json));
+
+  /// Saves a server, from what the connect screen collected.
+  ///
+  /// The address goes over as the user typed it: the core owns the parser, so
+  /// there is one answer to what "example.com:9987" means rather than one per
+  /// front-end. The answer arrives as `bookmark_add` with the updated list.
+  void addBookmark(NewBookmark bookmark) => _withJson(
+    bookmark.toJson(),
+    (json) => _bindings.bookmarkAdd(_handle, json),
+  );
 
   /// Drains whatever is queued right now.
   ///

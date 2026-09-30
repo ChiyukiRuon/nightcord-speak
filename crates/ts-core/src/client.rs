@@ -5,7 +5,7 @@ use ts_identity::IdentityStore;
 use ts_model::{ClientError, ConnectionState, ConnectionTarget, ProtocolKind, Server, SessionId};
 use ts_protocol::{Backend, ConnectionConfig};
 use ts_session::SessionManager;
-use ts_settings::{Settings, SettingsStore};
+use ts_settings::{Bookmark, BookmarkList, BookmarkStore, NewBookmark, Settings, SettingsStore};
 
 use crate::request::ConnectRequest;
 
@@ -28,20 +28,33 @@ pub struct Client {
     settings_store: SettingsStore,
     /// The preferences in force, so a connect does not re-read the file.
     settings: Settings,
+    /// Where the address book is written when it changes.
+    bookmarks_store: BookmarkStore,
+    /// The saved servers in force. See [`Client::bookmarks`].
+    bookmarks: BookmarkList,
 }
 
 impl Client {
-    /// A client that persists identities under `identities` and preferences
-    /// under `settings`.
+    /// A client that persists identities under `identities`, preferences under
+    /// `settings` and saved servers under `bookmarks`.
     #[must_use]
-    pub fn new(identities: IdentityStore, settings_store: SettingsStore) -> Self {
-        // Unreadable settings are not a reason to refuse to start. The defaults
-        // are perfectly usable and the user's next change overwrites whatever is
-        // wrong; the file is left alone so it can be looked at. The identity
-        // store makes the opposite choice, and `docs/settings.md` says why.
+    pub fn new(
+        identities: IdentityStore,
+        settings_store: SettingsStore,
+        bookmarks_store: BookmarkStore,
+    ) -> Self {
+        // Unreadable files are not a reason to refuse to start. The defaults —
+        // and an empty address book — are perfectly usable and the user's next
+        // change overwrites whatever is wrong; the file is left alone so it can
+        // be looked at. The identity store makes the opposite choice, and
+        // `docs/settings.md` says why.
         let settings = settings_store.load().unwrap_or_else(|error| {
             tracing::warn!(%error, path = %settings_store.path().display(), "using default settings");
             Settings::default()
+        });
+        let bookmarks = bookmarks_store.load().unwrap_or_else(|error| {
+            tracing::warn!(%error, path = %bookmarks_store.path().display(), "starting with an empty address book");
+            BookmarkList::default()
         });
 
         Self {
@@ -49,6 +62,8 @@ impl Client {
             identities,
             settings_store,
             settings,
+            bookmarks_store,
+            bookmarks,
         }
     }
 
@@ -62,7 +77,8 @@ impl Client {
     pub fn with_platform_store() -> Result<Self, ClientError> {
         let identities = IdentityStore::platform_default().map_err(ClientError::Identity)?;
         let settings = SettingsStore::platform_default().map_err(ClientError::Settings)?;
-        Ok(Self::new(identities, settings))
+        let bookmarks = BookmarkStore::platform_default().map_err(ClientError::Settings)?;
+        Ok(Self::new(identities, settings, bookmarks))
     }
 
     /// The preferences in force.
@@ -86,6 +102,51 @@ impl Client {
             .map_err(ClientError::Settings)?;
         self.settings = settings;
         Ok(())
+    }
+
+    /// The saved servers (§40).
+    #[must_use]
+    pub fn bookmarks(&self) -> &BookmarkList {
+        &self.bookmarks
+    }
+
+    /// Replaces the address book and writes it down.
+    ///
+    /// Saved before it is adopted, for the same reason as
+    /// [`Client::update_settings`]: a failed write must not leave the client
+    /// believing in an address book that is not on disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Settings`] if the file cannot be written.
+    pub fn update_bookmarks(&mut self, bookmarks: BookmarkList) -> Result<(), ClientError> {
+        self.bookmarks_store
+            .save(&bookmarks)
+            .map_err(ClientError::Settings)?;
+        self.bookmarks = bookmarks;
+        Ok(())
+    }
+
+    /// Adds a saved server, or replaces the one at the same address.
+    ///
+    /// The address is parsed here rather than by the caller, so every front-end
+    /// gets the same normalisation and the same error.
+    ///
+    /// Returns the list as it now stands, so a caller does not have to ask
+    /// again — and cannot show a list that does not include what it just saved.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::InvalidAddress`] if the address cannot be parsed,
+    /// or [`ClientError::Settings`] if the file cannot be written.
+    pub fn add_bookmark(&mut self, new: NewBookmark) -> Result<BookmarkList, ClientError> {
+        let bookmark = Bookmark::from_new(new).map_err(ClientError::InvalidAddress)?;
+
+        let mut next = self.bookmarks.clone();
+        next.upsert(bookmark);
+        self.update_bookmarks(next)?;
+
+        Ok(self.bookmarks.clone())
     }
 
     /// The bus every session publishes to.

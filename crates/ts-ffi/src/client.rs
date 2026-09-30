@@ -440,6 +440,43 @@ async fn handle(
             Err(error) => events.push(FfiEvent::failed(name, None, error)),
         },
 
+        Command::BookmarksGet => match serde_json::to_value(core.bookmarks()) {
+            Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
+            Err(error) => {
+                tracing::error!(%error, "could not serialise the saved servers");
+                events.push(FfiEvent::failed(
+                    name,
+                    None,
+                    ClientError::Protocol(ProtocolError::new(error.to_string())),
+                ));
+            }
+        },
+
+        // No `apply_*` counterpart, unlike settings: nothing that is already
+        // running depends on the address book, so there is nothing to adopt.
+        Command::BookmarksUpdate(bookmarks) => match core.update_bookmarks(*bookmarks) {
+            Ok(()) => events.push(FfiEvent::ok(name, None)),
+            Err(error) => events.push(FfiEvent::failed(name, None, error)),
+        },
+
+        Command::BookmarksAdd(bookmark) => match core.add_bookmark(*bookmark) {
+            // Answered with the list rather than a bare `ok`, so the screen that
+            // just saved something can show it without a second round trip — and
+            // cannot show a list that is missing it.
+            Ok(bookmarks) => match serde_json::to_value(&bookmarks) {
+                Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
+                Err(error) => {
+                    tracing::error!(%error, "could not serialise the bookmarks");
+                    events.push(FfiEvent::failed(
+                        name,
+                        None,
+                        ClientError::Protocol(ProtocolError::new(error.to_string())),
+                    ));
+                }
+            },
+            Err(error) => events.push(FfiEvent::failed(name, None, error)),
+        },
+
         Command::Shutdown => unreachable!("filtered by the caller"),
     }
 }
@@ -816,6 +853,54 @@ mod tests {
                 "the failure should not claim a device problem: {batch}"
             );
         }
+    }
+
+    #[test]
+    fn bookmarks_survive_a_round_trip_through_the_worker() {
+        // Same reasoning as the settings round trip below, and the same care:
+        // this writes the developer's real address book, so whatever was there
+        // goes back afterwards.
+        let store = ts_settings::BookmarkStore::platform_default().expect("a data root");
+        let before = store.load().unwrap_or_default();
+
+        let client = NightcordClient::new().expect("start the core");
+
+        let mut list = ts_settings::BookmarkList::default();
+        list.upsert(
+            ts_settings::Bookmark::from_new(ts_settings::NewBookmark {
+                name: "Round Trip".into(),
+                address: "192.168.31.128".into(),
+                nickname: Some("Tester".into()),
+                server_password: Some("hunter2".into()),
+                ..ts_settings::NewBookmark::default()
+            })
+            .expect("a valid address"),
+        );
+
+        client.send(Command::BookmarksUpdate(Box::new(list)));
+        wait_for_batch(&client, "bookmarks_update", Duration::from_secs(5))
+            .expect("servers_update went unanswered");
+
+        client.send(Command::BookmarksGet);
+        let batch = wait_for_batch(&client, "\"bookmarks\"", Duration::from_secs(5))
+            .expect("servers went unanswered");
+
+        let parsed: serde_json::Value = serde_json::from_str(&batch).expect("valid JSON");
+        let data = parsed
+            .as_array()
+            .and_then(|events| events.iter().find(|e| e["command"] == "bookmarks"))
+            .map(|event| event["data"].clone())
+            .expect("a servers result");
+
+        store.save(&before).expect("restore the address book");
+
+        assert_eq!(data["bookmarks"][0]["name"], "Round Trip");
+        assert_eq!(data["bookmarks"][0]["host"], "192.168.31.128");
+        assert_eq!(
+            data["bookmarks"][0]["port"], 9987,
+            "the default port applies"
+        );
+        assert_eq!(data["bookmarks"][0]["server_password"], "hunter2");
     }
 
     #[test]

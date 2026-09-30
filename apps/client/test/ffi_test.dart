@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/ffi/native.dart';
 import 'package:nightcord_client/ffi/rust_client.dart';
+import 'package:nightcord_client/models/bookmarks.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
 
@@ -43,6 +44,17 @@ Future<Settings> readSettings(RustClient client) async {
     throw StateError('the core refused to report settings: ${result.error?.message}');
   }
   return Settings.fromJson((result.data as Map).cast<String, dynamic>());
+}
+
+/// Asks the core for its address book and parses it.
+Future<BookmarkList> readBookmarks(RustClient client) async {
+  final pending = awaitCommand(client, 'bookmarks');
+  client.requestBookmarks();
+  final result = await pending;
+  if (!result.ok) {
+    throw StateError('the core refused to report bookmarks: ${result.error?.message}');
+  }
+  return BookmarkList.fromJson((result.data as Map).cast<String, dynamic>());
 }
 
 /// Whether any file under [directory] contains [needle].
@@ -230,6 +242,69 @@ void main() {
       expect(settings.version, 1);
       expect(settings.connection.nickname, isNotEmpty);
       expect(settings.connection.profile, isNotEmpty);
+    });
+  });
+
+  group('bookmarks', () {
+    test('a server saved through the FFI comes back', () async {
+      // The whole chain for the address book, and the one thing the Dart model
+      // cannot check: that the core's parser accepts what a user types and
+      // normalises it into the stored form.
+      //
+      // This writes the developer's real address book, so whatever was there
+      // goes back afterwards.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final original = await readBookmarks(client);
+      addTearDown(() => client.updateBookmarks(original));
+
+      final pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(name: 'Round Trip', address: '192.168.31.128:9987'),
+      );
+      final result = await pending;
+
+      expect(result.ok, isTrue, reason: result.error?.message);
+
+      final saved = (await readBookmarks(client)).bookmarks
+          .where((b) => b.name == 'Round Trip')
+          .toList();
+      expect(saved, hasLength(1));
+      expect(saved.single.host, '192.168.31.128');
+      expect(saved.single.port, 9987);
+    });
+
+    test('an address the core cannot parse is refused rather than stored', () async {
+      // Pasting a browser URL is the mistake this catches. The host itself is
+      // deliberately not validated — DNS is the authority on that, and guessing
+      // at hostname syntax rejects addresses that work. The scheme is another
+      // matter: `http://` is never going to reach a TeamSpeak server.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final before = await readBookmarks(client);
+
+      final pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(name: 'Bad', address: 'https://example.com/server'),
+      );
+      final result = await pending;
+
+      expect(result.ok, isFalse);
+      expect(result.error?.message, contains('scheme'));
+
+      // And nothing was written. Compared as JSON because these are value
+      // objects without an `==`, and the point is that the stored bytes match.
+      expect((await readBookmarks(client)).toJson(), before.toJson());
+    });
+
+    test('the core answers with bookmarks this build can read', () async {
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final bookmarks = await readBookmarks(client);
+      expect(bookmarks.version, 1);
     });
   });
 

@@ -1,6 +1,5 @@
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
 use ts_identity::Identity;
 use ts_model::{ConnectionTarget, ReconnectPolicy};
 
@@ -109,22 +108,6 @@ impl fmt::Debug for Redacted {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(if self.0 { "<set>" } else { "<unset>" })
     }
-}
-
-/// A server saved in the address book (§40).
-///
-/// Deliberately not the same thing as an account: it records where to connect
-/// and what to call yourself, and holds no credentials.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Bookmark {
-    /// What the user calls this entry.
-    pub name: String,
-    /// `host` or `host:port`.
-    pub host: String,
-    /// Port, defaulting to [`ts_model::DEFAULT_PORT`].
-    pub port: u16,
-    /// Nickname to use when connecting through this bookmark.
-    pub nickname: String,
 }
 
 #[cfg(test)]

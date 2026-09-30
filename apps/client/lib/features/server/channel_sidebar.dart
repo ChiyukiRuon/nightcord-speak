@@ -5,7 +5,10 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../ffi/rust_client.dart';
+import '../../models/bookmarks.dart';
 import '../../models/domain.dart';
+import '../../models/settings.dart';
 import '../../models/events.dart';
 import '../../providers/providers.dart';
 import '../../state/server_view.dart';
@@ -169,6 +172,9 @@ class _ServerHeader extends ConsumerWidget {
     WidgetRef ref,
     Map<int, ServerView> sessions,
   ) {
+    final saved = ref.read(bookmarksProvider)?.bookmarks ?? const <Bookmark>[];
+    final settings = ref.read(settingsProvider) ?? const Settings();
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.sidebar,
@@ -190,6 +196,28 @@ class _ServerHeader extends ConsumerWidget {
                   Navigator.of(sheetContext).pop();
                 },
               ),
+            if (saved.isNotEmpty) ...[
+              const Divider(height: 1),
+              const _SheetHeading('已保存'),
+              for (final bookmark in saved)
+                ListTile(
+                  leading: const Icon(Icons.bookmark_outline, size: 20),
+                  title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    bookmark.address,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                  // Connects straight away here, unlike the connect screen:
+                  // this sheet is for "open another one", and the details of a
+                  // server already saved are not what the user came to change.
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    ref
+                        .read(rustClientProvider)
+                        .connect(ConnectRequest.fromBookmark(bookmark, settings));
+                  },
+                ),
+            ],
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.add, size: 20),
@@ -396,6 +424,24 @@ class _StateBadge extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.only(left: 5),
         child: Icon(icon, size: 14, color: colour),
+      ),
+    );
+  }
+}
+
+/// A section label inside the switcher sheet.
+class _SheetHeading extends StatelessWidget {
+  const _SheetHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text, style: Theme.of(context).textTheme.titleSmall),
       ),
     );
   }

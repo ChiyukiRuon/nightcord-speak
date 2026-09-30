@@ -91,7 +91,7 @@ macOS / Android / iOS。
 | `ts-session`           | `Session` / `SessionManager`          | 知道具体协议                    |
 | `ts-identity`          | 身份持久化、应用数据目录              | 碰密码学（由 backend 提供生成） |
 | `ts-logging`           | 进程级 subscriber：文件、轮转、filter | 自己找目录（由调用方传入）      |
-| `ts-settings`          | 用户偏好：结构、存储、默认值          | 决定谁读它（由 core 应用）      |
+| `ts-settings`          | 用户偏好与已存服务器：结构、存储      | 决定谁读它（由 core 应用）      |
 | `ts-audio`             | 设备、采集、编码、播放、VAD           | 依赖协议库                      |
 | `ts-protocol-tsclient` | **唯一**允许知道 `tsclientlib` 的地方 | 出现具体协议判断                |
 | `ts-protocol-ts3/ts6`  | 声明协议、承载各自扩展                | 复制适配层                      |
@@ -180,8 +180,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 281 个
-cd apps/client && flutter analyze && flutter test                  # 57 个
+cargo test  --workspace --all-features                             # 295 个
+cd apps/client && flutter analyze && flutter test                  # 72 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -260,7 +260,7 @@ cd apps/client && flutter analyze && flutter test                  # 57 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 logging / 重连 / 设置界面 已完成 |
+| M0.6     | Production Client               | 🚧 logging / 重连 / 设置 / 书签 已完成 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -277,9 +277,9 @@ cd apps/client && flutter analyze && flutter test                  # 57 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **15,172 行**，13 crates + CLI |
-| Dart | **5,619 行**，26 文件          |
-| 测试 | **281 Rust + 57 Dart**，全绿   |
+| Rust | **15,946 行**，13 crates + CLI |
+| Dart | **6,403 行**，28 文件          |
+| 测试 | **295 Rust + 72 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -351,6 +351,19 @@ cd apps/client && flutter analyze && flutter test                  # 57 个
 | 部分/未知字段 | ✅ 删掉一行只重置那一项；未知字段被忽略而不是报错 |
 | 策略真的进了配置 | ✅ 两个测试：`Some(0)` 一次都不重试；没动过的配置照旧重试 |
 
+**书签 / 服务器列表（M0.6 第四项）**
+
+| 项 | 结果 |
+| --- | --- |
+| 模型搬家 + 改名 | ✅ `ts-protocol` 里那份死代码已删；`Server` 撞名的两处（Dart 与 `ts-model`）一跑 analyze 就暴露，改回 `Bookmark` |
+| 文件与设置分开 | ✅ `bookmarks.json` 与 `settings.json` 并列，互不干扰 |
+| 跨进程往返 | ✅ Dart 存入 → core 解析地址并归一化 → 文件 → 读回一致（含收尾恢复） |
+| 地址归一化 | ✅ `ts3://example.com:9999` → `host`+`port`；裸地址取默认端口 9987 |
+| 拒绝连不上的地址 | ✅ `https://example.com/server` 被拒，错误里点明 scheme，**且什么都没写** |
+| 密码不进 `Debug` | ✅ 单测盯着（`<set>` / `<unset>`） |
+| 坏文件不阻塞启动 | ✅ 实测：一条 `warn`、**消息里带文件名**、文件原样保留、照常连上服务器 |
+| 无 `.tmp` 残留 | ✅ 两个 store 各有一条回归测试（共用同一份原子写） |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -401,7 +414,9 @@ cd apps/client && flutter analyze && flutter test                  # 57 个
 - [x] **设置界面** —— `ts-settings` + `settings.json`，音频（设备/传输方式/灵敏度）
       与连接（昵称/身份档/重连次数）两节真的存下来了。见 [`docs/settings.md`](docs/settings.md)。
       设备管理、通知、快捷键、主题、本地化仍是 §70 里的独立项。
-- [ ] 书签 / 服务器列表
+- [x] **书签 / 服务器列表** —— `bookmarks.json` + 连接页与切换器两处入口。见
+      [`docs/bookmarks.md`](docs/bookmarks.md)。模型从 `ts-protocol` 搬到了 `ts-settings`
+      （分层），并改名为 `Bookmark`（`Server` 在两个语言里都已名花有主）。
 - [ ] 通知
 - [ ] 设备管理（设置对话框里已有雏形）
 - [ ] 快捷键（目前 PTT 用 `Focus`，非全局）
@@ -449,6 +464,7 @@ cd apps/client && flutter analyze && flutter test                  # 57 个
 | `docs/logging.md`          | 日志：位置、轮转、环境变量、「UI 可见即落日志」的不变式     |
 | `docs/reconnect.md`        | 重连：职责边界、fork 补丁、退避表、为什么首连失败不重试     |
 | `docs/settings.md`         | 设置：文件格式、谁读它、损坏文件为什么与身份文件处理不同     |
+| `docs/bookmarks.md`        | 书签：文件格式、明文密码这件事、地址归一化、两处入口的分工   |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

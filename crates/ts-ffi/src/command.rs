@@ -6,7 +6,7 @@
 
 use ts_core::ConnectRequest;
 use ts_model::{ChannelId, ClientId, MessageTarget, SessionId};
-use ts_settings::Settings;
+use ts_settings::{BookmarkList, NewBookmark, Settings};
 
 use crate::audio::AudioDirection;
 
@@ -73,6 +73,15 @@ pub(crate) enum Command {
     /// to a running engine.
     SettingsUpdate(Box<Settings>),
 
+    /// Report the saved servers.
+    BookmarksGet,
+
+    /// Replace them, and write them down.
+    BookmarksUpdate(Box<BookmarkList>),
+
+    /// Save a server from what the connect screen collected.
+    BookmarksAdd(Box<NewBookmark>),
+
     /// Stop the worker.
     Shutdown,
 }
@@ -98,6 +107,9 @@ impl Command {
             Self::VoicePushToTalk { .. } => "voice_push_to_talk",
             Self::SettingsGet => "settings",
             Self::SettingsUpdate(_) => "settings_update",
+            Self::BookmarksGet => "bookmarks",
+            Self::BookmarksUpdate(_) => "bookmarks_update",
+            Self::BookmarksAdd(_) => "bookmark_add",
             Self::Shutdown => "shutdown",
         }
     }

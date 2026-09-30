@@ -22,7 +22,7 @@ use ts_events::{ClientEvent, SessionEvent};
 use ts_identity::IdentityStore;
 use ts_model::{ChannelId, MessageTarget, ProtocolKind, SessionId, VoiceActivationSettings};
 use ts_protocol::AudioSink;
-use ts_settings::SettingsStore;
+use ts_settings::{BookmarkStore, SettingsStore};
 
 use crate::audio::AudioReport;
 use crate::view::View;
@@ -228,8 +228,13 @@ async fn run() -> Result<()> {
         None => SettingsStore::platform_default()
             .context("could not find a place to store settings; pass --identity-dir")?,
     };
+    let bookmarks = match &args.identity_dir {
+        Some(dir) => BookmarkStore::new(dir),
+        None => BookmarkStore::platform_default()
+            .context("could not find a place to store saved servers; pass --identity-dir")?,
+    };
 
-    let mut client = Client::new(identities, settings);
+    let mut client = Client::new(identities, settings, bookmarks);
 
     // Always installed, even without `--voice`: it costs nothing and makes the
     // "did any audio arrive" question answerable on any run.

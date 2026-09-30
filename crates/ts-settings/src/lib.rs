@@ -33,8 +33,12 @@
 //! refusing to start over a preference file turns a cosmetic problem into a
 //! fatal one.
 
-use std::path::{Path, PathBuf};
-use std::{fs, io};
+mod bookmarks;
+mod store;
+
+pub use bookmarks::{Bookmark, BookmarkList, BookmarkStore, NewBookmark};
+
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use ts_identity::app_data_root;
@@ -200,24 +204,16 @@ impl SettingsStore {
     /// The caller decides whether to carry on with defaults; this does not
     /// pretend the file was absent, because then nobody could say so.
     pub fn load(&self) -> Result<Settings, SettingsError> {
-        let bytes = match fs::read(self.path()) {
-            Ok(bytes) => bytes,
-            // No file is the first run, not a failure.
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok(Settings::default());
-            }
-            Err(error) => return Err(io_error(error)),
+        // No file is the first run, not a failure.
+        let Some(stored) = crate::store::read_json::<Settings>(&self.path())? else {
+            return Ok(Settings::default());
         };
-
-        let stored: Settings =
-            serde_json::from_slice(&bytes).map_err(|error| SettingsError::Malformed {
-                message: error.to_string(),
-            })?;
 
         if stored.version != FILE_VERSION {
             return Err(SettingsError::Malformed {
                 message: format!(
-                    "unsupported settings file version {}, expected {FILE_VERSION}",
+                    "{}: unsupported version {}, expected {FILE_VERSION}",
+                    self.path().display(),
                     stored.version
                 ),
             });
@@ -233,24 +229,7 @@ impl SettingsStore {
     /// Returns [`SettingsError::Io`] if the directory cannot be created or the
     /// file cannot be written.
     pub fn save(&self, settings: &Settings) -> Result<(), SettingsError> {
-        fs::create_dir_all(&self.dir).map_err(io_error)?;
-
-        let json =
-            serde_json::to_vec_pretty(settings).map_err(|error| SettingsError::Malformed {
-                message: error.to_string(),
-            })?;
-
-        // Written beside the target and renamed, so an interrupted save cannot
-        // leave a truncated file where a working one used to be. The settings
-        // are re-read on the next start, so that would otherwise be a silent
-        // reset to defaults.
-        let path = self.path();
-        let temp = path.with_extension("json.tmp");
-        fs::write(&temp, &json).map_err(io_error)?;
-        restrict_permissions(&temp)?;
-        fs::rename(&temp, &path).map_err(io_error)?;
-
-        Ok(())
+        crate::store::write_json(&self.path(), settings)
     }
 }
 
@@ -268,31 +247,10 @@ fn default_profile() -> String {
     "default".to_string()
 }
 
-fn io_error(source: io::Error) -> SettingsError {
-    SettingsError::Io {
-        message: source.to_string(),
-    }
-}
-
-/// Restricts the file to its owner.
-///
-/// Nothing in here is a secret today — a nickname and two device ids. It is
-/// restricted anyway because the file sits in the same directory as a private
-/// key, where loosening the habit later is how the key ends up world-readable.
-#[cfg(unix)]
-fn restrict_permissions(path: &Path) -> Result<(), SettingsError> {
-    use std::os::unix::fs::PermissionsExt as _;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(io_error)
-}
-
-/// No-op on Windows, where files inherit the profile's user-only ACL.
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) -> Result<(), SettingsError> {
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     /// A directory that cleans itself up, so tests can run in parallel.

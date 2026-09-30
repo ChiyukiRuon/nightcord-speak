@@ -123,7 +123,9 @@ fn default_profile() -> String {
 }
 
 fn default_protocol() -> ProtocolKind {
-    ProtocolKind::Ts3
+    // One definition, in the type itself: a request, a saved server and a
+    // hand-written file all mean the same thing by "no protocol given".
+    ProtocolKind::default()
 }
 
 #[cfg(test)]
