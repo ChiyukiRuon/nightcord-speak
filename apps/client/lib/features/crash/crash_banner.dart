@@ -3,10 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_banner.dart';
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/crash.dart';
 import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 import '../../util/reveal.dart';
 
 /// Says the previous run died without a clean exit, and offers the report.
@@ -36,60 +37,38 @@ class CrashBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return Material(
-      color: AppColors.header,
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return AppBanner(
+      icon: Icons.report_outlined,
+      // §2.6's warning, not §2.7's presence-idle. The two are a similar yellow
+      // and the old code used the presence one, but this is a state of the
+      // *application*, not of a person.
+      iconColour: tokens.warning,
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: tokens.primary),
+          onPressed: () => _generate(context, ref),
+          child: Text(l10n.crashGenerateReport),
         ),
-        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-        child: Row(
-          children: [
-            const Icon(Icons.report_outlined, size: 16, color: AppColors.idle),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.crashBannerTitle,
-                    style: const TextStyle(fontSize: 12, color: AppColors.idle),
-                  ),
-                  if (status.notes > 0)
-                    Text(
-                      l10n.crashBannerNotes(status.notes),
-                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                    ),
-                ],
-              ),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.accent,
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: () => _generate(context, ref),
-              child: Text(l10n.crashGenerateReport),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: () => revealDirectory(status.directory),
-              child: Text(l10n.crashOpenFolder),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: onDismissed,
-              child: Text(l10n.crashDismiss),
-            ),
-          ],
+        TextButton(
+          onPressed: () => revealDirectory(status.directory),
+          child: Text(l10n.crashOpenFolder),
         ),
+        TextButton(onPressed: onDismissed, child: Text(l10n.crashDismiss)),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(l10n.crashBannerTitle, style: text.bodySmall?.copyWith(color: tokens.warning)),
+          if (status.notes > 0)
+            Text(
+              l10n.crashBannerNotes(status.notes),
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+            ),
+        ],
       ),
     );
   }

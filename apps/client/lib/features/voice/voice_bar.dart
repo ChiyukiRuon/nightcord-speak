@@ -3,11 +3,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 import '../settings/settings_dialog.dart';
+
+/// How tall the bar is.
+///
+/// Unchanged from before the design system: §20's desktop diagram has an
+/// "optional status / input" band and gives no height for it, and 56 fits a
+/// 36px control (§26) with room around it.
+///
+/// Public because anything floating above the bottom of the window has to clear
+/// it — see `notice_stack.dart`.
+const double voiceBarHeight = 56;
 
 /// Who we are, and the buttons that control our microphone and speakers.
 class VoiceBar extends ConsumerWidget {
@@ -20,32 +30,40 @@ class VoiceBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
     final view = ref.watch(sessionsProvider)[session];
     final voice = view?.voice ?? const VoiceState();
     final name = view?.ownClient?.name ?? l10n.connectionStateDisconnected;
     final online = view?.isConnected ?? false;
 
     return Container(
-      height: 56,
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+      height: voiceBarHeight,
+      decoration: BoxDecoration(
+        // §35: a secondary area, the same step as the sidebar this bar sits at
+        // the bottom of.
+        color: tokens.backgroundSecondary,
+        border: Border(top: BorderSide(color: tokens.borderSubtle)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.space3,
+        vertical: tokens.space2,
+      ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               name,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              // §5.2's `bodyMedium` — 14/500, the level it names for emphasised
+              // body text. One's own name in a control bar is exactly that.
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
           _VoiceButton(
             icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
             tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
             active: voice.inputMuted,
-            colour: AppColors.danger,
+            colour: tokens.error,
             enabled: online,
             // The shortcut system calls the same method, so there is one
             // definition of what muting does.
@@ -55,7 +73,7 @@ class VoiceBar extends ConsumerWidget {
             icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
             tooltip: voice.outputMuted ? l10n.voiceUndeafen : l10n.voiceDeafen,
             active: voice.outputMuted,
-            colour: AppColors.danger,
+            colour: tokens.error,
             enabled: online,
             onPressed: () => ref.read(sessionsProvider.notifier).toggleOutputMuted(session),
           ),
@@ -77,6 +95,9 @@ class VoiceBar extends ConsumerWidget {
 }
 
 /// One round control in the voice bar.
+///
+/// Size, icon size and hover all come from the theme's `iconButtonTheme` (§26),
+/// so this only decides the *tint* — which is the part that carries meaning.
 class _VoiceButton extends StatelessWidget {
   const _VoiceButton({
     required this.icon,
@@ -96,19 +117,16 @@ class _VoiceButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = DesignTokens.of(context);
     final tint = !enabled
-        ? AppColors.textMuted
+        ? tokens.textDisabled
         : active
-        ? (colour ?? AppColors.accent)
-        : AppColors.textSecondary;
+        ? (colour ?? tokens.primary)
+        : tokens.textSecondary;
 
     return IconButton(
       onPressed: enabled ? onPressed : null,
       tooltip: tooltip,
-      iconSize: 19,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-      padding: const EdgeInsets.all(6),
       icon: Icon(icon, color: tint),
     );
   }

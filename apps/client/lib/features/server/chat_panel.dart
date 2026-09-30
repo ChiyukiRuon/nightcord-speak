@@ -5,12 +5,12 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_avatar.dart';
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../state/server_view.dart';
-import '../../theme/app_theme.dart';
-import '../../widgets/avatar.dart';
 
 /// The right-hand column of the window.
 class ChatPanel extends ConsumerStatefulWidget {
@@ -42,6 +42,8 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = DesignTokens.of(context);
+
     // `shownConversation`, not `activeConversation`: a private conversation the
     // user opened stays open even as the channel they are in changes underneath.
     final conversation = _view.shownConversation;
@@ -58,13 +60,13 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _ChatHeader(view: _view),
-        const Divider(height: 1, color: AppColors.divider),
+        Divider(height: 1, color: tokens.borderSubtle),
         Expanded(
           child: messages.isEmpty
               ? const _EmptyChannel()
               : ListView.builder(
                   controller: _scroll,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: tokens.space4),
                   itemCount: messages.length,
                   itemBuilder: (_, index) => _MessageTile(message: messages[index]),
                 ),
@@ -134,8 +136,9 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     if (!_scroll.hasClients) return;
     _scroll.animateTo(
       _scroll.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
+      // §27's panel timing, and §27's curve for something already on screen.
+      duration: AppMotion.panel,
+      curve: AppMotion.enter,
     );
   }
 }
@@ -168,47 +171,55 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final channel = view.ownChannel;
     final other = _privateWith(view, l10n);
 
     return Container(
-      color: AppColors.header,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      // §35: the band above the content is a secondary area.
+      color: tokens.backgroundSecondary,
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.space5,
+        vertical: tokens.space3,
+      ),
       child: Row(
         children: [
           if (other != null)
             IconButton(
-              icon: const Icon(Icons.arrow_back, size: 18),
+              icon: const Icon(Icons.arrow_back),
               tooltip: l10n.chatBackToChannel,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               onPressed: view.closeConversation,
             )
           else
-            const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
-          const SizedBox(width: 10),
+            Icon(Icons.chat_bubble_outline, color: tokens.textSecondary),
+          SizedBox(width: tokens.space2),
           Text(
             other?.name ?? channel?.name ?? l10n.chatNotInChannel,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            // §5.2's `title`: this is the heading of the whole content area,
+            // which is what the level is for.
+            style: text.titleLarge,
           ),
           if (other != null)
             Padding(
-              padding: const EdgeInsets.only(left: 8),
+              padding: EdgeInsets.only(left: tokens.space2),
               child: Text(
                 l10n.chatPrivateLabel,
-                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                style: text.bodySmall?.copyWith(color: tokens.textTertiary),
               ),
             ),
           if (channel?.topic != null && channel!.topic!.isNotEmpty) ...[
-            const SizedBox(width: 12),
-            const SizedBox(height: 16, child: VerticalDivider(width: 1)),
-            const SizedBox(width: 12),
+            SizedBox(width: tokens.space3),
+            SizedBox(
+              height: 16,
+              child: VerticalDivider(width: 1, color: tokens.borderSubtle),
+            ),
+            SizedBox(width: tokens.space3),
             Expanded(
               child: Text(
                 channel.topic!,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: text.bodySmall?.copyWith(color: tokens.textSecondary),
               ),
             ),
           ],
@@ -216,7 +227,7 @@ class _ChatHeader extends StatelessWidget {
           if (view.info != null)
             Text(
               l10n.chatOnlineCount(view.info!.clientsOnline),
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
             ),
         ],
       ),
@@ -231,15 +242,21 @@ class _EmptyChannel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = DesignTokens.of(context);
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.forum_outlined, size: 40, color: AppColors.textMuted),
-          const SizedBox(height: 12),
+          // §9's page-level size. The icon here was 40, which is not on that
+          // scale.
+          Icon(Icons.forum_outlined, size: 32, color: tokens.textDisabled),
+          SizedBox(height: tokens.space3),
           Text(
             AppLocalizations.of(context).chatEmpty,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
         ],
       ),
@@ -256,13 +273,25 @@ class _MessageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      // §13: 8px above and below gives consecutive messages 16px between them,
+      // which is the low end of the 16–20 it asks for. It does not distinguish
+      // "same sender" from "different sender" — the view does not keep that
+      // grouping, and inventing it here would mean guessing at data the core
+      // never sent.
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.space5,
+        vertical: tokens.space2,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Avatar(name: message.senderName, size: 38),
-          const SizedBox(width: 14),
+          // §14's chat size.
+          Avatar(name: message.senderName, size: 40),
+          SizedBox(width: tokens.space3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -275,30 +304,36 @@ class _MessageTile extends StatelessWidget {
                       child: Text(
                         message.senderName,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        // §13: username 14px, `textPrimary`.
+                        style: text.titleMedium?.copyWith(color: tokens.textPrimary),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: tokens.space2),
                     Text(
                       formatTimestamp(l10n, message.sentAt),
-                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                      // §13: time 12px, `textTertiary` — the one line of §13
+                      // that names both a size and a colour, and this matches
+                      // both.
+                      style: text.bodySmall?.copyWith(color: tokens.textTertiary),
                     ),
                     if (message.isPrivate) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.lock_outline, size: 12, color: AppColors.idle),
+                      SizedBox(width: tokens.space2),
+                      Icon(Icons.lock_outline, size: 16, color: tokens.idle),
                     ],
                   ],
                 ),
                 if (message.content.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                  SizedBox(height: tokens.space1),
                   SelectableText(
                     message.content,
-                    style: const TextStyle(fontSize: 14, height: 1.5),
+                    // §13: body 14px `textPrimary`. The line height comes from
+                    // the scale rather than being set here.
+                    style: text.bodyMedium?.copyWith(color: tokens.textPrimary),
                   ),
                 ],
                 for (final attachment in message.attachments)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
+                    padding: EdgeInsets.only(top: tokens.space2),
                     child: _AttachmentCard(attachment: attachment),
                   ),
               ],
@@ -324,15 +359,18 @@ class _AttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final available = attachment.isAvailable;
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
       decoration: BoxDecoration(
-        color: AppColors.composer,
-        borderRadius: BorderRadius.circular(8),
+        // §15: an attachment card is `#686080`, which is `surface2`.
+        color: tokens.surface2,
+        borderRadius: AppRadius.mdAll,
       ),
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(tokens.space3),
       child: Row(
         children: [
           Container(
@@ -340,19 +378,21 @@ class _AttachmentCard extends StatelessWidget {
             height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.chatBackground,
-              borderRadius: BorderRadius.circular(5),
+              color: tokens.backgroundPrimary,
+              // §7's `radiusXS` — "badges and small controls".
+              borderRadius: AppRadius.xsAll,
             ),
             child: Text(
               attachment.kindLabel,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+              // Was 10px. The floor the font specification sets is 12, and a
+              // three-letter label fits a 40px tile at 12.
+              style: text.bodySmall?.copyWith(
+                fontWeight: AppTypography.bold,
+                color: tokens.textRow,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: tokens.space3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,12 +400,14 @@ class _AttachmentCard extends StatelessWidget {
                 Text(
                   attachment.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  // §15: file name 14px `textPrimary`.
+                  style: text.titleMedium?.copyWith(color: tokens.textPrimary),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: tokens.space1 / 2),
                 Text(
                   '${attachment.readableSize}${attachment.mimeType == null ? '' : ' · ${attachment.mimeType}'}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  // §15: metadata 12px `#C0BBCD`, which is `rowText`.
+                  style: text.bodySmall?.copyWith(color: tokens.textRow),
                 ),
               ],
             ),
@@ -373,8 +415,7 @@ class _AttachmentCard extends StatelessWidget {
           IconButton(
             onPressed: available ? null : null,
             tooltip: available ? l10n.chatDownload : l10n.chatFileTransferLater,
-            icon: const Icon(Icons.download, size: 20),
-            color: AppColors.textSecondary,
+            icon: const Icon(Icons.download),
           ),
         ],
       ),
@@ -400,8 +441,15 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = DesignTokens.of(context);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+      padding: EdgeInsets.fromLTRB(
+        tokens.space5,
+        tokens.space2,
+        tokens.space5,
+        tokens.space4,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -413,19 +461,21 @@ class _Composer extends StatelessWidget {
               minLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
+              // §11's colours and radius come from the theme's
+              // `inputDecorationTheme`; only the hint is this widget's.
               decoration: InputDecoration(
                 hintText: hint,
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.alternate_email, size: 18, color: AppColors.textMuted),
-                    SizedBox(width: 14),
-                    Icon(Icons.text_fields, size: 18, color: AppColors.textMuted),
-                    SizedBox(width: 14),
-                    Icon(Icons.tag_faces_outlined, size: 18, color: AppColors.textMuted),
-                    SizedBox(width: 14),
-                    Icon(Icons.attach_file, size: 18, color: AppColors.textMuted),
-                    SizedBox(width: 12),
+                  children: [
+                    Icon(Icons.alternate_email, color: tokens.textTertiary),
+                    SizedBox(width: tokens.space3),
+                    Icon(Icons.text_fields, color: tokens.textTertiary),
+                    SizedBox(width: tokens.space3),
+                    Icon(Icons.tag_faces_outlined, color: tokens.textTertiary),
+                    SizedBox(width: tokens.space3),
+                    Icon(Icons.attach_file, color: tokens.textTertiary),
+                    SizedBox(width: tokens.space3),
                   ],
                 ),
               ),

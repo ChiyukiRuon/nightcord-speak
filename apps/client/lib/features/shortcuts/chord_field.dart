@@ -9,9 +9,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/shortcuts.dart';
-import '../../theme/app_theme.dart';
 
 /// Shows a shortcut and lets the user replace it.
 ///
@@ -140,43 +140,52 @@ class _ChordFieldState extends State<ChordField> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final shown = _recording ? _pending : widget.chord;
-    final text = _recording
+    final label = _recording
         ? (shown?.format() ?? l10n.chordFieldIdle)
         : (shown?.format() ?? l10n.chordFieldUnset);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: tokens.space2),
       child: Row(
         children: [
-          Expanded(
-            child: Text(widget.label, style: const TextStyle(fontSize: 13)),
-          ),
+          Expanded(child: Text(widget.label, style: text.labelLarge)),
           Focus(
             focusNode: _focus,
             onKeyEvent: (_, event) => _onKey(event),
             child: InkWell(
               onTap: _recording ? _stopRecording : _startRecording,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppRadius.smAll,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: EdgeInsets.symmetric(
+                  horizontal: tokens.space3,
+                  vertical: tokens.space2,
+                ),
                 constraints: const BoxConstraints(minWidth: 170),
                 decoration: BoxDecoration(
-                  color: AppColors.composer,
-                  borderRadius: BorderRadius.circular(6),
+                  // §11's input colours: this is a field, even though it takes
+                  // keystrokes rather than characters.
+                  color: tokens.backgroundSecondary,
+                  borderRadius: AppRadius.smAll,
                   border: Border.all(
-                    color: _recording ? AppColors.accent : Colors.transparent,
+                    // §11: the border turns primary on focus, which is exactly
+                    // what recording is.
+                    color: _recording ? tokens.primary : tokens.borderSubtle,
                   ),
                 ),
                 child: Text(
-                  text,
+                  label,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'monospace',
+                  style: text.bodySmall?.copyWith(
+                    // A key combination lines up better in a fixed pitch, like
+                    // the log paths. `AppTypography` owns the family name
+                    // (`docs/UI字体规范.md` §7).
+                    fontFamily: AppTypography.monospaceFamily,
                     color: shown == null || _recording
-                        ? AppColors.textMuted
-                        : AppColors.textPrimary,
+                        ? tokens.textTertiary
+                        : tokens.textPrimary,
                   ),
                 ),
               ),

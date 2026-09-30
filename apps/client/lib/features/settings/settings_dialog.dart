@@ -14,17 +14,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_section_title.dart';
+import '../../design/theme/app_theme.dart';
 import '../../ffi/rust_client.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/labels.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
-import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 import '../../models/shortcuts.dart';
 import '../../models/voice_status.dart';
-import '../shortcuts/chord_field.dart';
+import '../../providers/providers.dart';
 import '../../util/reveal.dart';
+import '../shortcuts/chord_field.dart';
+
+/// How wide the dialog is.
+///
+/// A layout constant. §17 describes a dialog's colours, radius, shadow and
+/// overlay, not its size, and this is the width the settings have always been.
+const double _dialogWidth = 480;
 
 /// Settings, opened from the voice bar.
 class SettingsDialog extends ConsumerStatefulWidget {
@@ -109,6 +116,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
     final settings = ref.watch(settingsProvider);
 
     // Nothing to edit until the core answers. Drawing the form first would seed
@@ -117,15 +125,16 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     // correct itself afterwards.
     if (settings == null) {
       return AlertDialog(
-        backgroundColor: AppColors.sidebar,
         title: Text(l10n.settingsTitle),
         content: SizedBox(
-          width: 480,
+          width: _dialogWidth,
           height: 80,
           child: Center(
             child: Text(
               l10n.settingsLoading,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
         ),
@@ -136,17 +145,19 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     final view = ref.watch(sessionsProvider)[widget.session];
     final connected = view?.isConnected ?? false;
 
+    // Background, border, radius, shadow and the overlay colour all come from
+    // the theme's `dialogTheme` (§17). This used to name the sidebar colour,
+    // which was neither the modal colour nor one this design system has.
     return AlertDialog(
-      backgroundColor: AppColors.sidebar,
       title: Text(l10n.settingsTitle),
       content: SizedBox(
-        width: 480,
+        width: _dialogWidth,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SectionTitle(l10n.settingsAudioSection),
+              _SectionHeading(l10n.settingsAudioSection),
               _DeviceDropdown(
                 label: l10n.settingsMicrophoneLabel,
                 value: settings.audio.inputDevice,
@@ -156,7 +167,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   settings.audio.copyWith(inputDevice: id, clearInputDevice: id == null),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               _DeviceDropdown(
                 label: l10n.settingsSpeakerLabel,
                 value: settings.audio.outputDevice,
@@ -166,7 +177,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   settings.audio.copyWith(outputDevice: id, clearOutputDevice: id == null),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               DropdownButtonFormField<VoiceActivationMode>(
                 initialValue: settings.audio.mode,
                 isExpanded: true,
@@ -180,9 +191,9 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   _audio(settings, settings.audio.copyWith(mode: mode));
                 },
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               _DeviceInUse(status: ref.watch(voiceStatusProvider)),
-              const SizedBox(height: 16),
+              SizedBox(height: tokens.space4),
               _SensitivitySlider(
                 value: _dragging ?? settings.audio.activation.sensitivity,
                 enabled: settings.audio.mode == VoiceActivationMode.voiceActivation,
@@ -197,32 +208,31 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   );
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: tokens.space2),
               _LevelMeter(
                 status: ref.watch(voiceStatusProvider),
                 threshold: settings.audio.activation.sensitivity,
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               // Said out loud because a device cannot be swapped under a running
               // stream: the core would have to tear it down and reopen it, which
               // is worse than waiting when someone is mid-sentence.
               Text(
-                connected
-                    ? l10n.settingsDeviceChangeNote
-                    : l10n.settingsConnectFirst,
-                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                connected ? l10n.settingsDeviceChangeNote : l10n.settingsConnectFirst,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               Row(
                 children: [
                   FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
                     onPressed: connected ? _toggleMicTest : null,
                     child: Text(
                       _testing ? l10n.settingsStopTest : l10n.settingsTestMicrophone,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: tokens.space3),
                   // Always available, engine or not: with no engine the core
                   // opens the output device on its own for the length of the
                   // tone. Gating this on the engine made the speaker check
@@ -231,21 +241,21 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   OutlinedButton.icon(
                     onPressed: () =>
                         ref.read(voiceStatusProvider.notifier).testOutput(),
-                    icon: const Icon(Icons.volume_up_outlined, size: 18),
+                    icon: const Icon(Icons.volume_up_outlined),
                     label: Text(l10n.settingsTestSpeaker),
                   ),
                 ],
               ),
 
-              const Divider(height: 32),
-              _SectionTitle(l10n.settingsConnectionSection),
+              const _SectionDivider(),
+              _SectionHeading(l10n.settingsConnectionSection),
               TextField(
                 controller: _nickname,
                 decoration: InputDecoration(labelText: l10n.settingsDefaultNickname),
                 onSubmitted: (_) => _commitText(settings),
                 onTapOutside: (_) => _commitText(settings),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               TextField(
                 controller: _profile,
                 decoration: InputDecoration(
@@ -255,7 +265,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 onSubmitted: (_) => _commitText(settings),
                 onTapOutside: (_) => _commitText(settings),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: tokens.space3),
               DropdownButtonFormField<int?>(
                 initialValue: settings.connection.maxReconnectAttempts,
                 isExpanded: true,
@@ -275,8 +285,8 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 ),
               ),
 
-              const Divider(height: 32),
-              _SectionTitle(l10n.settingsNotificationsSection),
+              const _SectionDivider(),
+              _SectionHeading(l10n.settingsNotificationsSection),
               _NotificationSection(
                 settings: settings.notifications,
                 onChanged: (notifications) => ref
@@ -284,24 +294,30 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                     .update(settings.copyWith(notifications: notifications)),
               ),
 
-              const Divider(height: 32),
-              _SectionTitle(l10n.settingsShortcutsSection),
+              const _SectionDivider(),
+              _SectionHeading(l10n.settingsShortcutsSection),
               for (final action in ShortcutAction.values)
                 ChordField(
                   label: action.label(l10n),
                   chord: settings.shortcuts[action],
                   onChanged: (chord) => ref
                       .read(settingsProvider.notifier)
-                      .update(settings.copyWith(shortcuts: settings.shortcuts.withBinding(action, chord))),
+                      .update(
+                        settings.copyWith(
+                          shortcuts: settings.shortcuts.withBinding(action, chord),
+                        ),
+                      ),
                 ),
-              const SizedBox(height: 4),
+              SizedBox(height: tokens.space1),
               Text(
                 l10n.settingsShortcutsHelp,
-                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
               ),
 
-              const Divider(height: 32),
-              _SectionTitle(l10n.settingsInterfaceSection),
+              const _SectionDivider(),
+              _SectionHeading(l10n.settingsInterfaceSection),
               DropdownButtonFormField<String?>(
                 // `requestedLanguage`, not `language`: a hand-edited value this
                 // build does not know would match no item, and the dropdown
@@ -320,8 +336,8 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 ),
               ),
 
-              const Divider(height: 32),
-              _SectionTitle(l10n.logLabel),
+              const _SectionDivider(),
+              _SectionHeading(l10n.logLabel),
               _LogSection(directory: coreLogDirectory()),
             ],
           ),
@@ -411,6 +427,35 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   }
 }
 
+/// A heading inside the dialog: the component, plus the gap under it.
+///
+/// The gap is the dialog's business, not the heading's — the same heading
+/// appears in the server switcher sheet with different spacing around it.
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: DesignTokens.of(context).space3),
+    child: SectionTitle(text),
+  );
+}
+
+/// The rule between two sections.
+///
+/// `space7` (32) is both §8's reading rhythm here and what this dialog already
+/// used; on a long scrolling form a line earns its place, which is not true of
+/// the rest of the app (§2.2).
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Divider(height: AppSpacing.space7, color: DesignTokens.of(context).borderSubtle);
+}
+
 /// What the engine actually has open, and whether it is what was asked for.
 ///
 /// The line that answers "why can nobody hear me": a saved device that has been
@@ -425,13 +470,15 @@ class _DeviceInUse extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final status = this.status;
     final input = status?.input;
 
     if (status == null || !status.running) {
       return Text(
         l10n.settingsVoiceNotStarted,
-        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+        style: text.bodySmall?.copyWith(color: tokens.textTertiary),
       );
     }
 
@@ -440,22 +487,24 @@ class _DeviceInUse extends StatelessWidget {
       children: [
         Text(
           l10n.settingsDeviceInUse(input?.displayName ?? l10n.settingsNoMicrophone),
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: text.bodySmall?.copyWith(color: tokens.textSecondary),
         ),
         if (input?.fellBack ?? false)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: tokens.space1),
             child: Text(
               l10n.settingsMicFellBack,
-              style: const TextStyle(fontSize: 12, color: AppColors.idle),
+              // §2.6's warning: the device is not the one that was asked for,
+              // but the app is still working.
+              style: text.bodySmall?.copyWith(color: tokens.warning),
             ),
           ),
         if (!status.healthy)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: tokens.space1),
             child: Text(
               l10n.settingsDeviceLost,
-              style: const TextStyle(fontSize: 12, color: AppColors.danger),
+              style: text.bodySmall?.copyWith(color: tokens.error),
             ),
           ),
       ],
@@ -477,6 +526,7 @@ class _LevelMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
     final running = status?.running ?? false;
     final level = running ? (status?.level ?? 0.0) : 0.0;
     final transmitting = running && (status?.transmitting ?? false);
@@ -490,8 +540,11 @@ class _LevelMeter extends StatelessWidget {
             Container(
               height: 10,
               decoration: BoxDecoration(
-                color: AppColors.composer,
-                borderRadius: BorderRadius.circular(5),
+                // A groove has to be *lighter* than the dialog it is cut into:
+                // §35 puts the dialog at the darkest step, so the track is the
+                // one above it.
+                color: tokens.surface1,
+                borderRadius: AppRadius.xsAll,
               ),
             ),
             // Clamped: a level can exceed the bar, and a FractionallySizedBox
@@ -501,8 +554,10 @@ class _LevelMeter extends StatelessWidget {
               child: Container(
                 height: 10,
                 decoration: BoxDecoration(
-                  color: transmitting ? AppColors.live : AppColors.textSecondary,
-                  borderRadius: BorderRadius.circular(5),
+                  // The same green as a talking name, because it means the same
+                  // thing: audio is on its way out.
+                  color: transmitting ? tokens.online : tokens.textTertiary,
+                  borderRadius: AppRadius.xsAll,
                 ),
               ),
             ),
@@ -510,17 +565,19 @@ class _LevelMeter extends StatelessWidget {
               widthFactor: threshold.clamp(0.0, 1.0),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: Container(width: 2, height: 16, color: AppColors.accent),
+                child: Container(width: 2, height: 16, color: tokens.primary),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: tokens.space1),
         Text(
           running
               ? (transmitting ? l10n.settingsTransmitting : l10n.settingsBelowThreshold)
               : l10n.settingsLevelMeterHint,
-          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
       ],
     );
@@ -537,51 +594,65 @@ class _NotificationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _switch(l10n.settingsNotifyPresence, settings.presence,
+        _switch(context, l10n.settingsNotifyPresence, settings.presence,
             (v) => onChanged(settings.copyWith(presence: v))),
-        _switch(l10n.settingsNotifyPoke, settings.poke,
+        _switch(context, l10n.settingsNotifyPoke, settings.poke,
             (v) => onChanged(settings.copyWith(poke: v))),
         _switch(
+          context,
           l10n.settingsNotifyChannelMessage,
           settings.channelMessage,
           (v) => onChanged(settings.copyWith(channelMessage: v)),
         ),
         _switch(
+          context,
           l10n.settingsNotifyDirectMessage,
           settings.directMessage,
           (v) => onChanged(settings.copyWith(directMessage: v)),
         ),
         _switch(
+          context,
           l10n.settingsNotifyConnection,
           settings.connection,
           (v) => onChanged(settings.copyWith(connection: v)),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: tokens.space2),
         // Separate from the switches above because it answers a different
         // question — where the notification goes, not whether there is one.
         _switch(
+          context,
           l10n.settingsNotifySystem,
           settings.system,
           (v) => onChanged(settings.copyWith(system: v)),
         ),
         Text(
           l10n.settingsNotifyNote,
-          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
       ],
     );
   }
 
-  Widget _switch(String label, bool value, ValueChanged<bool> onChanged) => SwitchListTile(
+  // The switch's colours come from the theme's `switchTheme` (§2.3: primary
+  // when it is on); only the label style is this widget's.
+  Widget _switch(
+    BuildContext context,
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) => SwitchListTile(
     value: value,
     onChanged: onChanged,
-    title: Text(label, style: const TextStyle(fontSize: 13)),
+    title: Text(label, style: Theme.of(context).textTheme.labelLarge),
     dense: true,
     contentPadding: EdgeInsets.zero,
-    activeThumbColor: AppColors.accent,
   );
 }
 
@@ -602,30 +673,36 @@ class _SensitivitySlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Text(l10n.settingsSensitivity,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text(
+              l10n.settingsSensitivity,
+              style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+            ),
             const Spacer(),
             Text(
               '${(value * 100).round()}%',
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
             ),
           ],
         ),
+        // Track, thumb and overlay come from the theme's `sliderTheme` (§2.3
+        // lists sliders as a primary-coloured control).
         Slider(
           value: value.clamp(0.0, 1.0),
           // Only shown while voice activation is what opens the microphone.
           onChanged: enabled ? onChanged : null,
           onChangeEnd: enabled ? onChangeEnd : null,
-          activeColor: AppColors.accent,
         ),
         Text(
           l10n.settingsSensitivityHint,
-          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+          style: text.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
       ],
     );
@@ -642,6 +719,7 @@ class _LogSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
     final directory = this.directory;
 
     return Column(
@@ -649,19 +727,19 @@ class _LogSection extends StatelessWidget {
       children: [
         SelectableText(
           directory ?? l10n.settingsNoLogDirectory,
-          style: const TextStyle(
-            fontSize: 12,
-            height: 1.4,
-            fontFamily: 'monospace',
-            color: AppColors.textSecondary,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            // A path is read character by character; the family name lives in
+            // `AppTypography` (`docs/UI字体规范.md` §7).
+            fontFamily: AppTypography.monospaceFamily,
+            color: tokens.textSecondary,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: tokens.space3),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
             onPressed: directory == null ? null : () => revealDirectory(directory),
-            icon: const Icon(Icons.folder_open, size: 18),
+            icon: const Icon(Icons.folder_open),
             label: Text(l10n.openLogFolder),
           ),
         ),
@@ -723,21 +801,6 @@ class _DeviceDropdown extends StatelessWidget {
         ),
       ],
       onChanged: onChanged,
-    );
-  }
-}
-
-/// A heading inside the dialog.
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text, style: Theme.of(context).textTheme.titleSmall),
     );
   }
 }

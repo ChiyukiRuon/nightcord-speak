@@ -8,14 +8,23 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 import '../voice/voice_bar.dart';
 import 'channel_sidebar.dart';
 import 'chat_panel.dart';
 import 'reconnect_banner.dart';
+
+/// How wide the channel sidebar is.
+///
+/// **Note for the layout round:** §21 gives 240–280 for a channel sidebar and
+/// warns against fixing every sidebar at its widest. This one is 288, from
+/// before the design system existed. It is left alone here because the layout
+/// is explicitly out of scope for this pass — narrowing it is a one-line change
+/// whenever that pass happens.
+const double channelSidebarWidth = 288;
 
 /// One connected server.
 class ServerPage extends ConsumerWidget {
@@ -36,11 +45,15 @@ class ServerPage extends ConsumerWidget {
         body: Center(
           child: Text(
             AppLocalizations.of(context).serverSessionEnded,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: DesignTokens.of(context).textSecondary),
           ),
         ),
       );
     }
+
+    final tokens = DesignTokens.of(context);
 
     // The voice controls go in the Scaffold's own bottom bar rather than in a
     // Column under the content. Both should be equivalent, but the Column
@@ -58,8 +71,8 @@ class ServerPage extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(width: 288, child: ChannelSidebar(view: view)),
-                const VerticalDivider(width: 1, color: AppColors.divider),
+                SizedBox(width: channelSidebarWidth, child: ChannelSidebar(view: view)),
+                VerticalDivider(width: 1, color: tokens.borderSubtle),
                 Expanded(child: ChatPanel(view: view)),
               ],
             ),

@@ -4,10 +4,23 @@
 // mark: a colour derived from the name, and its first character. Deriving the
 // colour from the name means the same person keeps the same colour across
 // sessions and machines, which is the only thing that makes it useful.
+//
+// Moved here from `widgets/` when the design system was built: it is a leaf
+// widget with no feature knowledge, used by both the chat and the member list,
+// which is the definition of a component.
+//
+// **The gradient constants are not from either specification.** §14 gives the
+// avatar's sizes, its shape and its presence dot, and stops there — there is no
+// rule for a name-derived colour, because the specification assumes a real
+// picture. The saturation and lightness below are the values this app already
+// had. They are kept because the mark has to stay legible *and* distinguishable
+// per person; §1.1's "avoid high saturation" is about the chrome, and a
+// generated identity mark is not chrome.
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../tokens/app_colors.dart';
+import '../tokens/app_typography.dart';
 
 /// A circular mark standing in for a user's picture.
 class Avatar extends StatelessWidget {
@@ -17,7 +30,8 @@ class Avatar extends StatelessWidget {
   /// The display name the mark is derived from.
   final String name;
 
-  /// Diameter in logical pixels.
+  /// Diameter in logical pixels. §14's sizes are 28 (compact), 36 (default),
+  /// 40 (chat) and 64/96 (profile).
   final double size;
 
   /// Whether to mute it, for someone offline.
@@ -47,8 +61,11 @@ class Avatar extends StatelessWidget {
         initial,
         style: TextStyle(
           fontSize: size * 0.42,
-          fontWeight: FontWeight.w600,
-          color: dimmed ? AppColors.textMuted : Colors.white,
+          fontWeight: AppTypography.semibold,
+          // The initial sits *on* a saturated fill, which is the case §2.4's
+          // `textOnPrimary` is for — its warning against pure white is about
+          // text on a background, not text on a colour.
+          color: dimmed ? AppColors.textDisabled : AppColors.textOnPrimary,
         ),
       ),
     );

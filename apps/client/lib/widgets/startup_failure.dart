@@ -6,10 +6,10 @@
 
 import 'package:flutter/material.dart';
 
+import '../design/theme/app_theme.dart';
 import '../ffi/native.dart';
 import '../ffi/rust_client.dart';
 import '../l10n/app_localizations.dart';
-import '../theme/app_theme.dart';
 import '../util/reveal.dart';
 
 /// A minimal app that explains why the core is missing.
@@ -39,7 +39,8 @@ class StartupFailureApp extends StatelessWidget {
       theme: theme,
       // No `locale:` here on purpose: this screen runs when the core did not
       // start, and the core is what owns the language setting. The system's
-      // language is the only honest answer left.
+      // language is the only honest answer left — and it is what the caller
+      // already used to pick the theme's font family.
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: _FailureScreen(error: error, stackTrace: stackTrace),
@@ -61,73 +62,75 @@ class _FailureScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    // Three places want the same shape: a label, then text in the platform's
+    // monospace. §7 of the font specification says widgets should not name a
+    // font family; the name lives in `AppTypography` and is applied here.
+    TextStyle mono(double size, Color colour, {double height = 1.4}) => TextStyle(
+      fontFamily: AppTypography.monospaceFamily,
+      fontSize: size,
+      height: height,
+      color: colour,
+    );
+
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(AppSpacing.space7),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.danger, size: 28),
-                    const SizedBox(width: 12),
-                    Text(
-                      l10n.startupFailureTitle,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                    ),
+                    // §9 puts a page-level icon at 28–32.
+                    Icon(Icons.error_outline, color: tokens.error, size: 28),
+                    const SizedBox(width: AppSpacing.space3),
+                    Text(l10n.startupFailureTitle, style: text.headlineMedium),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.space4),
                 SelectableText(
                   '$error',
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    height: 1.5,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: mono(AppTypography.bodySize, tokens.textSecondary, height: 1.5),
                 ),
                 if (error is! NativeLibraryNotFound && stackTrace != null) ...[
-                  const SizedBox(height: 24),
-                  Text(l10n.stackTraceLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.space6),
+                  Text(l10n.stackTraceLabel, style: text.titleMedium),
+                  const SizedBox(height: AppSpacing.space2),
+                  // Was 11px, which is under the floor
+                  // `docs/UI字体规范.md` §3 sets. A stack trace is the last
+                  // thing that should be hard to read.
                   SelectableText(
                     '$stackTrace',
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      height: 1.4,
-                      color: AppColors.textMuted,
-                    ),
+                    style: mono(AppTypography.captionSize, tokens.textTertiary),
                   ),
                 ],
                 if (coreLogDirectory() case final directory?) ...[
-                  const SizedBox(height: 24),
-                  Text(l10n.logLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.space6),
+                  Text(l10n.logLabel, style: text.titleMedium),
+                  const SizedBox(height: AppSpacing.space2),
                   // A core that failed to start still wrote a reason down —
                   // if the library could be loaded far enough to have one.
                   Text(
                     l10n.startupFailureLogHint,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    style: text.bodySmall?.copyWith(color: tokens.textSecondary),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.space1),
                   SelectableText(
                     directory,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: mono(AppTypography.captionSize, tokens.textSecondary),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.space3),
                   OutlinedButton.icon(
                     onPressed: () => revealDirectory(directory),
-                    icon: const Icon(Icons.folder_open, size: 18),
+                    // §9's small icon size, and the button's own height (§26)
+                    // comes from the theme.
+                    icon: const Icon(Icons.folder_open, size: 16),
                     label: Text(l10n.openLogFolder),
                   ),
                 ],

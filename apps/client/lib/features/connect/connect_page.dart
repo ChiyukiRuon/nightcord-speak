@@ -3,12 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_section_title.dart';
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/connect_request.dart';
 import '../../models/bookmarks.dart';
+import '../../models/connect_request.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 
 /// Collects a server address and nickname and opens a connection.
 class ConnectPage extends ConsumerStatefulWidget {
@@ -173,26 +174,33 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     });
 
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(tokens.space7),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.bubble_chart, color: AppColors.accent, size: 32),
-                    SizedBox(width: 12),
+                    // §9's page-level size, in §2.3's primary.
+                    Icon(Icons.bubble_chart, color: tokens.primary, size: 32),
+                    SizedBox(width: tokens.space3),
                     Text(
                       'Nightcord Speak',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+                      // §5.2's `headline`: this is a page title. Not `display`
+                      // (28) — that is for the rare special screen, and 28 next
+                      // to a 32px mark would make the mark look like an
+                      // accident.
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: tokens.space7),
 
                 // Saved servers first, because coming back to one is the common
                 // case; typing an address is what you do the first time.
@@ -211,14 +219,14 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   ),
                   onSubmitted: (_) => _connect(),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: tokens.space3),
 
                 TextField(
                   controller: _nickname,
                   decoration: InputDecoration(labelText: l10n.connectNicknameLabel),
                   onSubmitted: (_) => _connect(),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: tokens.space3),
 
                 TextField(
                   controller: _password,
@@ -229,7 +237,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   ),
                   onSubmitted: (_) => _connect(),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: tokens.space5),
 
                 // The protocol is a choice rather than a guess: detection during
                 // the handshake is on the roadmap, and until then picking the
@@ -239,6 +247,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 // Both segments are enabled: the TS6 backend has been working
                 // since M0.4 — this page still said "not implemented" and
                 // refused the choice long after that stopped being true.
+                //
+                // Colours come from the theme's `segmentedButtonTheme`; the
+                // stock Material version rendered in its own palette.
                 SegmentedButton<ProtocolKind>(
                   segments: const [
                     ButtonSegment(value: ProtocolKind.ts3, label: Text('TeamSpeak 3')),
@@ -248,7 +259,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   onSelectionChanged: (selection) =>
                       setState(() => _protocol = selection.first),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: tokens.space6),
 
                 // Saving is offered next to connecting rather than in a menu:
                 // the moment someone has just typed an address they are happy
@@ -259,20 +270,16 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: value.text.trim().isEmpty ? null : _save,
-                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                      style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+                      icon: const Icon(Icons.bookmark_add_outlined),
                       label: Text(l10n.connectSaveServer),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: tokens.space3),
 
+                // §10.1's colours, height and radius all come from the theme.
                 FilledButton(
                   onPressed: _connecting ? null : _connect,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
                   child: _connecting
                       ? const SizedBox(
                           height: 18,
@@ -307,19 +314,17 @@ class _SavedServers extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = DesignTokens.of(context);
     final bookmarks = ref.watch(bookmarksProvider)?.bookmarks ?? const <Bookmark>[];
     if (bookmarks.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: tokens.space5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            AppLocalizations.of(context).connectSavedServers,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          const SizedBox(height: 6),
+          SectionTitle(AppLocalizations.of(context).connectSavedServers),
+          SizedBox(height: tokens.space2),
           for (var index = 0; index < bookmarks.length; index++)
             _SavedServerRow(
               bookmark: bookmarks[index],
@@ -350,21 +355,27 @@ class _SavedServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      leading: const Icon(Icons.dns_outlined, size: 20, color: AppColors.textSecondary),
+      // Icon colour and size come from the theme's `listTileTheme` and
+      // `iconTheme` (§9): 20px, `textSecondary`.
+      leading: const Icon(Icons.dns_outlined),
       title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         bookmark.address,
-        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
       ),
       // Fills the form rather than connecting: this screen exists so the
       // details can still be changed before the connection is made.
       onTap: onPick,
       trailing: PopupMenuButton<String>(
         tooltip: l10n.connectMoreTooltip,
-        icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textMuted),
+        icon: const Icon(Icons.more_vert),
         onSelected: (choice) => choice == 'rename' ? onRename() : onDelete(),
         itemBuilder: (_) => [
           PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
@@ -403,8 +414,11 @@ class _NameDialogState extends State<_NameDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+
+    // Background, border, radius and shadow come from the theme's
+    // `dialogTheme` (§17) — this used to name the sidebar colour, which was
+    // neither the modal colour nor the right one.
     return AlertDialog(
-      backgroundColor: AppColors.sidebar,
       title: Text(l10n.connectSaveServerTitle),
       content: TextField(
         controller: _name,
@@ -417,11 +431,7 @@ class _NameDialogState extends State<_NameDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancelButton),
         ),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
-          onPressed: _submit,
-          child: Text(l10n.saveButton),
-        ),
+        FilledButton(onPressed: _submit, child: Text(l10n.saveButton)),
       ],
     );
   }

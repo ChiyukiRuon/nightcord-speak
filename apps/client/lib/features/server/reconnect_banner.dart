@@ -5,9 +5,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_banner.dart';
+import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
-import '../../theme/app_theme.dart';
 
 /// Says that the connection dropped, how long until the next attempt, and offers
 /// a way out of it.
@@ -54,6 +55,7 @@ class _ReconnectBannerState extends ConsumerState<ReconnectBanner> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
     final progress = ref.watch(sessionsProvider)[widget.session]?.reconnect;
 
     // No scheduled retry yet means the core is between attempts; saying so
@@ -63,33 +65,20 @@ class _ReconnectBannerState extends ConsumerState<ReconnectBanner> {
         ? l10n.bannerReconnecting
         : l10n.bannerRetryCountdown(progress.secondsLeft, progress.attempt);
 
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.divider)),
-      ),
-      padding: const EdgeInsets.only(left: 14, right: 6, top: 4, bottom: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_off, size: 16, color: AppColors.idle),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: AppColors.idle),
-            ),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: () =>
-                ref.read(sessionsProvider.notifier).disconnect(widget.session),
-            child: Text(l10n.bannerDisconnect),
-          ),
-        ],
+    return AppBanner(
+      icon: Icons.cloud_off,
+      // §2.6's warning rather than §2.7's presence-idle: a connection being
+      // retried is a state of the application, not of a person.
+      iconColour: tokens.warning,
+      actions: [
+        TextButton(
+          onPressed: () => ref.read(sessionsProvider.notifier).disconnect(widget.session),
+          child: Text(l10n.bannerDisconnect),
+        ),
+      ],
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.warning),
       ),
     );
   }

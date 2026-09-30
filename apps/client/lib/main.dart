@@ -8,10 +8,10 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'design/theme/app_theme.dart';
 import 'ffi/rust_client.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
-import 'theme/app_theme.dart';
 import 'widgets/startup_failure.dart';
 import 'widgets/app_shell.dart';
 
@@ -37,7 +37,18 @@ void main() {
   }
 
   if (failure != null) {
-    runApp(StartupFailureApp(error: failure, stackTrace: trace, theme: buildAppTheme()));
+    // The system locale, not the setting: the setting lives in the core, and
+    // the core is what failed to start. It only decides which font family the
+    // screen is drawn in (`docs/UI字体规范.md` §5), so guessing from the
+    // operating system is as good as it gets here — and better than assuming
+    // English on a Chinese desktop.
+    runApp(
+      StartupFailureApp(
+        error: failure,
+        stackTrace: trace,
+        theme: buildAppTheme(PlatformDispatcher.instance.locale),
+      ),
+    );
     return;
   }
 
@@ -87,13 +98,19 @@ class NightcordApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A concrete locale, resolved once in `localeProvider` — see there for why
+    // it is not left to MaterialApp's own resolution.
+    final locale = ref.watch(localeProvider);
+
     return MaterialApp(
       title: 'Nightcord Speak',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      // A concrete locale, resolved once in `localeProvider` — see there for
-      // why it is not left to MaterialApp's own resolution.
-      locale: ref.watch(localeProvider),
+      // Rebuilt when the language changes, which is the only thing the theme
+      // depends on: the font family follows the locale
+      // (`docs/UI字体规范.md` §5). Everything else in it is constant, so this
+      // is one `ThemeData` per language rather than one per frame.
+      theme: buildAppTheme(locale),
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: const AppShell(),

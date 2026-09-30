@@ -6,6 +6,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../design/theme/app_theme.dart';
 import '../features/connect/connect_page.dart';
 import '../features/crash/crash_banner.dart';
 import '../features/shortcuts/shortcut_host.dart';
@@ -19,7 +20,6 @@ import '../models/crash.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
 import '../providers/providers.dart';
-import '../theme/app_theme.dart';
 import '../util/reveal.dart';
 import '../util/system_notifications.dart';
 
@@ -47,6 +47,7 @@ const String _profileVar = 'NIGHTCORD_PROFILE';
 /// still on screen is the difference between a report and a guess.
 void _showError(BuildContext context, ClientError error) {
   final l10n = AppLocalizations.of(context);
+  final tokens = DesignTokens.of(context);
   final logDirectory = coreLogDirectory();
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
@@ -62,19 +63,29 @@ void _showError(BuildContext context, ClientError error) {
           Text(error.describe(l10n)),
           if (logDirectory != null)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: tokens.space1),
               child: Text(
                 l10n.shellLogPath(logDirectory),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  // Was 11px, under the floor `docs/UI字体规范.md` §3 sets.
+                  fontSize: AppTypography.captionSize,
+                  fontFamily: AppTypography.monospaceFamily,
+                  color: tokens.textSecondary,
                 ),
               ),
             ),
         ],
       ),
-      backgroundColor: error.isRetryable ? null : Colors.red.shade900,
+      // §19's error variant for something that cannot be retried, and the
+      // theme's default (also §19) for something that can — the retry banner
+      // already said so, and a red bar over a recoverable hiccup reads worse
+      // than the hiccup.
+      //
+      // This replaces `Colors.red.shade900` and a `null` that used to fall
+      // through to Material's `inverseSurface`, which in a dark theme is a
+      // *light* bar — the long-standing "looks like a bug" item in
+      // `AGENTS.md` §7. Both halves now come from the specification.
+      backgroundColor: error.isRetryable ? tokens.infoBg : tokens.errorBg,
       // Long enough to actually press the button — the default four seconds is
       // not, and the reason to show it at all is that someone acts on it.
       duration: const Duration(seconds: 10),
