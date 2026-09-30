@@ -49,6 +49,14 @@
     "nickname": "Nightcord User",
     "profile": "default",
     "max_reconnect_attempts": null
+  },
+  "notifications": {
+    "presence": true,
+    "poke": true,
+    "channel_message": true,
+    "direct_message": true,
+    "connection": true,
+    "system": true
   }
 }
 ```
@@ -101,6 +109,7 @@ WARN ts_core::client: using default settings
 | 设备 | `ts-ffi` 的 worker，`start_voice` 时 | 下一次「开始语音」 |
 | 传输方式 | 同上，另外**改了就应用**到活着的引擎 | 立即 |
 | 灵敏度 | 同上，同上 | 立即 |
+| 通知开关 | 前端 | 立即（见 [`docs/notifications.md`](notifications.md)） |
 
 设备是唯一不能立即生效的：替换一条活着的 cpal 流意味着拆掉重开，在别人说话的时候做
 这件事比等一等更糟。设置界面在设备下拉下面写明了这一点。

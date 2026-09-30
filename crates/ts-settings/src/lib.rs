@@ -65,6 +65,10 @@ pub struct Settings {
     /// Everything about reaching a server.
     #[serde(default)]
     pub connection: ConnectionSettings,
+
+    /// What is worth interrupting the user for.
+    #[serde(default)]
+    pub notifications: NotificationSettings,
 }
 
 impl Default for Settings {
@@ -73,8 +77,68 @@ impl Default for Settings {
             version: FILE_VERSION,
             audio: AudioSettings::default(),
             connection: ConnectionSettings::default(),
+            notifications: NotificationSettings::default(),
         }
     }
+}
+
+/// What raises a notification (§43).
+///
+/// Everything is on by default, which is why [`Default`] is written out rather
+/// than derived: a derived one would turn every switch off, and a client that
+/// starts silent looks broken rather than quiet.
+///
+/// The switches are per *kind* of event rather than per event, because that is
+/// the granularity a user actually has an opinion about. Nobody wants to be told
+/// about every join but not every leave.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NotificationSettings {
+    /// Someone joined or left.
+    #[serde(default = "default_true")]
+    pub presence: bool,
+
+    /// Someone poked us.
+    #[serde(default = "default_true")]
+    pub poke: bool,
+
+    /// A message in a channel, or to the whole server.
+    #[serde(default = "default_true")]
+    pub channel_message: bool,
+
+    /// A private message.
+    #[serde(default = "default_true")]
+    pub direct_message: bool,
+
+    /// A connection dropped or came back.
+    #[serde(default = "default_true")]
+    pub connection: bool,
+
+    /// Whether the above should also reach the operating system's notification
+    /// centre when the window is not in front.
+    ///
+    /// Separate from the switches above because it answers a different
+    /// question — *where* rather than *whether* — and because a desktop
+    /// notification is far more intrusive than one inside an app the user is
+    /// already looking at.
+    #[serde(default = "default_true")]
+    pub system: bool,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        Self {
+            presence: true,
+            poke: true,
+            channel_message: true,
+            direct_message: true,
+            connection: true,
+            system: true,
+        }
+    }
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 /// How audio is captured and played.
@@ -310,6 +374,7 @@ mod tests {
                 profile: "alt".into(),
                 max_reconnect_attempts: Some(3),
             },
+            notifications: NotificationSettings::default(),
         };
 
         store.save(&settings).unwrap();
@@ -372,6 +437,52 @@ mod tests {
         assert_eq!(loaded.connection.profile, "default");
         assert_eq!(loaded.connection.max_reconnect_attempts, None);
         assert_eq!(loaded.audio, AudioSettings::default());
+    }
+
+    #[test]
+    fn notifications_default_to_on() {
+        // A client that starts silent looks broken rather than quiet. This is
+        // the reason `Default` is written out instead of derived.
+        let settings = Settings::default().notifications;
+        assert!(settings.presence);
+        assert!(settings.poke);
+        assert!(settings.channel_message);
+        assert!(settings.direct_message);
+        assert!(settings.connection);
+        assert!(settings.system);
+    }
+
+    #[test]
+    fn a_file_written_before_notifications_existed_still_loads() {
+        // What every existing settings file looks like: no `notifications` key
+        // at all. It has to come back with the switches on, not off.
+        let dir = TempDir::new("nonotifications");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"version":1,"connection":{"nickname":"Bob"}}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.connection.nickname, "Bob");
+        assert_eq!(loaded.notifications, NotificationSettings::default());
+    }
+
+    #[test]
+    fn a_single_notification_switch_round_trips() {
+        // Turning one thing off must not turn the others off, which is what a
+        // hand-written `Default` and per-field serde defaults are for.
+        let dir = TempDir::new("oneswitch");
+        let store = dir.store();
+
+        let mut settings = Settings::default();
+        settings.notifications.presence = false;
+        store.save(&settings).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert!(!loaded.notifications.presence);
+        assert!(loaded.notifications.direct_message);
     }
 
     #[test]

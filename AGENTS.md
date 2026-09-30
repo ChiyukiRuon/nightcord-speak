@@ -180,8 +180,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 295 个
-cd apps/client && flutter analyze && flutter test                  # 72 个
+cargo test  --workspace --all-features                             # 298 个
+cd apps/client && flutter analyze && flutter test                  # 91 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -260,7 +260,7 @@ cd apps/client && flutter analyze && flutter test                  # 72 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 logging / 重连 / 设置 / 书签 已完成 |
+| M0.6     | Production Client               | 🚧 logging / 重连 / 设置 / 书签 / 通知 已完成 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -277,9 +277,9 @@ cd apps/client && flutter analyze && flutter test                  # 72 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **15,946 行**，13 crates + CLI |
-| Dart | **6,403 行**，28 文件          |
-| 测试 | **295 Rust + 72 Dart**，全绿   |
+| Rust | **16,057 行**，13 crates + CLI |
+| Dart | **7,757 行**，32 文件          |
+| 测试 | **298 Rust + 91 Dart**，全绿   |
 
 ### 5.3 实测验证过什么
 
@@ -364,6 +364,18 @@ cd apps/client && flutter analyze && flutter test                  # 72 个
 | 坏文件不阻塞启动 | ✅ 实测：一条 `warn`、**消息里带文件名**、文件原样保留、照常连上服务器 |
 | 无 `.tmp` 残留 | ✅ 两个 store 各有一条回归测试（共用同一份原子写） |
 
+**通知（M0.6 第五项）**
+
+| 项 | 结果 |
+| --- | --- |
+| 应用内浮层 | ✅ 实测截图：第二个人加入时右下角出现「同事二号 / 加入了服务器」 |
+| **不打扰正在看的线程** | ✅ 同一次实测里，频道消息**没有**弹——用户正看着那个频道 |
+| **握手重放被压住** | ✅ 应用连接时服务器上已有的人没有产生任何通知 |
+| **系统通知（我标为风险的那项）** | ✅ 实测：窗口最小化时，桌面右下角弹出 Windows toast。插件首次运行时自己补了缺的 `.lnk` |
+| 开关真的落盘 | ✅ FFI 往返测试断言新节存在且只关掉指定的那一个 |
+| 规则本身 | ✅ 18 条纯 Dart 测试：每个开关、正在看的线程、自己的消息、2 秒静默窗、重连重放、离场者名字 |
+| **未读点** | ⚠️ 只有单测——测试服务器只有一个频道，而 CLI 没有发私聊的参数，端到端制造不出「没在看的线程」 |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -417,7 +429,9 @@ cd apps/client && flutter analyze && flutter test                  # 72 个
 - [x] **书签 / 服务器列表** —— `bookmarks.json` + 连接页与切换器两处入口。见
       [`docs/bookmarks.md`](docs/bookmarks.md)。模型从 `ts-protocol` 搬到了 `ts-settings`
       （分层），并改名为 `Bookmark`（`Server` 在两个语言里都已名花有主）。
-- [ ] 通知
+- [x] **通知** —— 浮层 + 未读点 + 系统通知（桌面 `local_notifier`）。判断规则是纯 Dart、
+      可注入时钟，18 条测试。顺带把**私聊界面**做通了（点频道树里的人即可），
+      否则私聊通知点了没地方去。见 [`docs/notifications.md`](docs/notifications.md)。
 - [ ] 设备管理（设置对话框里已有雏形）
 - [ ] 快捷键（目前 PTT 用 `Focus`，非全局）
 - [ ] 本地化
@@ -465,6 +479,7 @@ cd apps/client && flutter analyze && flutter test                  # 72 个
 | `docs/reconnect.md`        | 重连：职责边界、fork 补丁、退避表、为什么首连失败不重试     |
 | `docs/settings.md`         | 设置：文件格式、谁读它、损坏文件为什么与身份文件处理不同     |
 | `docs/bookmarks.md`        | 书签：文件格式、明文密码这件事、地址归一化、两处入口的分工   |
+| `docs/notifications.md`    | 通知：三种送达方式、两个坑、为什么不打扰正在看的、Windows toast 依赖 |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

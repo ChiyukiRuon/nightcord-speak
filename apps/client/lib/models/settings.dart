@@ -13,6 +13,7 @@ class Settings {
     this.version = 1,
     this.audio = const AudioSettings(),
     this.connection = const ConnectionSettings(),
+    this.notifications = const NotificationSettings(),
   });
 
   /// On-disk format version. The core refuses one it does not know.
@@ -20,23 +21,101 @@ class Settings {
 
   final AudioSettings audio;
   final ConnectionSettings connection;
+  final NotificationSettings notifications;
 
-  Settings copyWith({AudioSettings? audio, ConnectionSettings? connection}) => Settings(
+  Settings copyWith({
+    AudioSettings? audio,
+    ConnectionSettings? connection,
+    NotificationSettings? notifications,
+  }) => Settings(
     version: version,
     audio: audio ?? this.audio,
     connection: connection ?? this.connection,
+    notifications: notifications ?? this.notifications,
   );
 
   factory Settings.fromJson(Map<String, dynamic> json) => Settings(
     version: json['version'] as int? ?? 1,
     audio: AudioSettings.fromJson(_object(json['audio'])),
     connection: ConnectionSettings.fromJson(_object(json['connection'])),
+    notifications: NotificationSettings.fromJson(_object(json['notifications'])),
   );
 
   Map<String, dynamic> toJson() => {
     'version': version,
     'audio': audio.toJson(),
     'connection': connection.toJson(),
+    'notifications': notifications.toJson(),
+  };
+}
+
+/// What raises a notification (§43).
+///
+/// Everything is on by default, so a settings file written before this section
+/// existed comes back with the switches *on* rather than off — a client that
+/// starts silent looks broken rather than quiet.
+class NotificationSettings {
+  const NotificationSettings({
+    this.presence = true,
+    this.poke = true,
+    this.channelMessage = true,
+    this.directMessage = true,
+    this.connection = true,
+    this.system = true,
+  });
+
+  /// Someone joined or left.
+  final bool presence;
+
+  /// Someone poked us.
+  final bool poke;
+
+  /// A message in a channel, or to the whole server.
+  final bool channelMessage;
+
+  /// A private message.
+  final bool directMessage;
+
+  /// A connection dropped or came back.
+  final bool connection;
+
+  /// Whether the above should also reach the operating system when the window
+  /// is not in front. A different question — *where* rather than *whether* —
+  /// and a desktop notification is far more intrusive than one inside the app.
+  final bool system;
+
+  NotificationSettings copyWith({
+    bool? presence,
+    bool? poke,
+    bool? channelMessage,
+    bool? directMessage,
+    bool? connection,
+    bool? system,
+  }) => NotificationSettings(
+    presence: presence ?? this.presence,
+    poke: poke ?? this.poke,
+    channelMessage: channelMessage ?? this.channelMessage,
+    directMessage: directMessage ?? this.directMessage,
+    connection: connection ?? this.connection,
+    system: system ?? this.system,
+  );
+
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) => NotificationSettings(
+    presence: json['presence'] as bool? ?? true,
+    poke: json['poke'] as bool? ?? true,
+    channelMessage: json['channel_message'] as bool? ?? true,
+    directMessage: json['direct_message'] as bool? ?? true,
+    connection: json['connection'] as bool? ?? true,
+    system: json['system'] as bool? ?? true,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'presence': presence,
+    'poke': poke,
+    'channel_message': channelMessage,
+    'direct_message': directMessage,
+    'connection': connection,
+    'system': system,
   };
 }
 

@@ -219,6 +219,10 @@ void main() {
 
       final edited = original.copyWith(
         connection: original.connection.copyWith(nickname: 'Round Trip'),
+        // The notification switches go with it: a section the core does not
+        // know about would be accepted and then silently stripped on the next
+        // read, which is worse than rejecting it.
+        notifications: original.notifications.copyWith(presence: false),
       );
 
       final pending = awaitCommand(client, 'settings_update');
@@ -226,7 +230,11 @@ void main() {
       final result = await pending;
 
       expect(result.ok, isTrue, reason: result.error?.message);
-      expect((await readSettings(client)).connection.nickname, 'Round Trip');
+
+      final back = await readSettings(client);
+      expect(back.connection.nickname, 'Round Trip');
+      expect(back.notifications.presence, isFalse);
+      expect(back.notifications.directMessage, isTrue, reason: 'one switch, not all');
     });
 
     test('the core answers with settings this build can read', () async {

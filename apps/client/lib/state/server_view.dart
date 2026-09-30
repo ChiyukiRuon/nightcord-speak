@@ -185,6 +185,58 @@ class ServerView {
   String get activeConversation =>
       ownChannelId == null ? ConversationKey.server : ConversationKey.channel(ownChannelId!);
 
+  /// The thread the user opened by hand, or null to follow [activeConversation].
+  ///
+  /// Opening a private conversation has to survive the channel we are in
+  /// changing underneath it — walking into another channel should not yank the
+  /// user out of a conversation they were reading.
+  String? openConversation;
+
+  /// Threads with something new in them that the user has not looked at.
+  ///
+  /// Deliberately not "everything that arrived": a message in the thread on
+  /// screen has been seen, so marking it would be a lie — and a badge that is
+  /// always lit is not a badge.
+  final Set<String> unread = {};
+
+  /// The thread the UI is actually showing.
+  String get shownConversation => openConversation ?? activeConversation;
+
+  /// Shows [conversation], and treats it as read.
+  void open(String conversation) {
+    openConversation = conversation;
+    unread.remove(conversation);
+  }
+
+  /// Goes back to following the channel we are in.
+  void closeConversation() {
+    openConversation = null;
+    unread.remove(activeConversation);
+  }
+
+  /// Marks [conversation] as having something new.
+  void markUnread(String conversation) {
+    if (conversation == shownConversation) return;
+    unread.add(conversation);
+  }
+
+  /// Whether anything is unread anywhere in this session.
+  bool get hasUnread => unread.isNotEmpty;
+
+  /// Whether a channel has anything unread.
+  ///
+  /// Its own thread, or any private conversation with someone sitting in it —
+  /// a dot on the channel is how a user finds the person who messaged them.
+  bool channelHasUnread(int channelId) {
+    if (unread.contains(ConversationKey.channel(channelId))) return true;
+    for (final id in unread) {
+      if (!id.startsWith('client:')) continue;
+      final clientId = int.tryParse(id.substring('client:'.length));
+      if (clientId != null && clients[clientId]?.channelId == channelId) return true;
+    }
+    return false;
+  }
+
   /// Applies one event.
   ///
   /// Idempotent for every variant: replaying the same event twice leaves the
@@ -254,11 +306,16 @@ class ServerView {
         }
         if (ownClientId == clientId) {
           ownChannelId = channelId;
+          // Walking into a channel is looking at it, so whatever was waiting
+          // there has been seen. The private conversation stays open: changing
+          // channels should not yank someone out of what they were reading.
+          unread.remove(activeConversation);
         }
 
       case OwnClientIdentifiedEvent(:final clientId, :final channelId):
         ownClientId = clientId;
         ownChannelId = channelId;
+        unread.remove(activeConversation);
         final client = clients[clientId];
         if (client != null) {
           clients[clientId] = client.movedTo(channelId);

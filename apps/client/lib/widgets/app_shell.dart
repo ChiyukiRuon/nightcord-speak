@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/connect/connect_page.dart';
+import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
 import '../features/voice/voice_bar.dart';
 import '../ffi/rust_client.dart';
@@ -14,6 +15,7 @@ import '../models/settings.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../util/reveal.dart';
+import '../util/system_notifications.dart';
 
 /// An address to connect to on launch, from the environment.
 ///
@@ -86,13 +88,32 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(windowFocusProvider.notifier).set(state == AppLifecycleState.resumed);
+  }
+
   /// Whether the auto-connect has already been attempted.
   bool _autoConnected = false;
 
   @override
   void initState() {
     super.initState();
+    // The only thing the app knows about being away, and the only reason a
+    // desktop notification is ever sent — while the window is in front, a toast
+    // inside it is both visible and less intrusive.
+    WidgetsBinding.instance.addObserver(this);
+    // A pop-up that never appears is a real possibility on Windows, where an
+    // unpackaged app needs a Start Menu shortcut carrying an AppUserModelID.
+    // The wrapper logs the failure rather than letting it pass unnoticed.
+    initSystemNotifications();
     // The defaults the environment does not override — nickname and identity
     // profile — come from the settings, so this waits for them to arrive. It is
     // a development aid; a round trip is nothing next to typing an address.
@@ -164,9 +185,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       _showError(context, error);
     });
 
-    if (active == null) return const ConnectPage();
-
-    // Push-to-talk watches the keyboard whenever a server is on screen (§30).
-    return PushToTalkListener(session: active, child: ServerPage(session: active));
+    // The notices ride above whichever screen is showing, including the connect
+    // one: a private message can arrive for a server you are not looking at.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (active == null)
+          const ConnectPage()
+        else
+          // Push-to-talk watches the keyboard whenever a server is on screen (§30).
+          PushToTalkListener(session: active, child: ServerPage(session: active)),
+        const NoticeStack(),
+      ],
+    );
   }
 }

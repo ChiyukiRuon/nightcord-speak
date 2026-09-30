@@ -13,6 +13,7 @@ import '../../models/events.dart';
 import '../../providers/providers.dart';
 import '../../state/server_view.dart';
 import '../../theme/app_theme.dart';
+import '../notifications/notice_stack.dart';
 import '../../widgets/avatar.dart';
 
 /// The left column of the window.
@@ -73,6 +74,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
           row: row,
           collapsed: _collapsed.contains(row.channel.id),
           selected: row.channel.id == _view.ownChannelId,
+          unread: _view.channelHasUnread(row.channel.id),
           onTap: () => _openChannel(row.channel),
           onToggle: row.hasChildren ? () => _toggle(row.channel.id) : null,
         ),
@@ -81,7 +83,17 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
       // Members sit under their channel, as in the reference design.
       if (_collapsed.contains(row.channel.id)) continue;
       for (final member in _view.clientsIn(row.channel.id)) {
-        rows.add(_MemberRow(member: member, depth: row.depth + 1));
+        rows.add(
+          _MemberRow(
+            member: member,
+            depth: row.depth + 1,
+            // Someone else's name is the way into a private conversation with
+            // them — the only one there is, and without it a private message
+            // arrives with nowhere to read it.
+            onTap: member.isSelf ? null : () => _view.open(ConversationKey.client(member.id)),
+            unread: _view.unread.contains(ConversationKey.client(member.id)),
+          ),
+        );
       }
     }
 
@@ -190,7 +202,9 @@ class _ServerHeader extends ConsumerWidget {
                   _stateLabel(entry.value.connection),
                   style: const TextStyle(fontSize: 12),
                 ),
-                trailing: entry.key == view.session ? const Icon(Icons.check, size: 18) : null,
+                trailing: entry.key == view.session
+                    ? const Icon(Icons.check, size: 18)
+                    : (entry.value.hasUnread ? const UnreadDot() : null),
                 onTap: () {
                   ref.read(activeSessionProvider.notifier).select(entry.key);
                   Navigator.of(sheetContext).pop();
@@ -298,12 +312,16 @@ class _ChannelRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.onToggle,
+    this.unread = false,
   });
 
   final TreeRow row;
   final bool collapsed;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Whether the channel — or someone in it — has something new.
+  final bool unread;
 
   /// Absent when the channel has no children, so no disclosure is drawn.
   final VoidCallback? onToggle;
@@ -354,6 +372,8 @@ class _ChannelRow extends StatelessWidget {
                     padding: EdgeInsets.only(left: 4),
                     child: Icon(Icons.lock_outline, size: 13, color: AppColors.textMuted),
                   ),
+                if (unread)
+                  const Padding(padding: EdgeInsets.only(left: 8), child: UnreadDot()),
               ],
             ),
           ),
@@ -365,17 +385,31 @@ class _ChannelRow extends StatelessWidget {
 
 /// A user inside a channel, or in the offline list.
 class _MemberRow extends StatelessWidget {
-  const _MemberRow({required this.member, required this.depth, this.dimmed = false});
+  const _MemberRow({
+    required this.member,
+    required this.depth,
+    this.dimmed = false,
+    this.onTap,
+    this.unread = false,
+  });
 
   final Client member;
   final int depth;
   final bool dimmed;
 
+  /// Opens a private conversation, when there is one to open.
+  final VoidCallback? onTap;
+
+  /// Whether this person has said something the user has not read.
+  final bool unread;
+
   @override
   Widget build(BuildContext context) {
     final nameColour = dimmed ? AppColors.textMuted : AppColors.textPrimary;
 
-    return Padding(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
       padding: EdgeInsets.only(left: 24 + depth * 12.0, right: 8, top: 2, bottom: 2),
       child: Row(
         children: [
@@ -403,7 +437,9 @@ class _MemberRow extends StatelessWidget {
               tooltip: '录音中',
               icon: Icons.fiber_manual_record,
             ),
+          if (unread) ...[const SizedBox(width: 6), const UnreadDot()],
         ],
+      ),
       ),
     );
   }

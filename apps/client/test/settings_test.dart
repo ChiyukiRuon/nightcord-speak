@@ -87,6 +87,26 @@ void main() {
       expect(chosen.copyWith(inputDevice: 'wasapi:Other').inputDevice, 'wasapi:Other');
     });
 
+    test('notification switches default to on and round trip', () {
+      // A settings file written before this section existed has no
+      // `notifications` key, and it has to come back with the switches *on*:
+      // a client that starts silent looks broken rather than quiet.
+      final bare = Settings.fromJson(const {});
+      expect(bare.notifications.presence, isTrue);
+      expect(bare.notifications.directMessage, isTrue);
+      expect(bare.notifications.system, isTrue);
+
+      const oneOff = Settings(
+        notifications: NotificationSettings(presence: false, directMessage: false),
+      );
+      final back = Settings.fromJson(roundTrip(oneOff));
+      expect(back.notifications.presence, isFalse);
+      expect(back.notifications.directMessage, isFalse);
+      // Turning one off must not turn the others off.
+      expect(back.notifications.channelMessage, isTrue);
+      expect(back.notifications.poke, isTrue);
+    });
+
     test('the mode names are the ones the core accepts', () {
       // The transmission mode travels inside this object now, so renaming one
       // here would silently change what the core does.

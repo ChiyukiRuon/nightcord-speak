@@ -216,6 +216,15 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               ),
 
               const Divider(height: 32),
+              const _SectionTitle('通知'),
+              _NotificationSection(
+                settings: settings.notifications,
+                onChanged: (notifications) => ref
+                    .read(settingsProvider.notifier)
+                    .update(settings.copyWith(notifications: notifications)),
+              ),
+
+              const Divider(height: 32),
               const _SectionTitle('日志'),
               _LogSection(directory: coreLogDirectory()),
             ],
@@ -265,6 +274,61 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     ref.read(rustClientProvider).voiceStart(widget.session);
     setState(() => _started = true);
   }
+}
+
+/// What is worth interrupting the user for (§43).
+class _NotificationSection extends StatelessWidget {
+  const _NotificationSection({required this.settings, required this.onChanged});
+
+  final NotificationSettings settings;
+  final ValueChanged<NotificationSettings> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _switch('有人加入或离开', settings.presence, (v) => onChanged(settings.copyWith(presence: v))),
+        _switch('戳一下', settings.poke, (v) => onChanged(settings.copyWith(poke: v))),
+        _switch(
+          '频道与服务器消息',
+          settings.channelMessage,
+          (v) => onChanged(settings.copyWith(channelMessage: v)),
+        ),
+        _switch(
+          '私聊消息',
+          settings.directMessage,
+          (v) => onChanged(settings.copyWith(directMessage: v)),
+        ),
+        _switch(
+          '连接断开与恢复',
+          settings.connection,
+          (v) => onChanged(settings.copyWith(connection: v)),
+        ),
+        const SizedBox(height: 8),
+        // Separate from the switches above because it answers a different
+        // question — where the notification goes, not whether there is one.
+        _switch(
+          '窗口不在前台时用系统通知',
+          settings.system,
+          (v) => onChanged(settings.copyWith(system: v)),
+        ),
+        const Text(
+          '不提醒你正在看的那个会话——消息已经在你眼前了。',
+          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+        ),
+      ],
+    );
+  }
+
+  Widget _switch(String label, bool value, ValueChanged<bool> onChanged) => SwitchListTile(
+    value: value,
+    onChanged: onChanged,
+    title: Text(label, style: const TextStyle(fontSize: 13)),
+    dense: true,
+    contentPadding: EdgeInsets.zero,
+    activeThumbColor: AppColors.accent,
+  );
 }
 
 /// The voice-activation threshold, as a slider.

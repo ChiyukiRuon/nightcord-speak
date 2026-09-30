@@ -41,7 +41,9 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final conversation = _view.activeConversation;
+    // `shownConversation`, not `activeConversation`: a private conversation the
+    // user opened stays open even as the channel they are in changes underneath.
+    final conversation = _view.shownConversation;
     final messages = _view.messagesIn(conversation);
 
     if (messages.length != _lastCount) {
@@ -102,13 +104,28 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     final text = _composer.text.trim();
     if (text.isEmpty || !_canSend) return;
 
-    final channel = _view.ownChannelId;
-    if (channel == null) return;
-
     // Echoed back by the server, so nothing is added locally: a message that
     // failed to send should not appear to have succeeded.
-    ref.read(rustClientProvider).sendMessage(_view.session, ChannelTarget(channel), text);
+    final target = _target();
+    if (target == null) return;
+
+    ref.read(rustClientProvider).sendMessage(_view.session, target, text);
     _composer.clear();
+  }
+
+  /// Where a message typed now should go.
+  ///
+  /// The thread on screen decides: a private conversation sends to that person,
+  /// the channel sends to the channel — which is what everyone in it expects.
+  MessageTarget? _target() {
+    final open = _view.openConversation;
+    if (open != null && open.startsWith('client:')) {
+      final id = int.tryParse(open.substring('client:'.length));
+      if (id != null) return ClientTarget(id);
+    }
+
+    final channel = _view.ownChannelId;
+    return channel == null ? null : ChannelTarget(channel);
   }
 
   void _scrollToBottom() {
@@ -121,6 +138,25 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   }
 }
 
+/// Who a private conversation is with, when one is open.
+///
+/// The name comes from the view, and a client who has since disconnected is
+/// still in its offline list — a conversation should not lose its title because
+/// the other person logged off mid-sentence.
+({int id, String name})? _privateWith(ServerView view) {
+  final open = view.openConversation;
+  if (open == null || !open.startsWith('client:')) return null;
+
+  final id = int.tryParse(open.substring('client:'.length));
+  if (id == null) return null;
+
+  final name =
+      view.clients[id]?.name ??
+      view.offline.where((c) => c.id == id).firstOrNull?.name ??
+      '私聊';
+  return (id: id, name: name);
+}
+
 /// The channel name and topic.
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({required this.view});
@@ -130,18 +166,34 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final channel = view.ownChannel;
+    final other = _privateWith(view);
 
     return Container(
       color: AppColors.header,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       child: Row(
         children: [
-          const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
+          if (other != null)
+            IconButton(
+              icon: const Icon(Icons.arrow_back, size: 18),
+              tooltip: '返回频道',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: view.closeConversation,
+            )
+          else
+            const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
           const SizedBox(width: 10),
           Text(
-            channel?.name ?? '未加入频道',
+            other?.name ?? channel?.name ?? '未加入频道',
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
+          if (other != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Text('私聊', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            ),
           if (channel?.topic != null && channel!.topic!.isNotEmpty) ...[
             const SizedBox(width: 12),
             const SizedBox(height: 16, child: VerticalDivider(width: 1)),

@@ -11,7 +11,9 @@ import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/bookmarks.dart';
 import '../models/settings.dart';
+import '../state/notifications.dart';
 import '../state/server_view.dart';
+import '../util/system_notifications.dart';
 
 /// The running Rust core, started once for the app.
 ///
@@ -69,6 +71,14 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         // A session can publish before `connect` reports back, so the view is
         // created on first sight rather than waiting for the command result.
         final view = state[session] ?? ServerView(session: session);
+
+        // **Before** the event lands, and deliberately not as a second listener
+        // on the same stream: which of two listeners runs first is not
+        // something to leave to luck. The rules need the view as it was — a
+        // client on their way out is still in it, and that is the only place
+        // their name can still be read.
+        ref.read(noticesProvider.notifier).consider(session, event, view);
+
         view.apply(event);
         state = {...state, session: view};
 
@@ -150,6 +160,14 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 /// The audio devices the core last reported, by direction.
 final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(
   BookmarksNotifier.new,
+);
+
+final windowFocusProvider = NotifierProvider<WindowFocusNotifier, bool>(
+  WindowFocusNotifier.new,
+);
+
+final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(
+  NoticesNotifier.new,
 );
 
 final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
@@ -283,6 +301,94 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
     if (data == null) return;
 
     state = BookmarkList.fromJson(data);
+  }
+}
+
+/// Whether the window is in front.
+///
+/// The only thing the app knows about being away, and the only reason a desktop
+/// notification is ever sent: while the window is in front, a toast inside it is
+/// both visible and less intrusive.
+class WindowFocusNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  /// Records what the platform reported.
+  void set(bool focused) => state = focused;
+}
+
+/// What happened that is worth telling the user about.
+///
+/// Holds the notices currently on screen. The deciding is in
+/// `state/notifications.dart`, which is pure Dart and tested directly; this only
+/// wires it to the event stream and routes the answer.
+class NoticesNotifier extends Notifier<List<Notice>> {
+  /// Built once the settings arrive: the switches are what the rules run on,
+  /// and guessing at them before then would either announce everything or
+  /// nothing.
+  NotificationPolicy? _policy;
+
+  @override
+  List<Notice> build() {
+    ref.listen(settingsProvider, (_, settings) {
+      if (settings != null) {
+        _policy = NotificationPolicy(settings: settings.notifications);
+      }
+    });
+    return const [];
+  }
+
+  /// Considers one event against the view it is about to be applied to.
+  ///
+  /// Called from `SessionsNotifier` rather than subscribing separately — see the
+  /// note there.
+  void consider(int session, ClientEvent event, ServerView view) {
+    final policy = _policy;
+    if (policy == null) return;
+
+    final attention = _attention(session, view);
+    final notice = policy.observe(session, event, view, attention);
+    if (notice == null) return;
+
+    // Recorded whatever happens next: an unread marker is for when the user
+    // looks back, and that is true whether or not the window is in front.
+    final conversation = notice.conversation;
+    if (conversation != null) view.markUnread(conversation);
+
+    if (attention.focused) {
+      if (notice.toast) _show(notice);
+    } else if (_systemEnabled) {
+      showSystemNotification(title: notice.title, body: notice.body);
+    }
+  }
+
+  /// Dismisses a toast the user clicked or that has been up long enough.
+  void dismiss(Notice notice) => state = [...state]..remove(notice);
+
+  /// What the user is looking at right now.
+  Attention _attention(int session, ServerView view) {
+    // The shell falls back to the newest session when nothing is selected, so
+    // "which server is on screen" is not `activeSessionProvider` on its own —
+    // mirroring that here is what keeps the rule from being wrong for the first
+    // few frames after a connect.
+    final requested = ref.read(activeSessionProvider);
+    final sessions = ref.read(sessionsProvider);
+    final active = requested ?? (sessions.isEmpty ? null : sessions.keys.last);
+
+    return Attention(
+      session: active,
+      conversation: active == session ? view.shownConversation : null,
+      focused: ref.read(windowFocusProvider),
+    );
+  }
+
+  bool get _systemEnabled => ref.read(settingsProvider)?.notifications.system ?? true;
+
+  void _show(Notice notice) {
+    // Oldest first: three is what fits without covering the conversation, and a
+    // fourth would push one out before it could be read.
+    final next = [...state, notice];
+    state = next.length > 3 ? next.sublist(next.length - 3) : next;
   }
 }
 
