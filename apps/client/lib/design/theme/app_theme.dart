@@ -324,17 +324,32 @@ ThemeData buildAppTheme(AppPalette palette, Locale locale) {
       ),
     ),
 
+    // The track carries the state; the knob contrasts *with the track*, not
+    // with the page.
+    //
+    // It used to be `primaryPressed` under a `primary` thumb — two adjacent
+    // steps of the same ramp, twenty levels apart, both desaturated. An "on"
+    // switch came out a flat lavender blob whose knob you could barely find,
+    // which reads as a broken render or a disabled control rather than as
+    // "this is on". The knob is now the on-primary colour, so it is white in
+    // two themes and near-black in the third, ~115 levels from its track.
+    //
+    // The "off" track also moved: it was `bgDeep`, which is exactly the dialog
+    // a switch sits in, so the off state had an invisible track held together
+    // by a hairline outline.
     switchTheme: SwitchThemeData(
       thumbColor: _fill(<WidgetState, Color>{
-        WidgetState.selected: palette.primary,
-        WidgetState.disabled: palette.primaryDisabled,
+        WidgetState.disabled: palette.textDisabled,
+        WidgetState.selected: palette.textOnPrimary,
       }, palette.textTertiary),
       trackColor: _fill(<WidgetState, Color>{
-        WidgetState.selected: palette.primaryPressed,
-      }, palette.bgDeep),
+        WidgetState.disabled: palette.surface1,
+        WidgetState.selected: palette.primary,
+      }, palette.surface2),
       trackOutlineColor: _fill(<WidgetState, Color>{
+        WidgetState.disabled: palette.borderSubtle,
         WidgetState.selected: Colors.transparent,
-      }, palette.borderDefault),
+      }, palette.borderStrong),
     ),
 
     // The connect screen picks the protocol with one of these.

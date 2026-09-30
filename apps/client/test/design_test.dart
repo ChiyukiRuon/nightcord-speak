@@ -206,6 +206,34 @@ void main() {
           _checkMaterialRoles(built.colorScheme, palette);
         });
 
+        test('a switch that is on does not look like one that is off', () {
+          // Regression, reported from looking at the app: the "on" track was
+          // `primaryPressed` under a `primary` thumb — two adjacent steps of
+          // one ramp, twenty levels apart, both desaturated. It rendered as a
+          // flat pill whose knob you could barely find, which reads as a broken
+          // render or a disabled control rather than as "on".
+          final SwitchThemeData sw = built.switchTheme;
+          final Color onTrack = sw.trackColor!.resolve(<WidgetState>{WidgetState.selected})!;
+          final Color offTrack = sw.trackColor!.resolve(<WidgetState>{})!;
+          final Color onThumb = sw.thumbColor!.resolve(<WidgetState>{WidgetState.selected})!;
+
+          expect(
+            _step(onTrack, offTrack),
+            greaterThan(_visible * 2),
+            reason: '${palette.name} draws the same switch either way',
+          );
+          // The knob has to stand out against its own track — that is the whole
+          // read of "on".
+          expect(
+            _step(onThumb, onTrack),
+            greaterThan(_visible * 4),
+            reason: '${palette.name} hides the knob in its track',
+          );
+          // And the off track has to be visible on the dialog it sits in, which
+          // it was not while it was `bgDeep`.
+          expect(_step(offTrack, palette.bgDeep), greaterThan(_visible));
+        });
+
         test('the selected item of a dropdown is legible', () {
           // Regression, found by looking at the Black theme: Material paints a
           // dropdown's current entry with `focusColor` and draws `textPrimary`

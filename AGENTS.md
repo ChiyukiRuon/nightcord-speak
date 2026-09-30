@@ -274,7 +274,7 @@ cd apps/client && flutter gen-l10n
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test  --workspace --all-features                             # 357 个
-cd apps/client && flutter analyze && flutter test                  # 191 个
+cd apps/client && flutter analyze && flutter test                  # 200 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -394,7 +394,7 @@ cd apps/client && flutter analyze && flutter test                  # 191 个
 |------|--------------------------------|
 | Rust | **21,105 行**，16 crates + CLI + gateway |
 | Dart | **14,963 行**，64 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **357 Rust + 191 Dart**，全绿  |
+| 测试 | **357 Rust + 200 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
