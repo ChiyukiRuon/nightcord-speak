@@ -1,0 +1,31 @@
+# Configuration for `flutter gen-l10n` (see `generate: true` in pubspec.yaml).
+#
+# The generated `app_localizations*.dart` files are committed to the repository:
+# `flutter analyze` and `flutter test` do not run generation, only `pub get` /
+# `run` / `build` do, so a fresh clone without the generated files would not
+# even analyze. After editing an ARB file, run:
+#
+#     flutter gen-l10n
+#
+# or any command that rebuilds, and commit the regenerated files with it.
+
+arb-dir: lib/l10n
+
+# English is the template: a key missing from a translation falls back to it,
+# and it is where the `@`-metadata (placeholders, descriptions) is declared.
+template-arb-file: app_en.arb
+
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+
+# `AppLocalizations.of(context)` is used everywhere; making it nullable would
+# only add `!`s. The delegate is installed on every MaterialApp in the app.
+nullable-getter: false
+
+# The order here is the fallback order: a system language that is neither zh
+# nor en resolves to the first entry, which is English on purpose — an
+# international client's neutral fallback. A Chinese system gets `zh` by
+# matching, not by this list (docs/localization.md).
+preferred-supported-locales:
+  - en
+  - zh

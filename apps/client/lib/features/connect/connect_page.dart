@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ffi/rust_client.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/bookmarks.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
@@ -171,6 +172,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
       }
     });
 
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -203,9 +205,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 TextField(
                   controller: _address,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '服务器地址',
-                    hintText: 'example.com 或 192.168.1.10:9987',
+                  decoration: InputDecoration(
+                    labelText: l10n.connectAddressLabel,
+                    hintText: l10n.connectAddressHint,
                   ),
                   onSubmitted: (_) => _connect(),
                 ),
@@ -213,7 +215,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
 
                 TextField(
                   controller: _nickname,
-                  decoration: const InputDecoration(labelText: '昵称'),
+                  decoration: InputDecoration(labelText: l10n.connectNicknameLabel),
                   onSubmitted: (_) => _connect(),
                 ),
                 const SizedBox(height: 12),
@@ -221,9 +223,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 TextField(
                   controller: _password,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '服务器密码',
-                    hintText: '没有就留空',
+                  decoration: InputDecoration(
+                    labelText: l10n.connectServerPasswordLabel,
+                    hintText: l10n.connectServerPasswordHint,
                   ),
                   onSubmitted: (_) => _connect(),
                 ),
@@ -233,27 +235,19 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 // the handshake is on the roadmap, and until then picking the
                 // wrong one should be the user's explicit mistake rather than a
                 // silent default (§34).
+                //
+                // Both segments are enabled: the TS6 backend has been working
+                // since M0.4 — this page still said "not implemented" and
+                // refused the choice long after that stopped being true.
                 SegmentedButton<ProtocolKind>(
                   segments: const [
                     ButtonSegment(value: ProtocolKind.ts3, label: Text('TeamSpeak 3')),
-                    ButtonSegment(
-                      value: ProtocolKind.ts6,
-                      label: Text('TeamSpeak 6'),
-                      enabled: false,
-                    ),
+                    ButtonSegment(value: ProtocolKind.ts6, label: Text('TeamSpeak 6')),
                   ],
                   selected: {_protocol},
                   onSelectionChanged: (selection) =>
                       setState(() => _protocol = selection.first),
                 ),
-                if (_protocol == ProtocolKind.ts6)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'TS6 后端尚未实现（Milestone 0.4）',
-                      style: TextStyle(color: AppColors.idle, fontSize: 12),
-                    ),
-                  ),
                 const SizedBox(height: 24),
 
                 // Saving is offered next to connecting rather than in a menu:
@@ -267,7 +261,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                       onPressed: value.text.trim().isEmpty ? null : _save,
                       icon: const Icon(Icons.bookmark_add_outlined, size: 18),
                       style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
-                      label: const Text('保存这个服务器'),
+                      label: Text(l10n.connectSaveServer),
                     ),
                   ),
                 ),
@@ -285,7 +279,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('连接'),
+                      : Text(l10n.connectButton),
                 ),
               ],
             ),
@@ -321,7 +315,10 @@ class _SavedServers extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('已保存的服务器', style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            AppLocalizations.of(context).connectSavedServers,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 6),
           for (var index = 0; index < bookmarks.length; index++)
             _SavedServerRow(
@@ -352,6 +349,7 @@ class _SavedServerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
@@ -365,12 +363,12 @@ class _SavedServerRow extends StatelessWidget {
       // details can still be changed before the connection is made.
       onTap: onPick,
       trailing: PopupMenuButton<String>(
-        tooltip: '更多',
+        tooltip: l10n.connectMoreTooltip,
         icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textMuted),
         onSelected: (choice) => choice == 'rename' ? onRename() : onDelete(),
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'rename', child: Text('重命名')),
-          PopupMenuItem(value: 'delete', child: Text('删除')),
+        itemBuilder: (_) => [
+          PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
+          PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
         ],
       ),
     );
@@ -404,24 +402,25 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
       backgroundColor: AppColors.sidebar,
-      title: const Text('保存服务器'),
+      title: Text(l10n.connectSaveServerTitle),
       content: TextField(
         controller: _name,
         autofocus: true,
-        decoration: const InputDecoration(labelText: '名称'),
+        decoration: InputDecoration(labelText: l10n.connectNameLabel),
         onSubmitted: (_) => _submit(),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+          child: Text(l10n.cancelButton),
         ),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
           onPressed: _submit,
-          child: const Text('保存'),
+          child: Text(l10n.saveButton),
         ),
       ],
     );

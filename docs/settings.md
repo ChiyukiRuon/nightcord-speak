@@ -62,6 +62,9 @@
     "mute":         { "key": 458768, "ctrl": true, "shift": true, "alt": false, "meta": false },
     "deafen":       { "key": 458759, "ctrl": true, "shift": true, "alt": false, "meta": false },
     "push_to_talk": { "key": 458771, "ctrl": true, "shift": true, "alt": false, "meta": false }
+  },
+  "ui": {
+    "language": null
   }
 }
 ```
@@ -69,6 +72,11 @@
 `shortcuts` 的 `key` 是 **Flutter 的 `PhysicalKeyboardKey.usbHidUsage`**——物理键而不是
 字母，因为快捷键要的是「手放在哪里」。代价是这一节不便手改，界面是它的编辑器，
 见 [`docs/shortcuts.md`](shortcuts.md)。
+
+`ui.language` 是 `"zh"` 或 `"en"`，`null` 表示跟随操作系统。core 存这一节但从不读它——
+`settings.json` 是应用唯一的偏好文件，为前端的偏好另开存储会多出第二个真相。一个不认识的
+值（手改的 `"fr"`）按「跟随系统」处理而**不会**让整个文件算坏，值本身也保留。细节见
+[`docs/localization.md`](localization.md)。
 
 `input_device` / `output_device` 是 cpal 的 `"<host>:<device>"`，`null` 表示系统默认。
 想知道该填什么，`cargo run -p ts-audio --example list_devices`。
@@ -120,6 +128,7 @@ WARN ts_core::client: using default settings
 | 灵敏度 | 同上，同上 | 立即 |
 | 通知开关 | 前端 | 立即（见 [`docs/notifications.md`](notifications.md)） |
 | 快捷键 | 前端 | 立即重新注册系统热键（见 [`docs/shortcuts.md`](shortcuts.md)） |
+| 界面语言 | 前端 | 立即整棵树换语言（见 [`docs/localization.md`](localization.md)） |
 
 设备是唯一不能立即生效的：替换一条活着的 cpal 流意味着拆掉重开，在别人说话的时候做
 这件事比等一等更糟。设置界面在设备下拉下面写明了这一点。

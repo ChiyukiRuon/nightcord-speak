@@ -16,6 +16,7 @@ class Settings {
     this.connection = const ConnectionSettings(),
     this.notifications = const NotificationSettings(),
     this.shortcuts = const ShortcutSettings(),
+    this.ui = const UiSettings(),
   });
 
   /// On-disk format version. The core refuses one it does not know.
@@ -25,18 +26,21 @@ class Settings {
   final ConnectionSettings connection;
   final NotificationSettings notifications;
   final ShortcutSettings shortcuts;
+  final UiSettings ui;
 
   Settings copyWith({
     AudioSettings? audio,
     ConnectionSettings? connection,
     NotificationSettings? notifications,
     ShortcutSettings? shortcuts,
+    UiSettings? ui,
   }) => Settings(
     version: version,
     audio: audio ?? this.audio,
     connection: connection ?? this.connection,
     notifications: notifications ?? this.notifications,
     shortcuts: shortcuts ?? this.shortcuts,
+    ui: ui ?? this.ui,
   );
 
   factory Settings.fromJson(Map<String, dynamic> json) => Settings(
@@ -45,6 +49,7 @@ class Settings {
     connection: ConnectionSettings.fromJson(_object(json['connection'])),
     notifications: NotificationSettings.fromJson(_object(json['notifications'])),
     shortcuts: ShortcutSettings.fromJson(_object(json['shortcuts'])),
+    ui: UiSettings.fromJson(_object(json['ui'])),
   );
 
   Map<String, dynamic> toJson() => {
@@ -53,6 +58,7 @@ class Settings {
     'connection': connection.toJson(),
     'notifications': notifications.toJson(),
     'shortcuts': shortcuts.toJson(),
+    'ui': ui.toJson(),
   };
 }
 
@@ -267,6 +273,42 @@ class ConnectionSettings {
     'profile': profile,
     'max_reconnect_attempts': maxReconnectAttempts,
   };
+}
+
+/// How the front-end presents itself.
+///
+/// The core stores these but never reads them — they are here because
+/// `settings.json` is the application's single preferences file.
+class UiSettings {
+  const UiSettings({this.language});
+
+  /// The language the front-end renders in: `'zh'` or `'en'`.
+  ///
+  /// Null means "follow the system", which is the default. A hand-edited value
+  /// the UI does not know is kept in the file but read through
+  /// [requestedLanguage], which treats it as unset.
+  final String? language;
+
+  /// The language actually asked for, or null for "follow the system".
+  ///
+  /// Separate from [language] so an unrecognized value — a typo, or a language
+  /// this build does not have yet — falls back to the system language instead
+  /// of reaching the locale lookup and matching nothing.
+  String? get requestedLanguage => switch (language) {
+    'zh' || 'en' => language,
+    _ => null,
+  };
+
+  UiSettings copyWith({String? language, bool clearLanguage = false}) => UiSettings(
+    // Same convention as `AudioSettings`: null cannot mean "clear", so
+    // choosing 「跟随系统」 says so explicitly.
+    language: clearLanguage ? null : (language ?? this.language),
+  );
+
+  factory UiSettings.fromJson(Map<String, dynamic> json) =>
+      UiSettings(language: json['language'] as String?);
+
+  Map<String, dynamic> toJson() => {'language': language};
 }
 
 /// Reads a nested object, tolerating anything else.

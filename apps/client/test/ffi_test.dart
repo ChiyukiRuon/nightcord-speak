@@ -41,7 +41,7 @@ Future<Settings> readSettings(RustClient client) async {
   client.requestSettings();
   final result = await pending;
   if (!result.ok) {
-    throw StateError('the core refused to report settings: ${result.error?.message}');
+    throw StateError('the core refused to report settings: ${result.error?.debugMessage}');
   }
   return Settings.fromJson((result.data as Map).cast<String, dynamic>());
 }
@@ -52,7 +52,7 @@ Future<BookmarkList> readBookmarks(RustClient client) async {
   client.requestBookmarks();
   final result = await pending;
   if (!result.ok) {
-    throw StateError('the core refused to report bookmarks: ${result.error?.message}');
+    throw StateError('the core refused to report bookmarks: ${result.error?.debugMessage}');
   }
   return BookmarkList.fromJson((result.data as Map).cast<String, dynamic>());
 }
@@ -128,7 +128,7 @@ void main() {
       final result = await pending;
 
       expect(result.ok, isFalse);
-      expect(result.error?.message, contains('sideways'));
+      expect(result.error?.debugMessage, contains('sideways'));
       expect(result.session, isNull, reason: 'device queries are not session-scoped');
     });
 
@@ -142,7 +142,7 @@ void main() {
       client.requestAudioDevices('output');
       final result = await pending;
 
-      expect(result.ok, isTrue, reason: result.error?.message);
+      expect(result.ok, isTrue, reason: result.error?.debugMessage);
       expect(result.data?['direction'], 'output');
       expect(result.data?['devices'], isA<List<dynamic>>());
     });
@@ -223,18 +223,20 @@ void main() {
         // know about would be accepted and then silently stripped on the next
         // read, which is worse than rejecting it.
         notifications: original.notifications.copyWith(presence: false),
+        ui: original.ui.copyWith(language: 'en'),
       );
 
       final pending = awaitCommand(client, 'settings_update');
       client.updateSettings(edited);
       final result = await pending;
 
-      expect(result.ok, isTrue, reason: result.error?.message);
+      expect(result.ok, isTrue, reason: result.error?.debugMessage);
 
       final back = await readSettings(client);
       expect(back.connection.nickname, 'Round Trip');
       expect(back.notifications.presence, isFalse);
       expect(back.notifications.directMessage, isTrue, reason: 'one switch, not all');
+      expect(back.ui.language, 'en', reason: 'the language must not vanish on the way back');
     });
 
     test('the core answers with settings this build can read', () async {
@@ -273,7 +275,7 @@ void main() {
       );
       final result = await pending;
 
-      expect(result.ok, isTrue, reason: result.error?.message);
+      expect(result.ok, isTrue, reason: result.error?.debugMessage);
 
       final saved = (await readBookmarks(client)).bookmarks
           .where((b) => b.name == 'Round Trip')
@@ -300,7 +302,7 @@ void main() {
       final result = await pending;
 
       expect(result.ok, isFalse);
-      expect(result.error?.message, contains('scheme'));
+      expect(result.error?.debugMessage, contains('scheme'));
 
       // And nothing was written. Compared as JSON because these are value
       // objects without an `==`, and the point is that the stored bytes match.

@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/shortcuts.dart';
 import '../../theme/app_theme.dart';
 
@@ -138,8 +139,11 @@ class _ChordFieldState extends State<ChordField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final shown = _recording ? _pending : widget.chord;
-    final text = _recording ? (shown?.format() ?? '按下你想要的组合…') : (shown?.format() ?? '未设置');
+    final text = _recording
+        ? (shown?.format() ?? l10n.chordFieldIdle)
+        : (shown?.format() ?? l10n.chordFieldUnset);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

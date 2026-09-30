@@ -99,7 +99,7 @@ class _ShortcutHostState extends ConsumerState<ShortcutHost> {
       // silently doing nothing: a shortcut that does not work is otherwise
       // indistinguishable from one that is not bound, and the user has no way
       // to tell which.
-      logToCore('warn', 'could not register the ${action.label} shortcut: $error');
+      logToCore('warn', 'could not register the ${action.name} shortcut: $error');
     }
   }
 

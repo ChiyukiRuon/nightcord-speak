@@ -6,15 +6,14 @@
 import 'package:flutter/services.dart';
 
 /// What a shortcut can set off.
+///
+/// The UI labels live in `l10n/labels.dart`. The log line that names an action
+/// uses [Enum.name]: logs are English by convention, and a label would put
+/// whatever language the UI happened to be in into the record.
 enum ShortcutAction {
-  mute('静音'),
-  deafen('耳聋'),
-  pushToTalk('按键说话');
-
-  const ShortcutAction(this.label);
-
-  /// What the settings screen calls it.
-  final String label;
+  mute,
+  deafen,
+  pushToTalk,
 }
 
 /// One key combination.

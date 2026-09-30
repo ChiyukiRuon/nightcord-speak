@@ -27,7 +27,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"nightcord_client", origin, size)) {
+  // The brand, not the crate name, and not translated: a window title that
+  // changed with the UI language would need a plugin to reach it after
+  // start-up, and "Nightcord Speak" reads the same in both languages
+  // (docs/localization.md).
+  if (!window.Create(L"Nightcord Speak", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

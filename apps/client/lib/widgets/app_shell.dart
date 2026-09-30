@@ -10,6 +10,8 @@ import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
 import '../ffi/rust_client.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/errors.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
 import '../providers/providers.dart';
@@ -40,6 +42,7 @@ const String _profileVar = 'NIGHTCORD_PROFILE';
 /// exactly how bug ③ became hard to chase. Naming the file while the message is
 /// still on screen is the difference between a report and a guess.
 void _showError(BuildContext context, ClientError error) {
+  final l10n = AppLocalizations.of(context);
   final logDirectory = coreLogDirectory();
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
@@ -50,12 +53,14 @@ void _showError(BuildContext context, ClientError error) {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(error.message),
+          // The sentence is built here, in the language on screen now — the
+          // error itself carries data, not words (see `l10n/errors.dart`).
+          Text(error.describe(l10n)),
           if (logDirectory != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '日志：$logDirectory',
+                l10n.shellLogPath(logDirectory),
                 style: const TextStyle(
                   fontSize: 11,
                   fontFamily: 'monospace',
@@ -72,7 +77,7 @@ void _showError(BuildContext context, ClientError error) {
       action: logDirectory == null
           ? null
           : SnackBarAction(
-              label: '打开日志',
+              label: l10n.shellOpenLog,
               onPressed: () => revealDirectory(logDirectory),
             ),
     ),

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'ffi/rust_client.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
 import 'theme/app_theme.dart';
 import 'widgets/startup_failure.dart';
@@ -75,16 +76,26 @@ void _recordUncaughtErrors() {
 }
 
 /// The application.
-class NightcordApp extends StatelessWidget {
+///
+/// Consumer rather than plain widget because the language is a setting: the
+/// core answers it a moment after the first frame, and the whole tree — the
+/// window's strings, the Material widgets' own labels — has to turn over when
+/// it does.
+class NightcordApp extends ConsumerWidget {
   /// Builds the app.
   const NightcordApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'Nightcord Speak',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
+      // A concrete locale, resolved once in `localeProvider` — see there for
+      // why it is not left to MaterialApp's own resolution.
+      locale: ref.watch(localeProvider),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const AppShell(),
     );
   }

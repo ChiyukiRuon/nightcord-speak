@@ -321,7 +321,7 @@ class RustClient {
             session: null,
             outcome: CommandOutcome(
               ok: false,
-              error: ClientError(kind: 'protocol', message: '无法解析事件：$error'),
+              error: ClientError(kind: 'unparsable', detail: {'message': '$error'}),
             ),
           ),
         ),

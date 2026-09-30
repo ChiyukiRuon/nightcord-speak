@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
@@ -18,9 +19,10 @@ class VoiceBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final view = ref.watch(sessionsProvider)[session];
     final voice = view?.voice ?? const VoiceState();
-    final name = view?.ownClient?.name ?? '未连接';
+    final name = view?.ownClient?.name ?? l10n.connectionStateDisconnected;
     final online = view?.isConnected ?? false;
 
     return Container(
@@ -41,7 +43,7 @@ class VoiceBar extends ConsumerWidget {
           ),
           _VoiceButton(
             icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
-            tooltip: voice.inputMuted ? '取消静音' : '静音麦克风',
+            tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
             active: voice.inputMuted,
             colour: AppColors.danger,
             enabled: online,
@@ -51,7 +53,7 @@ class VoiceBar extends ConsumerWidget {
           ),
           _VoiceButton(
             icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
-            tooltip: voice.outputMuted ? '取消耳聋' : '耳聋（关闭扬声器）',
+            tooltip: voice.outputMuted ? l10n.voiceUndeafen : l10n.voiceDeafen,
             active: voice.outputMuted,
             colour: AppColors.danger,
             enabled: online,
@@ -59,7 +61,7 @@ class VoiceBar extends ConsumerWidget {
           ),
           _VoiceButton(
             icon: Icons.settings,
-            tooltip: '设置',
+            tooltip: l10n.settingsTitle,
             // Unlike the two buttons above, settings do not need a live
             // connection — and the log folder it offers is most wanted exactly
             // when the connection is not working.

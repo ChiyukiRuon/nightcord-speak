@@ -116,5 +116,38 @@ void main() {
         expect(VoiceActivationMode.fromWire(audio['mode'] as String), mode);
       }
     });
+
+    test('the language defaults to following the system and round trips', () {
+      // A file written before this section existed has no `ui` key, and it has
+      // to come back as null — "follow the system" — not as a fixed language
+      // nobody chose.
+      final bare = Settings.fromJson(const {});
+      expect(bare.ui.language, isNull);
+
+      const english = Settings(ui: UiSettings(language: 'en'));
+      final back = Settings.fromJson(roundTrip(english));
+      expect(back.ui.language, 'en');
+    });
+
+    test('an unrecognized language reads as following the system', () {
+      // Hand-edited, or a language this build does not have yet. The stored
+      // value survives — a future build may know it — but what the UI acts on
+      // is null, so a typo cannot make the locale lookup match nothing.
+      const unknown = UiSettings(language: 'fr');
+      expect(unknown.requestedLanguage, isNull);
+      expect(unknown.toJson()['language'], 'fr');
+
+      expect(const UiSettings(language: 'zh').requestedLanguage, 'zh');
+      expect(const UiSettings().requestedLanguage, isNull);
+    });
+
+    test('going back to following the system is expressible', () {
+      // The same convention as the audio devices: null cannot mean "clear" in
+      // a `copyWith`, so choosing 「跟随系统」 says so explicitly.
+      const chosen = UiSettings(language: 'en');
+      expect(chosen.copyWith(language: 'zh').language, 'zh');
+      expect(chosen.copyWith().language, 'en');
+      expect(chosen.copyWith(clearLanguage: true).language, isNull);
+    });
   });
 }

@@ -1,0 +1,651 @@
+{
+  "@@locale": "en",
+
+  "closeButton": "Close",
+  "@closeButton": {
+    "description": "Generic dismiss button"
+  },
+  "logLabel": "Log",
+  "@logLabel": {
+    "description": "Short label for the log section or file, on the start-up failure screen and in settings"
+  },
+  "openLogFolder": "Open log folder",
+  "@openLogFolder": {
+    "description": "Button that reveals the log directory in the file manager"
+  },
+
+  "startupFailureTitle": "The core failed to start",
+  "@startupFailureTitle": {
+    "description": "Heading of the screen shown when the Rust core could not be loaded at all"
+  },
+  "stackTraceLabel": "Stack trace",
+  "@stackTraceLabel": {
+    "description": "Label above the raw stack trace on the start-up failure screen"
+  },
+  "startupFailureLogHint": "The record of this start-up (if any) is in this file:",
+  "@startupFailureLogHint": {
+    "description": "Explains that the log file may hold the reason the core failed to start"
+  },
+
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings dialog"
+  },
+  "settingsLoading": "Reading settings…",
+  "@settingsLoading": {
+    "description": "Shown while the core has not answered the settings request yet"
+  },
+  "settingsAudioSection": "Audio",
+  "@settingsAudioSection": {
+    "description": "Heading of the audio section"
+  },
+  "settingsMicrophoneLabel": "Microphone",
+  "@settingsMicrophoneLabel": {
+    "description": "Label of the input device dropdown"
+  },
+  "settingsSpeakerLabel": "Speakers",
+  "@settingsSpeakerLabel": {
+    "description": "Label of the output device dropdown"
+  },
+  "settingsTransmissionMode": "Transmission",
+  "@settingsTransmissionMode": {
+    "description": "Label of the transmission mode dropdown"
+  },
+  "settingsDeviceChangeNote": "Device changes take effect the next time voice is started.",
+  "@settingsDeviceChangeNote": {
+    "description": "Explains that a device cannot be swapped under a running voice stream"
+  },
+  "settingsConnectFirst": "Connect to start voice.",
+  "@settingsConnectFirst": {
+    "description": "Shown instead of the above when no session is connected"
+  },
+  "settingsStartVoice": "Start voice",
+  "@settingsStartVoice": {
+    "description": "Button that starts the audio engine"
+  },
+  "settingsTestSpeaker": "Test speakers",
+  "@settingsTestSpeaker": {
+    "description": "Button that plays a test tone through the output device"
+  },
+  "settingsConnectionSection": "Connection",
+  "@settingsConnectionSection": {
+    "description": "Heading of the connection section"
+  },
+  "settingsDefaultNickname": "Default nickname",
+  "@settingsDefaultNickname": {
+    "description": "Label of the nickname text field"
+  },
+  "settingsIdentityProfile": "Identity profile",
+  "@settingsIdentityProfile": {
+    "description": "Label of the identity profile text field"
+  },
+  "settingsIdentityProfileHelper": "One profile name is one client identity on every server",
+  "@settingsIdentityProfileHelper": {
+    "description": "Helper text under the identity profile field"
+  },
+  "settingsAfterDrop": "After a drop",
+  "@settingsAfterDrop": {
+    "description": "Label of the reconnect dropdown"
+  },
+  "settingsReconnectUnlimited": "Reconnect (no limit)",
+  "@settingsReconnectUnlimited": {
+    "description": "Reconnect option: retry forever"
+  },
+  "settingsReconnectAttempts": "Retry up to {n} times",
+  "@settingsReconnectAttempts": {
+    "description": "Reconnect option: a bounded number of attempts",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsReconnectNever": "Do not reconnect",
+  "@settingsReconnectNever": {
+    "description": "Reconnect option: give up on the first drop"
+  },
+  "settingsNotificationsSection": "Notifications",
+  "@settingsNotificationsSection": {
+    "description": "Heading of the notifications section"
+  },
+  "settingsShortcutsSection": "Shortcuts",
+  "@settingsShortcutsSection": {
+    "description": "Heading of the shortcuts section"
+  },
+  "settingsShortcutsHelp": "Click the box and press the combination you want. Esc cancels, Delete clears (a cleared shortcut stops firing).",
+  "@settingsShortcutsHelp": {
+    "description": "Explains how the shortcut recorder works"
+  },
+  "settingsInterfaceSection": "Interface",
+  "@settingsInterfaceSection": {
+    "description": "Heading of the interface section (language now, theme later)"
+  },
+  "settingsLanguageLabel": "Language",
+  "@settingsLanguageLabel": {
+    "description": "Label of the language dropdown"
+  },
+  "settingsLanguageSystem": "Follow the system",
+  "@settingsLanguageSystem": {
+    "description": "Language option: use whatever the operating system asks for"
+  },
+  "settingsLanguageZh": "简体中文",
+  "@settingsLanguageZh": {
+    "description": "Language option for Chinese, written in its own language"
+  },
+  "settingsLanguageEn": "English",
+  "@settingsLanguageEn": {
+    "description": "Language option for English, written in its own language"
+  },
+  "settingsVoiceNotStarted": "Voice has not started. Once it does, this shows the device actually in use and the microphone level.",
+  "@settingsVoiceNotStarted": {
+    "description": "Shown in place of the device-in-use line before the engine runs"
+  },
+  "settingsDeviceInUse": "In use: {name}",
+  "@settingsDeviceInUse": {
+    "description": "The device the engine actually opened",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsNoMicrophone": "No microphone",
+  "@settingsNoMicrophone": {
+    "description": "Stand-in name when the engine reports no input device"
+  },
+  "settingsMicFellBack": "Your chosen microphone is gone; the system default is in use.",
+  "@settingsMicFellBack": {
+    "description": "Warns that a saved input device no longer resolves"
+  },
+  "settingsDeviceLost": "The device was unplugged while in use. Starting voice again will restore it.",
+  "@settingsDeviceLost": {
+    "description": "Warns that the running stream lost its device"
+  },
+  "settingsTransmitting": "Transmitting",
+  "@settingsTransmitting": {
+    "description": "Level meter state while audio is being sent"
+  },
+  "settingsBelowThreshold": "Below threshold — not transmitting",
+  "@settingsBelowThreshold": {
+    "description": "Level meter state while voice activation is closed"
+  },
+  "settingsLevelMeterHint": "Microphone level (shown once voice starts)",
+  "@settingsLevelMeterHint": {
+    "description": "Level meter state before the engine runs"
+  },
+  "settingsNotifyPresence": "Someone joins or leaves",
+  "@settingsNotifyPresence": {
+    "description": "Notification switch: join/leave events"
+  },
+  "settingsNotifyPoke": "Someone pokes you",
+  "@settingsNotifyPoke": {
+    "description": "Notification switch: pokes"
+  },
+  "settingsNotifyChannelMessage": "Channel and server messages",
+  "@settingsNotifyChannelMessage": {
+    "description": "Notification switch: channel/server chat"
+  },
+  "settingsNotifyDirectMessage": "Private messages",
+  "@settingsNotifyDirectMessage": {
+    "description": "Notification switch: direct messages"
+  },
+  "settingsNotifyConnection": "A connection drops or comes back",
+  "@settingsNotifyConnection": {
+    "description": "Notification switch: connection state changes"
+  },
+  "settingsNotifySystem": "Use system notifications when the window is not in front",
+  "@settingsNotifySystem": {
+    "description": "Notification switch: desktop toasts"
+  },
+  "settingsNotifyNote": "Never for the conversation you are looking at — you can already see it.",
+  "@settingsNotifyNote": {
+    "description": "Explains why the focused conversation never raises a notice"
+  },
+  "settingsSensitivity": "Sensitivity",
+  "@settingsSensitivity": {
+    "description": "Label of the voice activation slider"
+  },
+  "settingsSensitivityHint": "Higher is harder to trigger by room noise, and takes a louder voice.",
+  "@settingsSensitivityHint": {
+    "description": "Explains what the sensitivity value means"
+  },
+  "settingsNoLogDirectory": "This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)",
+  "@settingsNoLogDirectory": {
+    "description": "Shown in place of the log path where there is none"
+  },
+  "settingsDeviceMissing": "The previously selected device is gone; the system default will be used",
+  "@settingsDeviceMissing": {
+    "description": "Helper text on a device dropdown whose saved choice no longer resolves"
+  },
+  "settingsSystemDefault": "System default",
+  "@settingsSystemDefault": {
+    "description": "Device dropdown entry for letting the core pick"
+  },
+  "settingsDeviceDefaultSuffix": "{name} (default)",
+  "@settingsDeviceDefaultSuffix": {
+    "description": "Marks the device the operating system would pick by default",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
+  "cancelButton": "Cancel",
+  "@cancelButton": {
+    "description": "Generic cancel button"
+  },
+  "saveButton": "Save",
+  "@saveButton": {
+    "description": "Generic save button"
+  },
+
+  "connectAddressLabel": "Server address",
+  "@connectAddressLabel": {
+    "description": "Label of the address field on the connect screen"
+  },
+  "connectAddressHint": "example.com or 192.168.1.10:9987",
+  "@connectAddressHint": {
+    "description": "Example address shown in the connect screen's address field"
+  },
+  "connectNicknameLabel": "Nickname",
+  "@connectNicknameLabel": {
+    "description": "Label of the nickname field on the connect screen"
+  },
+  "connectServerPasswordLabel": "Server password",
+  "@connectServerPasswordLabel": {
+    "description": "Label of the password field on the connect screen"
+  },
+  "connectServerPasswordHint": "Leave empty if none",
+  "@connectServerPasswordHint": {
+    "description": "Hint under the server password field"
+  },
+  "connectSaveServer": "Save this server",
+  "@connectSaveServer": {
+    "description": "Button that stores the typed address as a bookmark"
+  },
+  "connectButton": "Connect",
+  "@connectButton": {
+    "description": "The button that starts the connection"
+  },
+  "connectSavedServers": "Saved servers",
+  "@connectSavedServers": {
+    "description": "Heading above the bookmark list on the connect screen"
+  },
+  "connectMoreTooltip": "More",
+  "@connectMoreTooltip": {
+    "description": "Tooltip of a saved server's overflow menu"
+  },
+  "connectRename": "Rename",
+  "@connectRename": {
+    "description": "Menu entry that renames a saved server"
+  },
+  "connectDelete": "Delete",
+  "@connectDelete": {
+    "description": "Menu entry that removes a saved server"
+  },
+  "connectSaveServerTitle": "Save server",
+  "@connectSaveServerTitle": {
+    "description": "Title of the dialog that names a new bookmark"
+  },
+  "connectNameLabel": "Name",
+  "@connectNameLabel": {
+    "description": "Label of the bookmark name field"
+  },
+
+  "sidebarOffline": "Offline — {count}",
+  "@sidebarOffline": {
+    "description": "Heading of the offline members section",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarSessionFallback": "Server {id}",
+  "@sidebarSessionFallback": {
+    "description": "Name shown for a session whose server has not named itself yet",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarSheetSaved": "Saved",
+  "@sidebarSheetSaved": {
+    "description": "Heading above the saved-server list in the session switcher"
+  },
+  "sidebarAddServer": "Add server",
+  "@sidebarAddServer": {
+    "description": "Entry that returns to the connect screen"
+  },
+  "memberAway": "Away",
+  "@memberAway": {
+    "description": "Tooltip of the away badge on a member row"
+  },
+  "memberMuted": "Muted",
+  "@memberMuted": {
+    "description": "Tooltip of the muted badge on a member row"
+  },
+  "memberRecording": "Recording",
+  "@memberRecording": {
+    "description": "Tooltip of the recording badge on a member row"
+  },
+  "connectionStateConnected": "Connected",
+  "@connectionStateConnected": {
+    "description": "Session state: connected"
+  },
+  "connectionStateConnecting": "Connecting",
+  "@connectionStateConnecting": {
+    "description": "Session state: connecting"
+  },
+  "connectionStateReconnecting": "Reconnecting",
+  "@connectionStateReconnecting": {
+    "description": "Session state: reconnecting"
+  },
+  "connectionStateDisconnecting": "Disconnecting",
+  "@connectionStateDisconnecting": {
+    "description": "Session state: disconnecting"
+  },
+  "connectionStateFailed": "Connection failed",
+  "@connectionStateFailed": {
+    "description": "Session state: failed"
+  },
+  "connectionStateDisconnected": "Not connected",
+  "@connectionStateDisconnected": {
+    "description": "Session state: disconnected"
+  },
+
+  "chatHintCompose": "Send a message",
+  "@chatHintCompose": {
+    "description": "Composer hint when a message can be sent"
+  },
+  "chatHintReconnecting": "Reconnecting…",
+  "@chatHintReconnecting": {
+    "description": "Composer hint while the session is reconnecting"
+  },
+  "chatHintConnecting": "Connecting…",
+  "@chatHintConnecting": {
+    "description": "Composer hint while the session is connecting"
+  },
+  "chatHintDisconnected": "Connection lost",
+  "@chatHintDisconnected": {
+    "description": "Composer hint when the connection is gone"
+  },
+  "chatHintJoinChannel": "Join a channel to speak",
+  "@chatHintJoinChannel": {
+    "description": "Composer hint when not in a channel"
+  },
+  "chatPrivateLabel": "Private chat",
+  "@chatPrivateLabel": {
+    "description": "Badge next to a private conversation's title, and the fallback title"
+  },
+  "chatBackToChannel": "Back to channel",
+  "@chatBackToChannel": {
+    "description": "Tooltip of the button that leaves a private conversation"
+  },
+  "chatNotInChannel": "Not in a channel",
+  "@chatNotInChannel": {
+    "description": "Chat header title when no channel is joined"
+  },
+  "chatOnlineCount": "{count} online",
+  "@chatOnlineCount": {
+    "description": "Number of clients online, in the chat header",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatEmpty": "No messages yet",
+  "@chatEmpty": {
+    "description": "Placeholder in an empty conversation"
+  },
+  "chatDownload": "Download",
+  "@chatDownload": {
+    "description": "Tooltip of an attachment's download button"
+  },
+  "chatFileTransferLater": "File transfer is coming in a later phase",
+  "@chatFileTransferLater": {
+    "description": "Tooltip when an attachment cannot be downloaded yet"
+  },
+  "timestampToday": "Today {clock}",
+  "@timestampToday": {
+    "description": "Message timestamp for today; the clock is 24-hour",
+    "placeholders": {
+      "clock": {
+        "type": "String"
+      }
+    }
+  },
+  "timestampYesterday": "Yesterday {clock}",
+  "@timestampYesterday": {
+    "description": "Message timestamp for yesterday",
+    "placeholders": {
+      "clock": {
+        "type": "String"
+      }
+    }
+  },
+  "timestampThisYear": "{month}/{day} {clock}",
+  "@timestampThisYear": {
+    "description": "Message timestamp for an earlier day in the same year",
+    "placeholders": {
+      "month": {
+        "type": "int"
+      },
+      "day": {
+        "type": "int"
+      },
+      "clock": {
+        "type": "String"
+      }
+    }
+  },
+  "timestampOtherYear": "{year}/{month}/{day}",
+  "@timestampOtherYear": {
+    "description": "Message timestamp for another year",
+    "placeholders": {
+      "year": {
+        "type": "int"
+      },
+      "month": {
+        "type": "int"
+      },
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+
+  "bannerReconnecting": "Connection lost — reconnecting…",
+  "@bannerReconnecting": {
+    "description": "Reconnect banner before a delay has been scheduled"
+  },
+  "bannerRetryCountdown": "Connection lost — retrying in {seconds}s (attempt {attempt})",
+  "@bannerRetryCountdown": {
+    "description": "Reconnect banner with the countdown and attempt number",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      },
+      "attempt": {
+        "type": "int"
+      }
+    }
+  },
+  "bannerDisconnect": "Disconnect",
+  "@bannerDisconnect": {
+    "description": "Button that stops the reconnect loop"
+  },
+
+  "voiceUnmuteMic": "Unmute microphone",
+  "@voiceUnmuteMic": {
+    "description": "Tooltip of the microphone button while muted"
+  },
+  "voiceMuteMic": "Mute microphone",
+  "@voiceMuteMic": {
+    "description": "Tooltip of the microphone button while open"
+  },
+  "voiceUndeafen": "Undeafen",
+  "@voiceUndeafen": {
+    "description": "Tooltip of the speaker button while deafened"
+  },
+  "voiceDeafen": "Deafen (mute speakers)",
+  "@voiceDeafen": {
+    "description": "Tooltip of the speaker button while listening"
+  },
+
+  "serverSessionEnded": "Session ended",
+  "@serverSessionEnded": {
+    "description": "Shown when the session is gone and the page has nothing to draw"
+  },
+
+  "chordFieldIdle": "Press the combination you want…",
+  "@chordFieldIdle": {
+    "description": "Shortcut recorder hint while not recording"
+  },
+  "chordFieldUnset": "Not set",
+  "@chordFieldUnset": {
+    "description": "Shortcut recorder placeholder for an unbound action"
+  },
+
+  "shellLogPath": "Log: {path}",
+  "@shellLogPath": {
+    "description": "Shows where the log file lives",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "shellOpenLog": "Open log",
+  "@shellOpenLog": {
+    "description": "Button on the error snackbar that reveals the log directory"
+  },
+
+  "errorTimeout": "The operation timed out",
+  "@errorTimeout": {
+    "description": "Error sentence for the timeout variant"
+  },
+  "errorLagged": "The interface fell behind and {count} events were dropped",
+  "@errorLagged": {
+    "description": "Error sentence when the core dropped events for a slow UI",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorCommandFailed": "The command failed",
+  "@errorCommandFailed": {
+    "description": "Fallback when a command failed without a reason from the core"
+  },
+  "errorJoinDenied": "You do not have permission to join that channel",
+  "@errorJoinDenied": {
+    "description": "Shown when the local permission snapshot refuses a channel join"
+  },
+  "errorUnparsable": "Could not parse an event: {message}",
+  "@errorUnparsable": {
+    "description": "Shown when an event from the core could not be decoded",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "errorServerCode": "The server returned error code {code}",
+  "@errorServerCode": {
+    "description": "Error sentence for a variant that carries only a server-side code",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "errorPermissionAction": "Permission denied: cannot {action}",
+  "@errorPermissionAction": {
+    "description": "Error sentence for a permission variant that names the action",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "errorMissingPermission": "Missing permission #{permission}",
+  "@errorMissingPermission": {
+    "description": "Error sentence for a variant that carries a permission id",
+    "placeholders": {
+      "permission": {
+        "type": "String"
+      }
+    }
+  },
+  "errorDeviceMissing": "Device not found: {name}",
+  "@errorDeviceMissing": {
+    "description": "Error sentence for a variant that names a device",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
+  "noticeJoined": "joined the server",
+  "@noticeJoined": {
+    "description": "Notification body when someone joins; the title is their name"
+  },
+  "noticeLeft": "left the server",
+  "@noticeLeft": {
+    "description": "Notification body when someone leaves"
+  },
+  "noticeSomeone": "Someone",
+  "@noticeSomeone": {
+    "description": "Fallback name when a departing client's name is unreadable"
+  },
+  "noticeServerFallback": "Server",
+  "@noticeServerFallback": {
+    "description": "Fallback title when the server has not named itself yet"
+  },
+  "noticeConnectionRestored": "Connection restored",
+  "@noticeConnectionRestored": {
+    "description": "Notification body after a reconnect succeeded"
+  },
+  "noticeReconnecting": "Connection lost — reconnecting",
+  "@noticeReconnecting": {
+    "description": "Notification body while a dropped connection is being retried"
+  },
+  "noticeConnectionFailed": "Connection failed",
+  "@noticeConnectionFailed": {
+    "description": "Notification body when the connection failed for good"
+  },
+
+  "modePushToTalk": "Push to talk",
+  "@modePushToTalk": {
+    "description": "Transmission mode: only while the key is held"
+  },
+  "modeVoiceActivation": "Voice activation",
+  "@modeVoiceActivation": {
+    "description": "Transmission mode: opens on voice above the threshold"
+  },
+  "modeContinuous": "Continuous",
+  "@modeContinuous": {
+    "description": "Transmission mode: always open"
+  },
+  "modeMuted": "Muted",
+  "@modeMuted": {
+    "description": "Transmission mode: closed"
+  },
+  "shortcutMute": "Mute",
+  "@shortcutMute": {
+    "description": "Shortcut action: toggle the microphone"
+  },
+  "shortcutDeafen": "Deafen",
+  "@shortcutDeafen": {
+    "description": "Shortcut action: toggle the speakers"
+  },
+  "shortcutPushToTalk": "Push to talk",
+  "@shortcutPushToTalk": {
+    "description": "Shortcut action: hold to transmit"
+  }
+}

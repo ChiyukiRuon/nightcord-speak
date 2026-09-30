@@ -15,6 +15,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ffi/rust_client.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/labels.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
@@ -102,6 +104,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final settings = ref.watch(settingsProvider);
 
     // Nothing to edit until the core answers. Drawing the form first would seed
@@ -109,14 +112,17 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     // `DropdownButtonFormField.initialValue` is read once, so it would not
     // correct itself afterwards.
     if (settings == null) {
-      return const AlertDialog(
+      return AlertDialog(
         backgroundColor: AppColors.sidebar,
-        title: Text('设置'),
+        title: Text(l10n.settingsTitle),
         content: SizedBox(
           width: 480,
           height: 80,
           child: Center(
-            child: Text('正在读取设置…', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text(
+              l10n.settingsLoading,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
           ),
         ),
       );
@@ -128,7 +134,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
 
     return AlertDialog(
       backgroundColor: AppColors.sidebar,
-      title: const Text('设置'),
+      title: Text(l10n.settingsTitle),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -136,9 +142,9 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _SectionTitle('音频'),
+              _SectionTitle(l10n.settingsAudioSection),
               _DeviceDropdown(
-                label: '麦克风',
+                label: l10n.settingsMicrophoneLabel,
                 value: settings.audio.inputDevice,
                 devices: devices['input'] ?? const <AudioDevice>[],
                 onChanged: (id) => _audio(
@@ -148,7 +154,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               ),
               const SizedBox(height: 12),
               _DeviceDropdown(
-                label: '扬声器',
+                label: l10n.settingsSpeakerLabel,
                 value: settings.audio.outputDevice,
                 devices: devices['output'] ?? const <AudioDevice>[],
                 onChanged: (id) => _audio(
@@ -160,10 +166,10 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               DropdownButtonFormField<VoiceActivationMode>(
                 initialValue: settings.audio.mode,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: '传输方式'),
+                decoration: InputDecoration(labelText: l10n.settingsTransmissionMode),
                 items: [
                   for (final mode in VoiceActivationMode.values)
-                    DropdownMenuItem(value: mode, child: Text(mode.label)),
+                    DropdownMenuItem(value: mode, child: Text(mode.label(l10n))),
                 ],
                 onChanged: (mode) {
                   if (mode == null) return;
@@ -198,8 +204,8 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               // is worse than waiting when someone is mid-sentence.
               Text(
                 connected
-                    ? '设备改动会在下次「开始语音」时生效。'
-                    : '连接后可开始语音。',
+                    ? l10n.settingsDeviceChangeNote
+                    : l10n.settingsConnectFirst,
                 style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               const SizedBox(height: 12),
@@ -208,7 +214,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   FilledButton(
                     style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
                     onPressed: (_started || !connected) ? null : _startVoice,
-                    child: const Text('开始语音'),
+                    child: Text(l10n.settingsStartVoice),
                   ),
                   const SizedBox(width: 12),
                   // Only meaningful with an engine: it owns the output device,
@@ -219,25 +225,25 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                         ? () => ref.read(voiceStatusProvider.notifier).testOutput()
                         : null,
                     icon: const Icon(Icons.volume_up_outlined, size: 18),
-                    label: const Text('测试扬声器'),
+                    label: Text(l10n.settingsTestSpeaker),
                   ),
                 ],
               ),
 
               const Divider(height: 32),
-              const _SectionTitle('连接'),
+              _SectionTitle(l10n.settingsConnectionSection),
               TextField(
                 controller: _nickname,
-                decoration: const InputDecoration(labelText: '默认昵称'),
+                decoration: InputDecoration(labelText: l10n.settingsDefaultNickname),
                 onSubmitted: (_) => _commitText(settings),
                 onTapOutside: (_) => _commitText(settings),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _profile,
-                decoration: const InputDecoration(
-                  labelText: '身份档',
-                  helperText: '同一个档名在所有服务器上是同一个客户端身份',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsIdentityProfile,
+                  helperText: l10n.settingsIdentityProfileHelper,
                 ),
                 onSubmitted: (_) => _commitText(settings),
                 onTapOutside: (_) => _commitText(settings),
@@ -246,12 +252,12 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               DropdownButtonFormField<int?>(
                 initialValue: settings.connection.maxReconnectAttempts,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: '断线后'),
-                items: const [
-                  DropdownMenuItem(value: null, child: Text('自动重连（不限次数）')),
-                  DropdownMenuItem(value: 3, child: Text('最多重试 3 次')),
-                  DropdownMenuItem(value: 10, child: Text('最多重试 10 次')),
-                  DropdownMenuItem(value: 0, child: Text('不自动重连')),
+                decoration: InputDecoration(labelText: l10n.settingsAfterDrop),
+                items: [
+                  DropdownMenuItem(value: null, child: Text(l10n.settingsReconnectUnlimited)),
+                  DropdownMenuItem(value: 3, child: Text(l10n.settingsReconnectAttempts(3))),
+                  DropdownMenuItem(value: 10, child: Text(l10n.settingsReconnectAttempts(10))),
+                  DropdownMenuItem(value: 0, child: Text(l10n.settingsReconnectNever)),
                 ],
                 onChanged: (attempts) => _connection(
                   settings,
@@ -263,7 +269,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               ),
 
               const Divider(height: 32),
-              const _SectionTitle('通知'),
+              _SectionTitle(l10n.settingsNotificationsSection),
               _NotificationSection(
                 settings: settings.notifications,
                 onChanged: (notifications) => ref
@@ -272,23 +278,43 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               ),
 
               const Divider(height: 32),
-              const _SectionTitle('快捷键'),
+              _SectionTitle(l10n.settingsShortcutsSection),
               for (final action in ShortcutAction.values)
                 ChordField(
-                  label: action.label,
+                  label: action.label(l10n),
                   chord: settings.shortcuts[action],
                   onChanged: (chord) => ref
                       .read(settingsProvider.notifier)
                       .update(settings.copyWith(shortcuts: settings.shortcuts.withBinding(action, chord))),
                 ),
               const SizedBox(height: 4),
-              const Text(
-                '点一下右边的框，然后按下你想要的组合。Esc 取消，Delete 清空（清空后不再触发）。',
-                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              Text(
+                l10n.settingsShortcutsHelp,
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
               ),
 
               const Divider(height: 32),
-              const _SectionTitle('日志'),
+              _SectionTitle(l10n.settingsInterfaceSection),
+              DropdownButtonFormField<String?>(
+                // `requestedLanguage`, not `language`: a hand-edited value this
+                // build does not know would match no item, and the dropdown
+                // asserts on that.
+                initialValue: settings.ui.requestedLanguage,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: l10n.settingsLanguageLabel),
+                items: [
+                  DropdownMenuItem(value: null, child: Text(l10n.settingsLanguageSystem)),
+                  DropdownMenuItem(value: 'zh', child: Text(l10n.settingsLanguageZh)),
+                  DropdownMenuItem(value: 'en', child: Text(l10n.settingsLanguageEn)),
+                ],
+                onChanged: (language) => _ui(
+                  settings,
+                  settings.ui.copyWith(language: language, clearLanguage: language == null),
+                ),
+              ),
+
+              const Divider(height: 32),
+              _SectionTitle(l10n.logLabel),
               _LogSection(directory: coreLogDirectory()),
             ],
           ),
@@ -297,7 +323,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
+          child: Text(l10n.closeButton),
         ),
       ],
     );
@@ -310,6 +336,11 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   /// Stores a connection change.
   void _connection(Settings settings, ConnectionSettings connection) =>
       ref.read(settingsProvider.notifier).update(settings.copyWith(connection: connection));
+
+  /// Stores a front-end change — currently just the language, but the whole
+  /// 「界面」 section comes through here.
+  void _ui(Settings settings, UiSettings ui) =>
+      ref.read(settingsProvider.notifier).update(settings.copyWith(ui: ui));
 
   /// Stores whatever the text fields currently hold.
   ///
@@ -352,13 +383,14 @@ class _DeviceInUse extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final status = this.status;
     final input = status?.input;
 
     if (status == null || !status.running) {
-      return const Text(
-        '尚未开始语音。开始语音后，这里会显示实际在用的设备与麦克风电平。',
-        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+      return Text(
+        l10n.settingsVoiceNotStarted,
+        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
       );
     }
 
@@ -366,23 +398,23 @@ class _DeviceInUse extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '正在使用：${input?.displayName ?? "没有麦克风"}',
+          l10n.settingsDeviceInUse(input?.displayName ?? l10n.settingsNoMicrophone),
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         if (input?.fellBack ?? false)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '你选的麦克风不在了，正在使用系统默认。',
-              style: TextStyle(fontSize: 12, color: AppColors.idle),
+              l10n.settingsMicFellBack,
+              style: const TextStyle(fontSize: 12, color: AppColors.idle),
             ),
           ),
         if (!status.healthy)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '设备在使用中断开了。重新开始语音可以恢复。',
-              style: TextStyle(fontSize: 12, color: AppColors.danger),
+              l10n.settingsDeviceLost,
+              style: const TextStyle(fontSize: 12, color: AppColors.danger),
             ),
           ),
       ],
@@ -403,6 +435,7 @@ class _LevelMeter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final running = status?.running ?? false;
     final level = running ? (status?.level ?? 0.0) : 0.0;
     final transmitting = running && (status?.transmitting ?? false);
@@ -444,8 +477,8 @@ class _LevelMeter extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           running
-              ? (transmitting ? '正在传输' : '低于阈值，未传输')
-              : '麦克风电平（开始语音后显示）',
+              ? (transmitting ? l10n.settingsTransmitting : l10n.settingsBelowThreshold)
+              : l10n.settingsLevelMeterHint,
           style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
         ),
       ],
@@ -462,23 +495,26 @@ class _NotificationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _switch('有人加入或离开', settings.presence, (v) => onChanged(settings.copyWith(presence: v))),
-        _switch('戳一下', settings.poke, (v) => onChanged(settings.copyWith(poke: v))),
+        _switch(l10n.settingsNotifyPresence, settings.presence,
+            (v) => onChanged(settings.copyWith(presence: v))),
+        _switch(l10n.settingsNotifyPoke, settings.poke,
+            (v) => onChanged(settings.copyWith(poke: v))),
         _switch(
-          '频道与服务器消息',
+          l10n.settingsNotifyChannelMessage,
           settings.channelMessage,
           (v) => onChanged(settings.copyWith(channelMessage: v)),
         ),
         _switch(
-          '私聊消息',
+          l10n.settingsNotifyDirectMessage,
           settings.directMessage,
           (v) => onChanged(settings.copyWith(directMessage: v)),
         ),
         _switch(
-          '连接断开与恢复',
+          l10n.settingsNotifyConnection,
           settings.connection,
           (v) => onChanged(settings.copyWith(connection: v)),
         ),
@@ -486,13 +522,13 @@ class _NotificationSection extends StatelessWidget {
         // Separate from the switches above because it answers a different
         // question — where the notification goes, not whether there is one.
         _switch(
-          '窗口不在前台时用系统通知',
+          l10n.settingsNotifySystem,
           settings.system,
           (v) => onChanged(settings.copyWith(system: v)),
         ),
-        const Text(
-          '不提醒你正在看的那个会话——消息已经在你眼前了。',
-          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+        Text(
+          l10n.settingsNotifyNote,
+          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
         ),
       ],
     );
@@ -524,12 +560,14 @@ class _SensitivitySlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            const Text('灵敏度', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text(l10n.settingsSensitivity,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const Spacer(),
             Text(
               '${(value * 100).round()}%',
@@ -544,9 +582,9 @@ class _SensitivitySlider extends StatelessWidget {
           onChangeEnd: enabled ? onChangeEnd : null,
           activeColor: AppColors.accent,
         ),
-        const Text(
-          '越高越不容易被环境噪音触发，也越需要说得响一点。',
-          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+        Text(
+          l10n.settingsSensitivityHint,
+          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
         ),
       ],
     );
@@ -562,15 +600,14 @@ class _LogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final directory = this.directory;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SelectableText(
-          directory ??
-              '这个平台没有可写的日志目录，记录只写入标准错误输出。\n'
-                  '（Android 与 iOS 需要由宿主应用提供沙箱路径。）',
+          directory ?? l10n.settingsNoLogDirectory,
           style: const TextStyle(
             fontSize: 12,
             height: 1.4,
@@ -584,7 +621,7 @@ class _LogSection extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: directory == null ? null : () => revealDirectory(directory),
             icon: const Icon(Icons.folder_open, size: 18),
-            label: const Text('打开日志文件夹'),
+            label: Text(l10n.openLogFolder),
           ),
         ),
       ],
@@ -608,6 +645,7 @@ class _DeviceDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     // A saved device that is no longer plugged in is not in the list, and
     // `DropdownButtonFormField` throws if its value is not among the items.
     // Showing 「系统默认」 and letting the core fall back is both truthful and
@@ -628,16 +666,16 @@ class _DeviceDropdown extends StatelessWidget {
         // failed enumeration is not evidence that anything is gone, and saying
         // so would send someone looking for a device that is still plugged in.
         helperText: value != null && known == null && devices.isNotEmpty
-            ? '上次选的设备不在了，将使用系统默认'
+            ? l10n.settingsDeviceMissing
             : null,
       ),
       items: [
-        const DropdownMenuItem(value: null, child: Text('系统默认')),
+        DropdownMenuItem(value: null, child: Text(l10n.settingsSystemDefault)),
         ...devices.map(
           (device) => DropdownMenuItem(
             value: device.id,
             child: Text(
-              device.isDefault ? '${device.name}（默认）' : device.name,
+              device.isDefault ? l10n.settingsDeviceDefaultSuffix(device.name) : device.name,
               overflow: TextOverflow.ellipsis,
             ),
           ),

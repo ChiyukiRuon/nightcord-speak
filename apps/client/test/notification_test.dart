@@ -1,10 +1,15 @@
 // What is worth interrupting the user for (§43).
 //
-// Pure Dart, like `server_view_test.dart` — the policy takes a clock so the one
-// time-based rule can be tested without waiting for it. A test that has to sleep
-// two seconds is a test that gets deleted.
+// No widgets, like `server_view_test.dart` — the policy takes a clock so the
+// one time-based rule can be tested without waiting for it (a test that has to
+// sleep two seconds is a test that gets deleted), and the sentences as a
+// getter, so the rules are tested in one language and the switch is covered
+// separately.
+
+import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nightcord_client/l10n/app_localizations.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
@@ -45,13 +50,26 @@ Message privateMessage(int id, String content, {int? from, String fromName = 'Bo
   timestamp: 0,
 );
 
+/// The Chinese strings, which is what these assertions were written in.
+///
+/// The policy itself is language-blind — it asks the getter for a sentence when
+/// it needs one — but the tests below pin the actual words, so they say which
+/// language they mean. `en` output is covered by the one test that asks for it.
+final AppLocalizations zh = lookupAppLocalizations(const Locale('zh'));
+
 /// A policy with everything switched on, and a clock the test drives.
 ({NotificationPolicy policy, TestClock clock}) policyWith({
   NotificationSettings? settings,
+  AppLocalizations? strings,
 }) {
   final clock = TestClock();
+  final l10n = strings ?? zh;
   return (
-    policy: NotificationPolicy(settings: settings ?? const NotificationSettings(), clock: clock.call),
+    policy: NotificationPolicy(
+      settings: settings ?? const NotificationSettings(),
+      strings: () => l10n,
+      clock: clock.call,
+    ),
     clock: clock,
   );
 }
@@ -387,6 +405,30 @@ void main() {
           reason: '$event',
         );
       }
+    });
+  });
+
+  group('language', () {
+    test('the sentences follow the getter, not the language at construction', () {
+      // The policy is built once per settings change and lives for the session
+      // — rebuilding it on a language switch would re-arm the replay window —
+      // so a switch has to be picked up by the strings getter alone.
+      final clock = TestClock();
+      var l10n = zh;
+      final policy = NotificationPolicy(
+        settings: const NotificationSettings(),
+        strings: () => l10n,
+        clock: clock.call,
+      );
+      final target = view();
+      settle(policy, clock, target);
+
+      final before = policy.observe(session, const ClientLeftEvent(7), target, const Attention());
+      expect(before?.body, '离开了服务器');
+
+      l10n = lookupAppLocalizations(const Locale('en'));
+      final after = policy.observe(session, const ClientLeftEvent(7), target, const Attention());
+      expect(after?.body, 'left the server');
     });
   });
 }

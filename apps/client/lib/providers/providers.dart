@@ -4,9 +4,13 @@
 // widgets read the store. Nothing here touches FFI directly except through
 // `RustClient`.
 
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/widgets.dart' show Locale, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../ffi/rust_client.dart';
+import '../l10n/app_localizations.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/bookmarks.dart';
@@ -99,7 +103,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         // The core dropped events, so what is on screen may be stale. Saying so
         // is the honest option; silently rendering a wrong tree is not.
         ref.read(lastErrorProvider.notifier).report(
-          ClientError(kind: 'lagged', message: '界面跟不上事件速度，已丢失 $missed 个事件'),
+          ClientError(kind: 'lagged', detail: {'missed': missed}),
         );
 
       case UnknownFfiEvent():
@@ -120,7 +124,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     }
 
     ref.read(lastErrorProvider.notifier).report(
-      result.error ?? const ClientError(kind: 'unknown', message: '命令失败'),
+      result.error ?? const ClientError(kind: 'command_failed'),
     );
   }
 
@@ -206,6 +210,32 @@ final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(
 final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
   SettingsNotifier.new,
 );
+
+/// What the operating system says the user prefers.
+///
+/// Behind a provider so that "what does the system think" can be answered by a
+/// test without a platform.
+final systemLocalesProvider = Provider<List<Locale>>(
+  (ref) => PlatformDispatcher.instance.locales,
+);
+
+/// The language the UI renders in, always resolved to a supported locale.
+///
+/// Deliberately concrete rather than "null means the system": the same answer
+/// is needed outside the widget tree — the notification rules compose
+/// sentences without a `BuildContext` — and resolving it in two places is how
+/// the toast and the window end up in different languages.
+///
+/// The setting belongs to the core, so null covers both "not answered yet" and
+/// "follow the system"; both resolve the same way, which keeps the first frame
+/// in the system's language instead of flashing a default.
+final localeProvider = Provider<Locale>((ref) {
+  final requested = ref.watch(settingsProvider)?.ui.requestedLanguage;
+  final preferred = requested == null
+      ? ref.watch(systemLocalesProvider)
+      : <Locale>[Locale(requested)];
+  return basicLocaleListResolution(preferred, AppLocalizations.supportedLocales);
+});
 
 final audioDevicesProvider =
     NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
@@ -396,7 +426,12 @@ class NoticesNotifier extends Notifier<List<Notice>> {
   List<Notice> build() {
     ref.listen(settingsProvider, (_, settings) {
       if (settings != null) {
-        _policy = NotificationPolicy(settings: settings.notifications);
+        _policy = NotificationPolicy(
+          settings: settings.notifications,
+          // Read at the moment a sentence is needed, so a language switch
+          // needs no rebuild of the policy — see `NotificationPolicy.strings`.
+          strings: () => lookupAppLocalizations(ref.read(localeProvider)),
+        );
       }
     });
     return const [];

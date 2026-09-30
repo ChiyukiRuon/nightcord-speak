@@ -173,6 +173,11 @@ cargo run -p nightcord-cli -- --address <host> --nickname <name>
 
 # Flutter（需要 CMAKE_GENERATOR，见上）
 cd apps/client && flutter run -d windows
+
+# 改了 apps/client/lib/l10n/*.arb 之后：重新生成并一起提交。
+# build/run 会自动生成，analyze/test 不会——所以生成文件必须进仓库，
+# 详见 docs/localization.md。
+cd apps/client && flutter gen-l10n
 ```
 
 ### 3.5 门禁：提交前必须全绿
@@ -180,8 +185,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 307 个
-cd apps/client && flutter analyze && flutter test                  # 107 个
+cargo test  --workspace --all-features                             # 311 个
+cd apps/client && flutter analyze && flutter test                  # 125 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -260,7 +265,7 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 只剩本地化 / 崩溃上报 |
+| M0.6     | Production Client               | 🚧 只剩崩溃上报 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -277,9 +282,9 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **16,696 行**，13 crates + CLI |
-| Dart | **8,811 行**，38 文件          |
-| 测试 | **307 Rust + 107 Dart**，全绿  |
+| Rust | **16,790 行**，13 crates + CLI |
+| Dart | **11,222 行**，45 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **311 Rust + 125 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -373,7 +378,7 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 | **握手重放被压住** | ✅ 应用连接时服务器上已有的人没有产生任何通知 |
 | **系统通知（我标为风险的那项）** | ✅ 实测：窗口最小化时，桌面右下角弹出 Windows toast。插件首次运行时自己补了缺的 `.lnk` |
 | 开关真的落盘 | ✅ FFI 往返测试断言新节存在且只关掉指定的那一个 |
-| 规则本身 | ✅ 18 条纯 Dart 测试：每个开关、正在看的线程、自己的消息、2 秒静默窗、重连重放、离场者名字 |
+| 规则本身 | ✅ 19 条纯 Dart 测试：每个开关、正在看的线程、自己的消息、2 秒静默窗、重连重放、离场者名字、语言切换 |
 | **未读点** | ⚠️ 只有单测——测试服务器只有一个频道，而 CLI 没有发私聊的参数，端到端制造不出「没在看的线程」 |
 
 **设备管理（M0.6 第六项）**
@@ -403,6 +408,20 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 | 设置里的记录器 | ⚠️ **没能截图确认**（滚动截图两次都不稳定），只有 `flutter analyze` 与代码审查 |
 | PTT 的按住/松开 | ⚠️ 未实测（`SendKeys` 无法按住不放） |
 
+**本地化（M0.6 第八项）**
+
+| 项 | 结果 |
+| --- | --- |
+| **读取与应用（端到端）** | ✅ 实测截图：手改 `settings.json` 的 `ui.language` 为 `"en"` → 启动 → **整页英文**（Saved servers / Server address / Connect）；改 `"zh"` → 整页中文。品牌与用户数据（书签、昵称）两种语言下均不变 |
+| 跟随系统 | ✅ 系统 zh-CN + `language: null` 的解析与 `"zh"` 走同一条路；`localeProvider` 单测覆盖五种语义（显式 zh/en、系统 zh、系统 fr→en、未答复、不认识的值） |
+| 设置里切换 | ⚠️ 只有单测与 FFI 往返（写入路径 = 对话框下拉 → core → 文件 → 读回）。**连接页够不到设置对话框**（§7 的已知缺口），本机没连服务器，对话框本体没有手工点到 |
+| 错误句与时间戳 | ✅ 单测双语断言：`describe` 透传 core 原文 / 结构化 payload / 四种 Dart 侧 kind；`formatTimestamp` 今天 / 昨天 / 同年 / 跨年 |
+| 通知文案随语言切换 | ✅ 单测：policy 构造后换 getter 的返回语言，下一句即换（重建 policy 会重置重放窗口，故用 getter） |
+| ARB 完整性 | ✅ 单测直接比较两份 ARB 的 key 集合——gen-l10n 对「缺翻译」是**静默回退英文**的，这是唯一守卫 |
+| Windows 窗口标题 | ✅ 截图确认已是 `Nightcord Speak`（品牌，不随语言变；`Runner.rc` 同步） |
+| **顺带修正**：TS6 分段陈旧 UI | ✅ 截图确认两个分段都可选——原先 `enabled: false` + 「尚未实现」停留在 M0.4 之前，见 §6 ⑤ |
+| `flutter gen-l10n` 产物入库 | ✅ 生成文件已提交（`analyze`/`test` 不会自动生成，不提交则克隆后第一次门禁即红） |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -420,8 +439,9 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 
 ## 6. 过程中修掉的真 bug
 
-四个都是「**前端对 core 的认知与实际不符**」，都只有真正跑起来才暴露——
-单元测试全绿、CLI 也正常。
+前四个都是「**前端对 core 的认知与实际不符**」，都只有真正跑起来才暴露——
+单元测试全绿、CLI 也正常。⑤ 是同一类（UI 落后于后端能力），只是这次是在读代码
+时撞见的。
 
 | # | 症状                           | 根因                                                    | 修法                                                          |
 |---|--------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
@@ -429,6 +449,7 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 | ② | 聊天输入框始终禁用             | 权限提示缺失被当成「拒绝」（hints 是**可选**的）        | 缺失 = 未知 = 放行；服务器仍是权威                            |
 | ③ | 启动语音前按静音弹红错         | 无引擎时报 `NoInputDevice`——既不该报错，解释也是错的    | 记成 **intent**，`start_voice` 时应用                         |
 | ④ | 核心主动报的错误**完全不显示** | `ErrorEvent` 被 `server_view.dart` 归入「不参与渲染」而 `break` 掉，既没提示也没 SnackBar——握手失败、掉线、重连拒绝时频道树就那么僵着。日志里有，用户看不到 | `providers.dart` 里让它也走 `lastErrorProvider`，于是自动获得提示与日志（做 logging 时顺带发现） |
+| ⑤ | TS6 早已可用，连接页却拒绝选择 | 分段按钮的 `enabled: false` 与「TS6 后端尚未实现」停留在 M0.4 之前；M0.4 实测通过后没人回头改 UI | 启用分段、删掉过时提示（做本地化扫荡到该文件时发现）          |
 
 ③ 由用户指出。**教训**：错误只以 SnackBar 出现、不落日志，线索几秒就没了——
 这正是 M0.6 的 logging 要补的。
@@ -457,7 +478,7 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
       [`docs/bookmarks.md`](docs/bookmarks.md)。模型从 `ts-protocol` 搬到了 `ts-settings`
       （分层），并改名为 `Bookmark`（`Server` 在两个语言里都已名花有主）。
 - [x] **通知** —— 浮层 + 未读点 + 系统通知（桌面 `local_notifier`）。判断规则是纯 Dart、
-      可注入时钟，18 条测试。顺带把**私聊界面**做通了（点频道树里的人即可），
+      可注入时钟与文案表，19 条测试。顺带把**私聊界面**做通了（点频道树里的人即可），
       否则私聊通知点了没地方去。见 [`docs/notifications.md`](docs/notifications.md)。
 - [x] **设备管理** —— 电平表、实际在用哪个设备（含失效回退提示）、测试扬声器、
       热插拔轮询，全部走一个新命令 `nightcord_voice_status`。顺带修掉两个真 bug：
@@ -465,7 +486,10 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
       见 [`docs/devices.md`](docs/devices.md)。
 - [x] **快捷键** —— 三个动作、系统级、可配置。顺带修掉旧 PTT 的一个真 bug
       （先松 Ctrl 会卡在「一直发着」）。见 [`docs/shortcuts.md`](docs/shortcuts.md)。
-- [ ] 本地化
+- [x] **本地化** —— zh + en，官方 `flutter gen-l10n`；语言存 `settings.json` 的
+      `ui.language`，默认跟随系统。两处无 BuildContext 的组句（错误句、通知文案）
+      改为「状态层存数据、渲染期组句」。顺带修正连接页停滞在 M0.4 之前的 TS6 陈旧 UI。
+      见 [`docs/localization.md`](docs/localization.md)。
 - [ ] 崩溃上报
 
 ### 其他
@@ -513,6 +537,7 @@ cd apps/client && flutter analyze && flutter test                  # 107 个
 | `docs/notifications.md`    | 通知：三种送达方式、两个坑、为什么不打扰正在看的、Windows toast 依赖 |
 | `docs/devices.md`          | 设备：状态出口、为什么电平是拉不是推、静音着采集就是麦克风测试 |
 | `docs/shortcuts.md`        | 快捷键：为什么系统级、物理键与 HID 码的代价、旧 PTT 的卡住 bug |
+| `docs/localization.md`     | 本地化：工具与文件、语言如何决定、无 context 组句、什么不本地化、加语言/加文案 |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

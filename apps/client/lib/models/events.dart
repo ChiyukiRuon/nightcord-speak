@@ -7,54 +7,47 @@
 import 'domain.dart';
 
 /// An error, in the unified vocabulary from `ts-model` (§37).
+///
+/// Pure data: the sentence the user reads is built at render time by
+/// `l10n/errors.dart::describe`, so an error raised before a language switch
+/// cannot show the old language afterwards — and the model keeps no strings of
+/// its own.
 class ClientError {
-  const ClientError({required this.kind, required this.message});
+  const ClientError({required this.kind, this.detail});
 
   /// The variant name, e.g. `network`, `permission`, `timeout`.
+  ///
+  /// Besides the core's own variants there are a few Dart-side kinds for
+  /// failures the core never sees: `command_failed`, `lagged`, `unparsable`,
+  /// `join_denied`. `l10n/errors.dart` is the one place that knows them all.
   final String kind;
 
-  /// Something a person can read.
-  final String message;
+  /// The variant's payload exactly as it arrived.
+  ///
+  /// Shaped differently per variant — a struct with a `message`, a bare
+  /// string, or nothing at all for unit variants — and kept raw because what
+  /// it means is only decided when the sentence is built.
+  final Object? detail;
 
   /// Whether trying again could plausibly work.
   bool get isRetryable => kind == 'network' || kind == 'timeout';
 
-  factory ClientError.fromJson(Map<String, dynamic> json) {
-    final kind = json['kind'] as String? ?? 'unknown';
-    return ClientError(kind: kind, message: _describe(kind, json['detail']));
-  }
+  factory ClientError.fromJson(Map<String, dynamic> json) =>
+      ClientError(kind: json['kind'] as String? ?? 'unknown', detail: json['detail']);
 
-  /// Turns the variant's payload into a sentence.
+  /// The core's own words when it sent any — for logs and tests, not the UI.
   ///
-  /// The payloads are shaped differently per variant — a struct with a
-  /// `message`, a bare string, or nothing at all for unit variants — so this is
-  /// where that irregularity is absorbed rather than at every call site.
-  static String _describe(String kind, Object? detail) {
-    if (detail == null) {
-      return switch (kind) {
-        'timeout' => '操作超时',
-        _ => kind,
-      };
-    }
-    if (detail is String) return detail;
-    if (detail is Map) {
-      final message = detail['message'] as String?;
-      if (message != null) return message;
-      // Some variants carry no free-text message, only a code or a name.
-      final code = detail['server_code'];
-      if (code != null) return '服务器返回错误码 $code';
-      final action = detail['action'] as String?;
-      if (action != null) return '权限不足：无法 $action';
-      final permission = detail['permission'];
-      if (permission != null) return '缺少权限 #$permission';
-      final name = detail['name'] as String?;
-      if (name != null) return '找不到设备 $name';
-    }
-    return kind;
-  }
+  /// Whatever the core wrote is already the most specific thing about this
+  /// error and is English by construction; the UI renders a translated
+  /// sentence instead (`l10n/errors.dart`).
+  String get debugMessage => switch (detail) {
+    final String text => text,
+    final Map<Object?, Object?> map when map['message'] is String => map['message']! as String,
+    _ => kind,
+  };
 
   @override
-  String toString() => message;
+  String toString() => debugMessage;
 }
 
 /// Something that happened on a session.

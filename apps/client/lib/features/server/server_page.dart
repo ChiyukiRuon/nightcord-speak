@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
@@ -31,8 +32,13 @@ class ServerPage extends ConsumerWidget {
     // Reached only when the session was deliberately forgotten — losing a
     // connection keeps the view, precisely so a reconnect can fill it back in.
     if (view == null) {
-      return const Scaffold(
-        body: Center(child: Text('会话已结束', style: TextStyle(color: AppColors.textSecondary))),
+      return Scaffold(
+        body: Center(
+          child: Text(
+            AppLocalizations.of(context).serverSessionEnded,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
       );
     }
 

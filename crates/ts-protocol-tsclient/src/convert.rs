@@ -153,9 +153,20 @@ pub fn permissions(book: &BookConnection) -> Permissions {
     let own = book.clients.get(&book.own_client);
     let channel = own.and_then(|client| book.channels.get(&client.channel));
 
-    let channel_hints = channel.and_then(|c| c.permission_hints);
-    let client_hints = own.and_then(|c| c.permission_hints);
+    permissions_from(
+        channel.and_then(|c| c.permission_hints),
+        own.and_then(|c| c.permission_hints),
+    )
+}
 
+/// Maps the two hint sets onto the domain's permissions.
+///
+/// Split out from [`permissions`] so the rule above can be tested without
+/// constructing a whole `BookConnection` — see `absent_hints_read_as_allowed`.
+fn permissions_from(
+    channel_hints: Option<ChannelPermissionHint>,
+    client_hints: Option<ClientPermissionHint>,
+) -> Permissions {
     Permissions {
         // `is_none_or` reads as "no hints, or hints that include the bit".
         can_join_channel: channel_hints.is_none_or(|h| h.contains(ChannelPermissionHint::JOIN)),
@@ -233,6 +244,36 @@ mod tests {
         assert_eq!(
             parent_of(tsclientlib::ChannelId(7)),
             Some(ChannelId::new(7))
+        );
+    }
+
+    #[test]
+    fn absent_hints_read_as_allowed() {
+        // Regression: hints are optional, and reading their absence as a denial
+        // is how the message composer ended up disabled on servers that simply
+        // do not volunteer them. The server stays the authority — it refuses
+        // with an error the user can see — so unknown must mean allowed.
+        assert_eq!(permissions_from(None, None), Permissions::all());
+    }
+
+    #[test]
+    fn present_hints_are_taken_at_their_word() {
+        // The other half: once the server does volunteer hints, an unset bit is
+        // a real answer, not a missing one.
+        let permissions = permissions_from(
+            Some(ChannelPermissionHint::JOIN | ChannelPermissionHint::SUBSCRIBE),
+            Some(ClientPermissionHint::KICK_CHANNEL),
+        );
+
+        assert_eq!(
+            permissions,
+            Permissions {
+                can_join_channel: true,
+                can_send_channel_message: true,
+                // Either kick hint on its own is enough.
+                can_kick: true,
+                ..Permissions::none()
+            }
         );
     }
 }

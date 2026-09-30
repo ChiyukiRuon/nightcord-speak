@@ -73,6 +73,10 @@ pub struct Settings {
     /// Which keys do what (§42).
     #[serde(default)]
     pub shortcuts: ShortcutSettings,
+
+    /// How the front-end presents itself — currently just the language.
+    #[serde(default)]
+    pub ui: UiSettings,
 }
 
 impl Default for Settings {
@@ -83,6 +87,7 @@ impl Default for Settings {
             connection: ConnectionSettings::default(),
             notifications: NotificationSettings::default(),
             shortcuts: ShortcutSettings::default(),
+            ui: UiSettings::default(),
         }
     }
 }
@@ -319,6 +324,24 @@ impl ConnectionSettings {
     }
 }
 
+/// How the front-end presents itself.
+///
+/// The core never reads these — they live here because `settings.json` is the
+/// application's single preferences file, and a second store for "front-end
+/// things" would be a second answer to keep in sync.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct UiSettings {
+    /// The language the front-end renders in: `"zh"` or `"en"`.
+    ///
+    /// `None` — follow the operating system, which is the default and the right
+    /// answer for almost everyone. A free string rather than an enum so that a
+    /// hand-written value the front-end does not know costs that one preference
+    /// instead of making the whole file malformed; the front-end reads anything
+    /// it does not recognize as "follow the system".
+    #[serde(default)]
+    pub language: Option<String>,
+}
+
 /// Reads and writes [`Settings`] in one directory.
 ///
 /// The root is explicit so tests can point at a temporary directory and mobile
@@ -472,6 +495,9 @@ mod tests {
             },
             notifications: NotificationSettings::default(),
             shortcuts: ShortcutSettings::default(),
+            ui: UiSettings {
+                language: Some("en".into()),
+            },
         };
 
         store.save(&settings).unwrap();
@@ -635,6 +661,33 @@ mod tests {
 
         let loaded = store.load().unwrap();
         assert_eq!(loaded.shortcuts, ShortcutSettings::default());
+    }
+
+    #[test]
+    fn a_file_written_before_the_ui_section_existed_follows_the_system() {
+        let dir = TempDir::new("noui");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"version":1,"connection":{"nickname":"Bob"}}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.ui.language, None);
+    }
+
+    #[test]
+    fn an_unknown_language_is_kept_rather_than_rejected() {
+        // The front-end reads anything it does not recognize as "follow the
+        // system", and the value survives so that a future front-end — or the
+        // same one after an upgrade — can still make sense of it.
+        let dir = TempDir::new("unknownlang");
+        let store = dir.store();
+        fs::write(store.path(), br#"{"version":1,"ui":{"language":"fr"}}"#).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.ui.language.as_deref(), Some("fr"));
     }
 
     #[test]

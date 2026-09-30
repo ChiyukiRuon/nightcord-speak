@@ -30,6 +30,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Ships the Material/Cupertino/Widgets translation delegates that go
+  # alongside our own `AppLocalizations`.
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -38,6 +42,10 @@ dependencies:
   ffi: ^2.2.0
   local_notifier: ^0.1.6
   hotkey_manager: ^0.2.3
+  # `any` on purpose: the generated localization code imports this, and its
+  # version is pinned by `flutter_localizations`, not by us. Naming a range
+  # here would only be a second opinion that can conflict with the SDK's.
+  intl: any
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +68,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Runs `gen-l10n` during `pub get`/`run`/`build` so the generated
+  # `lib/l10n/app_localizations*.dart` files stay in step with the ARB files.
+  # The generated files are committed (see `l10n.yaml`): `flutter analyze` and
+  # `flutter test` do *not* regenerate, so a clone without them would not even
+  # analyze.
+  generate: true
 
   # To add assets to your application, add an assets section, like this:
   # assets:

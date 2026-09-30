@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../../state/server_view.dart';
@@ -90,13 +91,14 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   /// so the old blanket 「加入频道后才能发言」 blamed the one thing that was not
   /// wrong — and the input stayed disabled with nothing on screen explaining it.
   String get _hint {
-    if (_canSend) return '发送消息';
+    final l10n = AppLocalizations.of(context);
+    if (_canSend) return l10n.chatHintCompose;
 
     return switch (_view.connection) {
-      ConnectionState.reconnecting => '正在重连…',
-      ConnectionState.connecting => '正在连接…',
-      ConnectionState.disconnected || ConnectionState.failed => '连接已断开',
-      _ => '加入频道后才能发言',
+      ConnectionState.reconnecting => l10n.chatHintReconnecting,
+      ConnectionState.connecting => l10n.chatHintConnecting,
+      ConnectionState.disconnected || ConnectionState.failed => l10n.chatHintDisconnected,
+      _ => l10n.chatHintJoinChannel,
     };
   }
 
@@ -143,7 +145,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
 /// The name comes from the view, and a client who has since disconnected is
 /// still in its offline list — a conversation should not lose its title because
 /// the other person logged off mid-sentence.
-({int id, String name})? _privateWith(ServerView view) {
+({int id, String name})? _privateWith(ServerView view, AppLocalizations l10n) {
   final open = view.openConversation;
   if (open == null || !open.startsWith('client:')) return null;
 
@@ -153,7 +155,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   final name =
       view.clients[id]?.name ??
       view.offline.where((c) => c.id == id).firstOrNull?.name ??
-      '私聊';
+      l10n.chatPrivateLabel;
   return (id: id, name: name);
 }
 
@@ -165,8 +167,9 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final channel = view.ownChannel;
-    final other = _privateWith(view);
+    final other = _privateWith(view, l10n);
 
     return Container(
       color: AppColors.header,
@@ -176,7 +179,7 @@ class _ChatHeader extends StatelessWidget {
           if (other != null)
             IconButton(
               icon: const Icon(Icons.arrow_back, size: 18),
-              tooltip: '返回频道',
+              tooltip: l10n.chatBackToChannel,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -186,13 +189,16 @@ class _ChatHeader extends StatelessWidget {
             const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
           const SizedBox(width: 10),
           Text(
-            other?.name ?? channel?.name ?? '未加入频道',
+            other?.name ?? channel?.name ?? l10n.chatNotInChannel,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
           if (other != null)
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: Text('私聊', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                l10n.chatPrivateLabel,
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
             ),
           if (channel?.topic != null && channel!.topic!.isNotEmpty) ...[
             const SizedBox(width: 12),
@@ -209,7 +215,7 @@ class _ChatHeader extends StatelessWidget {
           const Spacer(),
           if (view.info != null)
             Text(
-              '${view.info!.clientsOnline} 在线',
+              l10n.chatOnlineCount(view.info!.clientsOnline),
               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
             ),
         ],
@@ -225,13 +231,16 @@ class _EmptyChannel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.forum_outlined, size: 40, color: AppColors.textMuted),
-          SizedBox(height: 12),
-          Text('还没有消息', style: TextStyle(color: AppColors.textSecondary)),
+          const Icon(Icons.forum_outlined, size: 40, color: AppColors.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            AppLocalizations.of(context).chatEmpty,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
         ],
       ),
     );
@@ -246,6 +255,7 @@ class _MessageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Row(
@@ -270,7 +280,7 @@ class _MessageTile extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      formatTimestamp(message.sentAt),
+                      formatTimestamp(l10n, message.sentAt),
                       style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                     ),
                     if (message.isPrivate) ...[
@@ -313,6 +323,7 @@ class _AttachmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final available = attachment.isAvailable;
 
     return Container(
@@ -361,7 +372,7 @@ class _AttachmentCard extends StatelessWidget {
           ),
           IconButton(
             onPressed: available ? null : null,
-            tooltip: available ? '下载' : '文件传输将在下个阶段支持',
+            tooltip: available ? l10n.chatDownload : l10n.chatFileTransferLater,
             icon: const Icon(Icons.download, size: 20),
             color: AppColors.textSecondary,
           ),
@@ -428,9 +439,11 @@ class _Composer extends StatelessWidget {
 
 /// A message timestamp, in the form a person reads.
 ///
-/// "今天 5:04" rather than a full date for anything recent, because that is
-/// what someone scrolling a live conversation needs.
-String formatTimestamp(DateTime when, {DateTime? now}) {
+/// 「今天 5:04」 rather than a full date for anything recent, because that is
+/// what someone scrolling a live conversation needs. The words come from the
+/// strings file; the clock stays 24-hour in both languages — a deliberate
+/// simplification recorded in `docs/localization.md`.
+String formatTimestamp(AppLocalizations l10n, DateTime when, {DateTime? now}) {
   final reference = now ?? DateTime.now();
   final clock = '${when.hour}:${when.minute.toString().padLeft(2, '0')}';
 
@@ -438,8 +451,8 @@ String formatTimestamp(DateTime when, {DateTime? now}) {
   final that = DateTime(when.year, when.month, when.day);
   final days = today.difference(that).inDays;
 
-  if (days == 0) return '今天 $clock';
-  if (days == 1) return '昨天 $clock';
-  if (when.year == reference.year) return '${when.month}月${when.day}日 $clock';
-  return '${when.year}/${when.month}/${when.day}';
+  if (days == 0) return l10n.timestampToday(clock);
+  if (days == 1) return l10n.timestampYesterday(clock);
+  if (when.year == reference.year) return l10n.timestampThisYear(when.month, when.day, clock);
+  return l10n.timestampOtherYear(when.year, when.month, when.day);
 }

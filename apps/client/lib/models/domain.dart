@@ -479,19 +479,20 @@ class Capabilities {
 }
 
 /// How transmission is triggered.
+///
+/// The UI labels live in `l10n/labels.dart` — a model is data, and a label is
+/// presentation (it is also the only part of this enum that changes with the
+/// language).
 enum VoiceActivationMode {
-  pushToTalk('push_to_talk', '按键说话'),
-  voiceActivation('voice_activation', '语音激活'),
-  continuous('continuous', '持续传输'),
-  muted('muted', '静音');
+  pushToTalk('push_to_talk'),
+  voiceActivation('voice_activation'),
+  continuous('continuous'),
+  muted('muted');
 
-  const VoiceActivationMode(this.wire, this.label);
+  const VoiceActivationMode(this.wire);
 
   /// The name the FFI accepts.
   final String wire;
-
-  /// Label for the UI.
-  final String label;
 
   static VoiceActivationMode fromWire(String? value) => values.firstWhere(
     (m) => m.wire == value,

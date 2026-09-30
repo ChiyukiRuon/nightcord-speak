@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
 
@@ -52,14 +53,15 @@ class _ReconnectBannerState extends ConsumerState<ReconnectBanner> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final progress = ref.watch(sessionsProvider)[widget.session]?.reconnect;
 
     // No scheduled retry yet means the core is between attempts; saying so
     // without a number is more honest than showing a countdown that is not
     // running.
     final label = progress == null
-        ? '连接已断开，正在重连…'
-        : '连接已断开，${progress.secondsLeft} 秒后重试（第 ${progress.attempt} 次）';
+        ? l10n.bannerReconnecting
+        : l10n.bannerRetryCountdown(progress.secondsLeft, progress.attempt);
 
     return Container(
       width: double.infinity,
@@ -85,7 +87,7 @@ class _ReconnectBannerState extends ConsumerState<ReconnectBanner> {
             ),
             onPressed: () =>
                 ref.read(sessionsProvider.notifier).disconnect(widget.session),
-            child: const Text('断开'),
+            child: Text(l10n.bannerDisconnect),
           ),
         ],
       ),

@@ -110,8 +110,10 @@ AppUserModelID 的快捷方式，而本仓库的 runner 是原版模板，一个
 
 ## 相关
 
-- `lib/state/notifications.dart` —— 判断规则，纯 Dart，时钟可注入
-- `test/notification_test.dart` —— 18 条，包括两个坑各自的回归
+- `lib/state/notifications.dart` —— 判断规则，无 BuildContext；时钟与文案表都可注入。
+  文案是 `AppLocalizations Function()` 而不是现成实例：切语言不该重建 policy（会重置
+  重放窗口），细节见 [`docs/localization.md`](localization.md)
+- `test/notification_test.dart` —— 19 条，包括两个坑各自的回归与一条语言切换
 - `lib/features/notifications/notice_stack.dart` —— 浮层与未读点
 - `lib/util/system_notifications.dart` —— 插件唯一出现的地方
 - [`docs/settings.md`](settings.md) —— 开关存在 `settings.json` 的 `notifications` 一节

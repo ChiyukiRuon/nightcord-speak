@@ -1,15 +1,20 @@
 // What is worth interrupting the user for (§43).
 //
-// Pure Dart with no Flutter dependency, so the rules can be tested directly —
+// No `BuildContext` and no widget tree, so the rules can be tested directly —
 // the same reason `server_view.dart` is written this way. The clock is injected
 // for the same reason: one rule is time-based, and a test that has to wait two
 // seconds is a test that gets deleted.
+//
+// The sentences are injected too, as a getter: this class has no context to
+// look a translation up from, and a frozen one would keep the old language
+// after a switch (see [NotificationPolicy.strings]).
 //
 // §43 splits the work: "由 Rust Event 产生，Flutter 决定怎么显示". This file is
 // the second half. It decides *whether* something is worth telling the user
 // about and *what* to say; where it goes — a toast, a badge, the operating
 // system — is the caller's business.
 
+import '../l10n/app_localizations.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
@@ -98,11 +103,23 @@ class Attention {
 /// Stateful for one reason: the replay window needs to know when the last
 /// handshake was. Everything else is a pure function of the event and the view.
 class NotificationPolicy {
-  NotificationPolicy({required this.settings, DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  NotificationPolicy({
+    required this.settings,
+    required this.strings,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   /// Which kinds of event are worth saying anything about.
   final NotificationSettings settings;
+
+  /// The sentences, fetched when one is needed.
+  ///
+  /// A getter rather than a ready-made instance: this object is rebuilt only
+  /// when the notification switches change, so a frozen language would put the
+  /// old language into the next toast. Rebuilding on a switch instead is not an
+  /// option — it would reset the handshake timestamps and re-arm the replay
+  /// window (a reconnect would then announce everyone all over again).
+  final AppLocalizations Function() strings;
 
   /// Where "now" comes from. Injected so the replay window can be tested
   /// without waiting for it.
@@ -150,7 +167,7 @@ class NotificationPolicy {
           session,
           view,
           title: client.name,
-          body: '加入了服务器',
+          body: strings().noticeJoined,
           replayed: view?.clients.containsKey(client.id) ?? false,
         );
 
@@ -159,8 +176,8 @@ class NotificationPolicy {
           session,
           view,
           // Read before the view drops them — afterwards the name is gone.
-          title: view?.clients[clientId]?.name ?? '有人',
-          body: '离开了服务器',
+          title: view?.clients[clientId]?.name ?? strings().noticeSomeone,
+          body: strings().noticeLeft,
           // Deliberately *not* the "already known" test the join uses: someone
           // on their way out is in the view, and that is the only place their
           // name can still be read from. Only the replay window silences these.
@@ -201,8 +218,8 @@ class NotificationPolicy {
     return Notice(
       kind: NoticeKind.connectionRestored,
       session: session,
-      title: view?.server?.displayName ?? '服务器',
-      body: '连接已恢复',
+      title: view?.server?.displayName ?? strings().noticeServerFallback,
+      body: strings().noticeConnectionRestored,
       // The banner across the window already says so.
       toast: false,
     );
@@ -215,8 +232,8 @@ class NotificationPolicy {
     // `Disconnecting` are steps, and `Disconnected` is a clean end the user
     // asked for.
     final lost = switch (state) {
-      ConnectionState.reconnecting => '连接已断开，正在重连',
-      ConnectionState.failed => '连接失败',
+      ConnectionState.reconnecting => strings().noticeReconnecting,
+      ConnectionState.failed => strings().noticeConnectionFailed,
       _ => null,
     };
     if (lost == null) return null;
@@ -224,7 +241,7 @@ class NotificationPolicy {
     return Notice(
       kind: NoticeKind.connectionLost,
       session: session,
-      title: view?.server?.displayName ?? '服务器',
+      title: view?.server?.displayName ?? strings().noticeServerFallback,
       body: lost,
       // The reconnect banner is on screen for exactly as long as this lasts.
       toast: false,

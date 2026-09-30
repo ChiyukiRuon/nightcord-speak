@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ffi/rust_client.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/bookmarks.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
@@ -108,7 +109,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
     final collapsed = _collapsed.contains(_offlineKey);
     final rows = <Widget>[
       _CategoryRow(
-        label: '离线 — ${_view.offline.length}',
+        label: AppLocalizations.of(context).sidebarOffline(_view.offline.length),
         collapsed: collapsed,
         onToggle: () => _toggle(_offlineKey),
       ),
@@ -130,9 +131,9 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
   void _openChannel(Channel channel) {
     if (channel.id == _view.ownChannelId) return; // already there
     if (!_view.permissions.canJoinChannel) {
-      ref.read(lastErrorProvider.notifier).report(
-        const ClientError(kind: 'permission', message: '没有加入该频道的权限'),
-      );
+      // A Dart-side kind with no payload; `l10n/errors.dart` turns it into the
+      // sentence, so no language is baked in here.
+      ref.read(lastErrorProvider.notifier).report(const ClientError(kind: 'join_denied'));
       return;
     }
     ref.read(rustClientProvider).joinChannel(_view.session, channel.id);
@@ -147,10 +148,11 @@ class _ServerHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final sessions = ref.watch(sessionsProvider);
     final name = view.info?.name.isNotEmpty == true
         ? view.info!.name
-        : (view.server?.displayName ?? '未连接');
+        : (view.server?.displayName ?? l10n.connectionStateDisconnected);
 
     return Material(
       color: Colors.transparent,
@@ -190,72 +192,77 @@ class _ServerHeader extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.sidebar,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final entry in sessions.entries)
-              ListTile(
-                leading: const Icon(Icons.dns_outlined, size: 20),
-                title: Text(entry.value.server?.displayName ?? '服务器 ${entry.key}'),
-                subtitle: Text(
-                  _stateLabel(entry.value.connection),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                trailing: entry.key == view.session
-                    ? const Icon(Icons.check, size: 18)
-                    : (entry.value.hasUnread ? const UnreadDot() : null),
-                onTap: () {
-                  ref.read(activeSessionProvider.notifier).select(entry.key);
-                  Navigator.of(sheetContext).pop();
-                },
-              ),
-            if (saved.isNotEmpty) ...[
-              const Divider(height: 1),
-              const _SheetHeading('已保存'),
-              for (final bookmark in saved)
+      builder: (sheetContext) {
+        final l10n = AppLocalizations.of(sheetContext);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final entry in sessions.entries)
                 ListTile(
-                  leading: const Icon(Icons.bookmark_outline, size: 20),
-                  title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    bookmark.address,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  leading: const Icon(Icons.dns_outlined, size: 20),
+                  title: Text(
+                    entry.value.server?.displayName ?? l10n.sidebarSessionFallback(entry.key),
                   ),
-                  // Connects straight away here, unlike the connect screen:
-                  // this sheet is for "open another one", and the details of a
-                  // server already saved are not what the user came to change.
+                  subtitle: Text(
+                    _stateLabel(l10n, entry.value.connection),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: entry.key == view.session
+                      ? const Icon(Icons.check, size: 18)
+                      : (entry.value.hasUnread ? const UnreadDot() : null),
                   onTap: () {
+                    ref.read(activeSessionProvider.notifier).select(entry.key);
                     Navigator.of(sheetContext).pop();
-                    ref
-                        .read(rustClientProvider)
-                        .connect(ConnectRequest.fromBookmark(bookmark, settings));
                   },
                 ),
+              if (saved.isNotEmpty) ...[
+                const Divider(height: 1),
+                _SheetHeading(l10n.sidebarSheetSaved),
+                for (final bookmark in saved)
+                  ListTile(
+                    leading: const Icon(Icons.bookmark_outline, size: 20),
+                    title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      bookmark.address,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                    // Connects straight away here, unlike the connect screen:
+                    // this sheet is for "open another one", and the details of a
+                    // server already saved are not what the user came to change.
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      ref
+                          .read(rustClientProvider)
+                          .connect(ConnectRequest.fromBookmark(bookmark, settings));
+                    },
+                  ),
+              ],
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add, size: 20),
+                title: Text(l10n.sidebarAddServer),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  // Clearing the active session returns to the connect screen,
+                  // leaving the current connection running in the background.
+                  ref.read(activeSessionProvider.notifier).forget(view.session);
+                },
+              ),
             ],
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.add, size: 20),
-              title: const Text('添加服务器'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                // Clearing the active session returns to the connect screen,
-                // leaving the current connection running in the background.
-                ref.read(activeSessionProvider.notifier).forget(view.session);
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  static String _stateLabel(ConnectionState state) => switch (state) {
-    ConnectionState.connected => '已连接',
-    ConnectionState.connecting => '连接中',
-    ConnectionState.reconnecting => '重连中',
-    ConnectionState.disconnecting => '断开中',
-    ConnectionState.failed => '连接失败',
-    ConnectionState.disconnected => '未连接',
+  static String _stateLabel(AppLocalizations l10n, ConnectionState state) => switch (state) {
+    ConnectionState.connected => l10n.connectionStateConnected,
+    ConnectionState.connecting => l10n.connectionStateConnecting,
+    ConnectionState.reconnecting => l10n.connectionStateReconnecting,
+    ConnectionState.disconnecting => l10n.connectionStateDisconnecting,
+    ConnectionState.failed => l10n.connectionStateFailed,
+    ConnectionState.disconnected => l10n.connectionStateDisconnected,
   };
 }
 
@@ -405,6 +412,7 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final nameColour = dimmed ? AppColors.textMuted : AppColors.textPrimary;
 
     return InkWell(
@@ -427,14 +435,14 @@ class _MemberRow extends StatelessWidget {
             ),
           ),
           if (member.flags.away && !dimmed) ...[
-            const _StateBadge(colour: AppColors.idle, tooltip: '离开', icon: Icons.schedule),
+            _StateBadge(colour: AppColors.idle, tooltip: l10n.memberAway, icon: Icons.schedule),
           ],
           if (member.flags.inputMuted && !dimmed)
-            const _StateBadge(colour: AppColors.danger, tooltip: '已静音', icon: Icons.mic_off),
+            _StateBadge(colour: AppColors.danger, tooltip: l10n.memberMuted, icon: Icons.mic_off),
           if (member.flags.recording)
-            const _StateBadge(
+            _StateBadge(
               colour: AppColors.danger,
-              tooltip: '录音中',
+              tooltip: l10n.memberRecording,
               icon: Icons.fiber_manual_record,
             ),
           if (unread) ...[const SizedBox(width: 6), const UnreadDot()],
