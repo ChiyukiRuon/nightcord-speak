@@ -164,6 +164,11 @@ tools/web-debug/                        # 现调试页迁入：诊断/协议验�
 `flutter build web` + Cloudflare Pages → ④ 移动平台脚手架 + `MobileShell` → ⑤
 三条一致性要求逐项走查。
 
+**层 1 已经建起来了**（2026-09-30）：`lib/design/{tokens,theme,components}`，
+按 `docs/UI设计与配色规范.md` 与 `docs/UI字体规范.md` 落地。**布局那一层没动**
+——Server Rail、独立成员栏、`MobileShell` 都还在后面。见
+[`docs/ui.md`](docs/ui.md)。
+
 ---
 
 ## 3. 开发流程
@@ -189,6 +194,18 @@ git clone --recurse-submodules <repo>     # 子模块必须初始化
 | cmake         | **必须**。`audiopus_sys` 用它从源码编译 libopus。装：`winget install --id Kitware.CMake -e` |
 | Visual Studio | 需要**装了 C++ 工作负载**的版本（见下）                                                     |
 | Flutter       | 3.47.5+（本机 3.47.5 / Dart 3.13.4），做客户端时必需                                        |
+| UI 字体       | **必须**先跑 `bash scripts/fetch-fonts.sh`（见下）                                          |
+
+**字体不进仓库**：`apps/client/assets/fonts/` 被 `.gitignore` 忽略，
+`scripts/fetch-fonts.sh` 从 jsDelivr 取 Noto Sans / Noto Sans SC 的可变字体
+（约 20 MB，校验 sha256），另一处来源是 `raw.githubusercontent.com` 作兜底。
+理由是体积与不可变性——一个永远不变的二进制没必要跟着每一次 clone 走。
+
+**代价要知道**：`pubspec.yaml` 声明了这些文件，所以**缺字体时
+`flutter analyze` 与 `flutter test` 都会失败**，报 `unable to locate asset
+entry`（analyze 对 `.txt` 那份报 `asset_does_not_exist`）。这是刻意的：另一种
+做法（不声明）会让每个页面默默用系统字体渲染，而那正是这份规范要消灭的
+平台差异。`--check` 只校验不下载，CI 可以用它给一句人话。
 
 **本机特有**：CMake 会挑最新 VS，但必须选装了 C++ 工具链的那个。本机
 VS 2022 Community 未装，VS 2019 BuildTools 装了，所以：
@@ -238,6 +255,7 @@ cargo test  --workspace --all-features
 cargo run -p nightcord-cli -- --address <host> --nickname <name>
 
 # Flutter（需要 CMAKE_GENERATOR，见上）
+bash scripts/fetch-fonts.sh                # 克隆后一次；analyze / test 都要它
 cd apps/client && flutter run -d windows
 
 # 改了 apps/client/lib/l10n/*.arb 之后：重新生成并一起提交。
@@ -256,7 +274,7 @@ cd apps/client && flutter gen-l10n
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test  --workspace --all-features                             # 355 个
-cd apps/client && flutter analyze && flutter test                  # 138 个
+cd apps/client && flutter analyze && flutter test                  # 158 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -268,6 +286,10 @@ cd apps/client && flutter analyze && flutter test                  # 138 个
 
 **顺序很重要**：先 `flutter analyze` 再 `flutter build`。跳过 analyze 直接 build，
 会把编译错误当成运行时问题查（犯过一次）。
+
+**字体是 Flutter 侧门禁的前提**：`apps/client/assets/fonts/` 为空时
+`flutter analyze` 与 `flutter test` 都会失败（见 §3.2）。克隆后先跑一次
+`bash scripts/fetch-fonts.sh`。
 
 ### 3.6 提交
 
@@ -371,8 +393,8 @@ cd apps/client && flutter analyze && flutter test                  # 138 个
 |      | 数量                           |
 |------|--------------------------------|
 | Rust | **21,065 行**，16 crates + CLI + gateway |
-| Dart | **12,181 行**，50 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **355 Rust + 138 Dart**，全绿  |
+| Dart | **14,082 行**，64 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **355 Rust + 158 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -600,6 +622,18 @@ cd apps/client && flutter analyze && flutter test                  # 138 个
 
 > **M0.6 至此全部完成。** 下一站是 Phase 7（Web Gateway，§71）。
 
+### 视觉层欠账（见 [`docs/ui.md`](docs/ui.md)）
+
+- [ ] **布局那一层**：配色规范 §20/§21 的 Server Rail + 独立成员栏、§22/§23 的
+      移动端 Shell、§2.8 的自绘窗口标题栏。token 与组件已就位，改的是结构。
+- [ ] **§21 的侧栏宽度**：现状 288，规范给 240–280（代码里有注释）。
+- [ ] **§27 的动效**只用到一处（聊天滚到底），其余时长与曲线备好未用。
+- [ ] **§29 的完整无障碍走查**：目前只做到「颜色不是唯一信号」。
+- [ ] **繁中 / 日 / 韩字体**：现在只打包了 en + zh，其余靠逐字系统回退。
+      加一种要三处一起改（字体文件、`pubspec.yaml`、`app_fonts.dart` 的分支），
+      只加分支会指向一个不存在的家族而**静默**用上系统字体。
+- [ ] **浅色主题**：§30 要求重新设计而不是 `Color.lerp` 推导，尚未做。
+
 ### Phase 7 欠账（见 [`docs/gateway.md`](docs/gateway.md)）
 
 - [ ] 网关没有 TLS，也没有每访客身份与会话归属；多标签页同权是写明的 v1 行为
@@ -655,6 +689,7 @@ cd apps/client && flutter analyze && flutter test                  # 138 个
 | `docs/localization.md`     | 本地化：工具与文件、语言如何决定、无 context 组句、什么不本地化、加语言/加文案 |
 | `docs/crash.md`            | 崩溃上报：三类信号、标记语义、为什么不解析符号、Dart 侧的关窗路径、边界与触发法 |
 | `docs/gateway.md`          | Web 网关：为什么不是托管服务、三层协议、安全边界、身份档、语音分阶段 |
+| `docs/ui.md`               | 视觉层：设计系统住哪、与两份规范的四处分歧怎么裁的、字体为什么下载而不是提交 |
 | `docs/UI设计与配色规范.md` | UI 设计系统：颜色 / 字体 / 间距 token 与组件规范（Flutter 六端共用） |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
