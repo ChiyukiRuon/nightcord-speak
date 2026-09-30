@@ -24,6 +24,7 @@ import 'package:nightcord_client/features/connect/connect_page.dart';
 import 'package:nightcord_client/features/notifications/notice_stack.dart';
 import 'package:nightcord_client/features/server/server_page.dart';
 import 'package:nightcord_client/features/settings/settings_dialog.dart';
+import 'package:nightcord_client/features/voice/voice_bar.dart';
 import 'package:nightcord_client/l10n/app_localizations.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
@@ -315,6 +316,37 @@ void main() {
 
     expect(transport.calls, contains('disconnect:1'));
     expect(container.read(sessionsProvider), isEmpty);
+  });
+
+  testWidgets('the name in the voice bar is lifted off its own line box', (tester) async {
+    // Regression, and the third attempt at it. Reported twice as "the name is
+    // not centred" after two changes to its line height — neither of which was
+    // the cause.
+    //
+    // A line box is centred on the font's ascent and descent together, and Noto
+    // Sans is nearly four times as much ascent as descent; most of that ascent
+    // is empty space above the capitals. So the *box* is centred and the
+    // glyphs inside it are not. Measured on screen, the name's ink sat 4.5
+    // physical pixels below the middle of the bar while the icon next to it was
+    // on it.
+    //
+    // What fixes it is a bottom-padded box — the row centres the padding, so
+    // the text ends up above the middle. That is what this checks, because it
+    // is the part a widget test can see: the test font has no real glyph
+    // metrics, so the size of the lift can only be measured on screen.
+    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // Scoped to the bar: the member list shows the same name.
+    final name = tester.getRect(
+      find.descendant(of: find.byType(VoiceBar), matching: find.text('TsukinoAyaka')),
+    );
+    final bar = tester.getRect(find.byType(VoiceBar));
+    expect(
+      name.center.dy,
+      lessThan(bar.center.dy),
+      reason: 'the name is sitting on its line box, which draws it low',
+    );
   });
 
   testWidgets('the brand mark is on the screens that carry it', (tester) async {

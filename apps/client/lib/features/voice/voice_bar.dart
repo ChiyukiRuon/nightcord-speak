@@ -9,6 +9,25 @@ import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../settings/settings_dialog.dart';
 
+/// How far the glyphs sit below the middle of their own line box, in logical
+/// pixels.
+///
+/// A line box is centred on the font's ascent and descent together, and Noto
+/// Sans's ascent is nearly four times its descent — most of that ascent is the
+/// empty space above the capitals. So a *box* that is perfectly centred still
+/// draws its glyphs low.
+///
+/// Measured on screen at 150%: the name's ink centred 4.5 physical pixels (3
+/// logical) under the middle of the bar, while the disconnect button beside it
+/// — an icon, whose ink really is centred on its box — sat on it. That 3px gap
+/// is what reads as "the name is not centred".
+///
+/// No line height fixes this: the lever is weak and pointing the wrong way, and
+/// every value between 1.0 and 1.5 moved the ink by about a pixel. A `Row`
+/// centres the box it is given, so a *bottom inset of twice this* is what lifts
+/// the glyphs by it.
+const double _opticalLift = 3;
+
 /// How tall the bar is.
 ///
 /// Unchanged from before the design system: §20's desktop diagram has an
@@ -60,13 +79,18 @@ class VoiceBar extends ConsumerWidget {
             child: Row(
               children: [
                 Flexible(
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    // §12.2's `bodyMedium` — 14/500, the level it names for
-                    // emphasised body text. One's own name in a control bar is
-                    // exactly that.
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: Padding(
+                    // The label sitting on the bar's centre, rather than the
+                    // line box that contains it — see `_opticalLift`.
+                    padding: const EdgeInsets.only(bottom: _opticalLift * 2),
+                    child: Text(
+                      name,
+                      overflow: TextOverflow.ellipsis,
+                      // §12.2's `bodyMedium` — 14/500, the level it names for
+                      // emphasised body text. One's own name in a control bar
+                      // is exactly that.
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                 ),
                 SizedBox(width: tokens.space1),
