@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../ffi/rust_client.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/connect_request.dart';
 import '../../models/bookmarks.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
@@ -35,7 +35,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     // Ask for the settings, and fill the nickname in when they arrive. The field
     // starts with the same fallback the settings default to, so the page looks
     // the same whether the answer comes back before or after the first frame.
-    final client = ref.read(rustClientProvider);
+    final client = ref.read(clientTransportProvider);
     client.requestSettings();
     client.requestBookmarks();
     ref.listenManual(settingsProvider, (_, settings) {
@@ -146,7 +146,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final profile = ref.read(settingsProvider)?.connection.profile ?? 'default';
 
     setState(() => _connecting = true);
-    ref.read(rustClientProvider).connect(
+    ref.read(clientTransportProvider).connect(
       ConnectRequest(
         address: address,
         nickname: _nickname.text.trim(),

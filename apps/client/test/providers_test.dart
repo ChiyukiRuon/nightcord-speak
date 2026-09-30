@@ -10,9 +10,45 @@ import 'dart:ui' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nightcord_client/core/transport/client_transport.dart';
+import 'package:nightcord_client/models/connect_request.dart';
+import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
 import 'package:nightcord_client/providers/providers.dart';
+
+/// A transport that only records, so a test can prove the app talks to the
+/// interface and not to a particular implementation.
+///
+/// Only the members a test exercises are implemented; the rest throw, which is
+/// also a statement: nothing else may be needed to run the stores.
+class _RecordingTransport implements ClientTransport {
+  final List<String> calls = [];
+  final StreamController<FfiEvent> _events = StreamController<FfiEvent>.broadcast();
+
+  @override
+  Stream<FfiEvent> get events => _events.stream;
+
+  @override
+  void voiceStart(int session, {String? inputDevice, String? outputDevice}) =>
+      calls.add('voiceStart:$session');
+
+  @override
+  void setInputMuted(bool muted) => calls.add('setInputMuted:$muted');
+
+  @override
+  void setOutputMuted(bool muted) => calls.add('setOutputMuted:$muted');
+
+  @override
+  void connect(ConnectRequest request) => calls.add('connect:${request.address}');
+
+  @override
+  void dispose() => calls.add('dispose');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not part of this test');
+}
 
 /// A [SettingsNotifier] that answers with a fixed object, without a core.
 class _FixedSettings extends SettingsNotifier {
@@ -61,6 +97,31 @@ void main() {
     await pumpEventQueue();
 
     expect(container.read(lastErrorProvider), same(error));
+  });
+
+  test('the stores speak to the transport interface, not to the FFI', () async {
+    // The seam's whole point: everything above `clientTransportProvider` works
+    // against the interface, whichever core is below it. A fake transport that
+    // records calls proves the stores never reach past it.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [clientTransportProvider.overrideWithValue(transport)],
+    );
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    // A connected session, so the mute toggle has something to act on.
+    container.read(activeSessionProvider.notifier).select(7);
+    transport._events.add(const DomainEvent(
+      session: 7,
+      event: ConnectionStateChangedEvent(ConnectionState.connected),
+    ));
+    await pumpEventQueue();
+
+    container.read(sessionsProvider.notifier).toggleInputMuted(7);
+    container.read(sessionsProvider.notifier).toggleOutputMuted(7);
+
+    expect(transport.calls, ['setInputMuted:true', 'setOutputMuted:true']);
   });
 
   group('localeProvider', () {

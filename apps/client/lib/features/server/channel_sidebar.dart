@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../ffi/rust_client.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/connect_request.dart';
 import '../../models/bookmarks.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
@@ -136,7 +136,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
       ref.read(lastErrorProvider.notifier).report(const ClientError(kind: 'join_denied'));
       return;
     }
-    ref.read(rustClientProvider).joinChannel(_view.session, channel.id);
+    ref.read(clientTransportProvider).joinChannel(_view.session, channel.id);
   }
 }
 
@@ -233,7 +233,7 @@ class _ServerHeader extends ConsumerWidget {
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       ref
-                          .read(rustClientProvider)
+                          .read(clientTransportProvider)
                           .connect(ConnectRequest.fromBookmark(bookmark, settings));
                     },
                   ),

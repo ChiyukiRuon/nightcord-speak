@@ -9,6 +9,7 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/widgets.dart' show Locale, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/transport/client_transport.dart';
 import '../ffi/rust_client.dart';
 import '../l10n/app_localizations.dart';
 import '../models/domain.dart';
@@ -31,9 +32,18 @@ final rustClientProvider = Provider<RustClient>((ref) {
   return client;
 });
 
+/// The one protocol boundary the rest of the app talks through.
+///
+/// Today it hands back the embedded (FFI) transport; when the web build
+/// arrives this is where a remote (WebSocket) transport will be chosen, and
+/// nothing above it changes. See `core/transport/client_transport.dart`.
+final clientTransportProvider = Provider<ClientTransport>((ref) {
+  return ref.watch(rustClientProvider);
+});
+
 /// Every envelope the core publishes.
 final eventStreamProvider = StreamProvider<FfiEvent>((ref) {
-  return ref.watch(rustClientProvider).events;
+  return ref.watch(clientTransportProvider).events;
 });
 
 /// One accumulated view per session.
@@ -147,11 +157,11 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     final voice = view.voice;
     if (input) {
       final muted = !voice.inputMuted;
-      ref.read(rustClientProvider).setInputMuted(muted);
+      ref.read(clientTransportProvider).setInputMuted(muted);
       reportVoiceState(session, voice.copyWith(inputMuted: muted));
     } else {
       final muted = !voice.outputMuted;
-      ref.read(rustClientProvider).setOutputMuted(muted);
+      ref.read(clientTransportProvider).setOutputMuted(muted);
       reportVoiceState(session, voice.copyWith(outputMuted: muted));
     }
   }
@@ -166,7 +176,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   /// The one caller is the reconnect banner's 「断开」: retrying forever is the
   /// right default for a dropped connection, but only if the user can stop it.
   void disconnect(int session) {
-    ref.read(rustClientProvider).disconnect(session);
+    ref.read(clientTransportProvider).disconnect(session);
     forget(session);
   }
 
@@ -296,7 +306,7 @@ class SettingsNotifier extends Notifier<Settings?> {
   }
 
   /// Asks the core for the current settings.
-  void refresh() => ref.read(rustClientProvider).requestSettings();
+  void refresh() => ref.read(clientTransportProvider).requestSettings();
 
   /// Records an edit, and sends it to the core to be stored and applied.
   ///
@@ -306,7 +316,7 @@ class SettingsNotifier extends Notifier<Settings?> {
   /// puts the truth back.
   void update(Settings settings) {
     state = settings;
-    ref.read(rustClientProvider).updateSettings(settings);
+    ref.read(clientTransportProvider).updateSettings(settings);
   }
 
   void _collect(CommandResult result) {
@@ -335,10 +345,10 @@ class VoiceStatusNotifier extends Notifier<VoiceStatus?> {
   }
 
   /// Asks the core what the engine is doing.
-  void refresh() => ref.read(rustClientProvider).requestVoiceStatus();
+  void refresh() => ref.read(clientTransportProvider).requestVoiceStatus();
 
   /// Plays a test tone through the speakers.
-  void testOutput() => ref.read(rustClientProvider).testOutput();
+  void testOutput() => ref.read(clientTransportProvider).testOutput();
 
   void _collect(CommandResult result) {
     if (result.command != 'voice_status' || !result.ok) return;
@@ -366,7 +376,7 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
   }
 
   /// Asks the core for the address book.
-  void refresh() => ref.read(rustClientProvider).requestBookmarks();
+  void refresh() => ref.read(clientTransportProvider).requestBookmarks();
 
   /// Records an edit, and sends it to the core to be stored.
   ///
@@ -375,7 +385,7 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
   /// the next `bookmarks` result puts the truth back.
   void update(BookmarkList bookmarks) {
     state = bookmarks;
-    ref.read(rustClientProvider).updateBookmarks(bookmarks);
+    ref.read(clientTransportProvider).updateBookmarks(bookmarks);
   }
 
   /// Saves a server from what the connect screen collected.
@@ -383,7 +393,7 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
   /// Sent rather than applied locally, unlike [update]: the core parses the
   /// address, so it — not this class — decides what the entry becomes. The
   /// answer carries the list as it now stands.
-  void add(NewBookmark bookmark) => ref.read(rustClientProvider).addBookmark(bookmark);
+  void add(NewBookmark bookmark) => ref.read(clientTransportProvider).addBookmark(bookmark);
 
   void _collect(CommandResult result) {
     // `bookmark_add` answers with the same payload as a plain request, so the

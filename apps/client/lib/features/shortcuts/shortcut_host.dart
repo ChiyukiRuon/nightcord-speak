@@ -111,7 +111,7 @@ class _ShortcutHostState extends ConsumerState<ShortcutHost> {
     if (action == ShortcutAction.pushToTalk) {
       // Momentary, and to the engine rather than to a session: there is one
       // engine, and it does not care which server is on screen.
-      ref.read(rustClientProvider).setPushToTalk(held);
+      ref.read(clientTransportProvider).setPushToTalk(held);
       return;
     }
 

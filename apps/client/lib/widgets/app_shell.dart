@@ -12,6 +12,7 @@ import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
 import '../ffi/rust_client.dart';
+import '../models/connect_request.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/errors.dart';
 import '../models/crash.dart';
@@ -154,7 +155,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     // The defaults the environment does not override — nickname and identity
     // profile — come from the settings, so this waits for them to arrive. It is
     // a development aid; a round trip is nothing next to typing an address.
-    ref.read(rustClientProvider).requestSettings();
+    ref.read(clientTransportProvider).requestSettings();
     ref.listenManual(settingsProvider, (_, settings) => _autoConnect(settings));
 
     // In case the answer beat the subscription above.
@@ -179,7 +180,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     final nickname = Platform.environment[_nicknameVar];
     final profile = Platform.environment[_profileVar];
 
-    final client = ref.read(rustClientProvider);
+    final client = ref.read(clientTransportProvider);
     for (final address in raw.split(',').map((part) => part.trim())) {
       if (address.isEmpty) continue;
 

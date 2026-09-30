@@ -111,7 +111,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     final target = _target();
     if (target == null) return;
 
-    ref.read(rustClientProvider).sendMessage(_view.session, target, text);
+    ref.read(clientTransportProvider).sendMessage(_view.session, target, text);
     _composer.clear();
   }
 

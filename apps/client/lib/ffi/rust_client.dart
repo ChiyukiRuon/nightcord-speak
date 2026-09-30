@@ -9,6 +9,8 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
+import '../core/transport/client_transport.dart';
+import '../models/connect_request.dart';
 import '../models/crash.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
@@ -78,67 +80,6 @@ NightcordBindings? _reachCore() {
   }
 }
 
-/// Everything needed to open a connection.
-///
-/// Mirrors `ts_core::ConnectRequest`. The identity is deliberately absent: the
-/// core owns it, loads it from disk, and never hands key material out (§31).
-class ConnectRequest {
-  const ConnectRequest({
-    required this.address,
-    required this.nickname,
-    this.profile = 'default',
-    this.serverPassword,
-    this.channelPassword,
-    this.privilegeKey,
-    this.defaultChannel,
-    this.protocol = ProtocolKind.ts3,
-  });
-
-  /// `host`, `host:port`, `ts3://host` or `[::1]:9987`.
-  final String address;
-
-  final String nickname;
-
-  /// Identity profile. The same profile presents the same client to every
-  /// server, which is what a user expects of "their" identity.
-  final String profile;
-
-  final String? serverPassword;
-  final String? channelPassword;
-  final String? privilegeKey;
-  final String? defaultChannel;
-  final ProtocolKind protocol;
-
-  /// Builds a request from a saved server, filling the gaps from the settings.
-  ///
-  /// **This is the only definition of that rule.** A bookmark wins where it has
-  /// an opinion — the address, and a nickname it was saved with — and the
-  /// settings supply the rest. Both places that connect from a bookmark go
-  /// through here, because two copies of "which one wins" is exactly how they
-  /// end up disagreeing.
-  factory ConnectRequest.fromBookmark(Bookmark bookmark, Settings settings) => ConnectRequest(
-    address: bookmark.address,
-    nickname: bookmark.nickname ?? settings.connection.nickname,
-    profile: settings.connection.profile,
-    serverPassword: bookmark.serverPassword,
-    protocol: bookmark.protocol,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'address': address,
-    'nickname': nickname,
-    'profile': profile,
-    if (serverPassword != null && serverPassword!.isNotEmpty)
-      'server_password': serverPassword,
-    if (channelPassword != null && channelPassword!.isNotEmpty)
-      'channel_password': channelPassword,
-    if (privilegeKey != null && privilegeKey!.isNotEmpty) 'privilege_key': privilegeKey,
-    if (defaultChannel != null && defaultChannel!.isNotEmpty)
-      'default_channel': defaultChannel,
-    'protocol': protocol.wire,
-  };
-}
-
 /// How often the core is polled for events.
 ///
 /// Around one frame at 60 Hz. Polling is a lock, a drain, and a JSON decode of
@@ -146,7 +87,7 @@ class ConnectRequest {
 const Duration _pollInterval = Duration(milliseconds: 16);
 
 /// A running Rust core.
-class RustClient {
+class RustClient implements ClientTransport {
   RustClient._(this._bindings, this._handle) {
     // Polling begins only once something is listening.
     //
@@ -184,6 +125,7 @@ class RustClient {
   bool _disposed = false;
 
   /// Everything the core has to say, as it happens.
+  @override
   Stream<FfiEvent> get events => _events.stream;
 
   /// The core's version, for the about box and for spotting a stale library
@@ -192,20 +134,25 @@ class RustClient {
 
   /// Opens a connection. The session handle arrives as a `connect`
   /// [CommandResult].
+  @override
   void connect(ConnectRequest request) =>
       _withJson(request.toJson(), (json) => _bindings.connect(_handle, json));
 
   /// Closes a connection.
+  @override
   void disconnect(int session) => _bindings.disconnect(_handle, session);
 
   /// Moves us into a channel.
+  @override
   void joinChannel(int session, int channelId) =>
       _bindings.joinChannel(_handle, session, channelId);
 
   /// Returns to the server's default channel.
+  @override
   void leaveChannel(int session) => _bindings.leaveChannel(_handle, session);
 
   /// Sends a chat message.
+  @override
   void sendMessage(int session, MessageTarget target, String text) {
     _withJson(
       target.toJson(),
@@ -214,6 +161,7 @@ class RustClient {
   }
 
   /// Moves another client into a channel.
+  @override
   void moveClient(int session, int clientId, int channelId) =>
       _bindings.moveClient(_handle, session, clientId, channelId);
 
@@ -221,12 +169,14 @@ class RustClient {
   ///
   /// The answer arrives as a `audio_devices` [CommandResult] whose `data` holds
   /// `{"direction": ..., "devices": [...]}`.
+  @override
   void requestAudioDevices(String direction) =>
       _withText(direction, (text) => _bindings.audioDevices(_handle, text));
 
   /// Opens audio devices and binds voice to a session.
   ///
   /// A null device id selects the system default.
+  @override
   void voiceStart(int session, {String? inputDevice, String? outputDevice}) {
     _withText(inputDevice ?? '', (input) {
       _withText(outputDevice ?? '', (output) {
@@ -236,15 +186,19 @@ class RustClient {
   }
 
   /// Closes the audio devices.
+  @override
   void voiceStop() => _bindings.voiceStop(_handle);
 
   /// Mutes or unmutes the microphone.
+  @override
   void setInputMuted(bool muted) => _bindings.voiceSetInputMuted(_handle, muted);
 
   /// Mutes or unmutes the speakers.
+  @override
   void setOutputMuted(bool muted) => _bindings.voiceSetOutputMuted(_handle, muted);
 
   /// Push-to-talk key down or up (§30).
+  @override
   void setPushToTalk(bool held) => _bindings.voicePushToTalk(_handle, held);
 
   /// Asks what the audio engine is doing.
@@ -253,10 +207,12 @@ class RustClient {
   /// pushed on purpose: the engine produces a frame every 20 ms, and a status
   /// event at that rate would fill the event queue the app also reads messages
   /// and notifications from.
+  @override
   void requestVoiceStatus() => _bindings.voiceStatus(_handle);
 
   /// Plays a short tone through the speakers, so the user can hear whether they
   /// work.
+  @override
   void testOutput() => _bindings.voiceTestOutput(_handle);
 
   /// Asks for the preferences.
@@ -265,17 +221,20 @@ class RustClient {
   /// settings object — the same request-and-collect shape as the device list,
   /// so there is one copy of the settings rather than a cache here that could
   /// drift from the core's.
+  @override
   void requestSettings() => _bindings.settingsGet(_handle);
 
   /// Replaces the preferences, and writes them down.
   ///
   /// The whole object, not a patch: the caller has the current settings and
   /// edits them. The answer arrives as `settings_update`.
+  @override
   void updateSettings(Settings settings) =>
       _withJson(settings.toJson(), (json) => _bindings.settingsUpdate(_handle, json));
 
   /// Asks for the saved servers. The answer arrives as a `bookmarks`
   /// [CommandResult] whose `data` is the list.
+  @override
   void requestBookmarks() => _bindings.bookmarksGet(_handle);
 
   /// Replaces the saved servers, and writes them down.
@@ -283,6 +242,7 @@ class RustClient {
   /// The entries carry server passwords, so this argument — and the one that
   /// comes back from [requestBookmarks] — is a credential. It goes no further
   /// than the core's file.
+  @override
   void updateBookmarks(BookmarkList bookmarks) =>
       _withJson(bookmarks.toJson(), (json) => _bindings.bookmarksUpdate(_handle, json));
 
@@ -291,6 +251,7 @@ class RustClient {
   /// The address goes over as the user typed it: the core owns the parser, so
   /// there is one answer to what "example.com:9987" means rather than one per
   /// front-end. The answer arrives as `bookmark_add` with the updated list.
+  @override
   void addBookmark(NewBookmark bookmark) => _withJson(
     bookmark.toJson(),
     (json) => _bindings.bookmarkAdd(_handle, json),
@@ -377,6 +338,7 @@ class RustClient {
   }
 
   /// Stops the core and releases the library handle.
+  @override
   void dispose() {
     if (_disposed) return;
     _disposed = true;

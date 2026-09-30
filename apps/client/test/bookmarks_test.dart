@@ -7,8 +7,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nightcord_client/ffi/rust_client.dart';
 import 'package:nightcord_client/models/bookmarks.dart';
+import 'package:nightcord_client/models/connect_request.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/settings.dart';
 
