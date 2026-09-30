@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/bookmarks.dart';
 import '../../models/connect_request.dart';
 import '../../models/domain.dart';
+import '../../models/settings.dart';
 import '../../providers/providers.dart';
 
 /// Collects a server address and nickname and opens a connection.
@@ -77,6 +78,21 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
         _nickname.text = nickname;
       });
     }
+  }
+
+  /// Connects straight to a saved server, past the form.
+  ///
+  /// A double click on a row. The request is built by
+  /// `ConnectRequest.fromBookmark` — the same rule the server switcher uses, so
+  /// "which of the bookmark and the settings wins" has one answer. The form is
+  /// deliberately left alone: this is the shortcut for someone who already
+  /// knows which server they want, and rewriting the fields under them would
+  /// make the click feel like two.
+  void _connectTo(Bookmark bookmark) {
+    setState(() => _connecting = true);
+    ref
+        .read(clientTransportProvider)
+        .connect(ConnectRequest.fromBookmark(bookmark, ref.read(settingsProvider) ?? const Settings()));
   }
 
   /// Saves what the form currently holds.
@@ -208,6 +224,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 // case; typing an address is what you do the first time.
                 _SavedServers(
                   onPick: _fillFrom,
+                  onConnect: _connectTo,
                   onRename: _rename,
                   onDelete: _delete,
                 ),
@@ -306,11 +323,16 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
 class _SavedServers extends ConsumerWidget {
   const _SavedServers({
     required this.onPick,
+    required this.onConnect,
     required this.onRename,
     required this.onDelete,
   });
 
   final ValueChanged<Bookmark> onPick;
+
+  /// Opens the connection straight away, for a double click.
+  final ValueChanged<Bookmark> onConnect;
+
   final void Function(int index, Bookmark bookmark) onRename;
   final ValueChanged<int> onDelete;
 
@@ -331,6 +353,7 @@ class _SavedServers extends ConsumerWidget {
             _SavedServerRow(
               bookmark: bookmarks[index],
               onPick: () => onPick(bookmarks[index]),
+              onConnect: () => onConnect(bookmarks[index]),
               onRename: () => onRename(index, bookmarks[index]),
               onDelete: () => onDelete(index),
             ),
@@ -345,12 +368,14 @@ class _SavedServerRow extends StatelessWidget {
   const _SavedServerRow({
     required this.bookmark,
     required this.onPick,
+    required this.onConnect,
     required this.onRename,
     required this.onDelete,
   });
 
   final Bookmark bookmark;
   final VoidCallback onPick;
+  final VoidCallback onConnect;
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
@@ -359,30 +384,48 @@ class _SavedServerRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final tokens = DesignTokens.of(context);
 
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      // Icon colour and size come from the theme's `listTileTheme` and
-      // `iconTheme` (§16): 20px, `textSecondary`.
-      leading: const Icon(Icons.dns_outlined),
-      title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        bookmark.address,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
-      ),
-      // Fills the form rather than connecting: this screen exists so the
-      // details can still be changed before the connection is made.
-      onTap: onPick,
-      trailing: PopupMenuButton<String>(
-        tooltip: l10n.connectMoreTooltip,
-        icon: const Icon(Icons.more_vert),
-        onSelected: (choice) => choice == 'rename' ? onRename() : onDelete(),
-        itemBuilder: (_) => [
-          PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
-          PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
-        ],
+    return GestureDetector(
+      // Only the double tap. The tile keeps its own `onTap`, so a single click
+      // still fills the form and the row still shows the tile's ink.
+      //
+      // The cost is that Flutter holds a single tap back for the double-tap
+      // timeout (~300 ms) while it waits to see whether a second one is
+      // coming, so the form fills a beat after the click. That is the price of
+      // having both gestures on one row.
+      onDoubleTap: onConnect,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        // Icon colour and size come from the theme's `listTileTheme` and
+        // `iconTheme` (§16): 20px, `textSecondary`.
+        //
+        // The inset is because the tile's own padding is zero — the rows line
+        // up with the form fields below, and the glyph was landing flush
+        // against that edge with nothing between it and the border.
+        leading: Padding(
+          padding: EdgeInsets.only(left: tokens.space2),
+          child: const Icon(Icons.dns_outlined),
+        ),
+        title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          bookmark.address,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
+        ),
+        // Fills the form rather than connecting: this screen exists so the
+        // details can still be changed before the connection is made. Double
+        // click is the shortcut past that.
+        onTap: onPick,
+        trailing: PopupMenuButton<String>(
+          tooltip: l10n.connectMoreTooltip,
+          icon: const Icon(Icons.more_vert),
+          onSelected: (choice) => choice == 'rename' ? onRename() : onDelete(),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
+            PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
+          ],
+        ),
       ),
     );
   }

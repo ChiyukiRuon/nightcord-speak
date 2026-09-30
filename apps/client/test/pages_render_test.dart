@@ -26,6 +26,8 @@ import 'package:nightcord_client/features/server/server_page.dart';
 import 'package:nightcord_client/features/settings/settings_dialog.dart';
 import 'package:nightcord_client/features/voice/voice_bar.dart';
 import 'package:nightcord_client/l10n/app_localizations.dart';
+import 'package:nightcord_client/models/bookmarks.dart';
+import 'package:nightcord_client/models/connect_request.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
@@ -55,6 +57,9 @@ class _SilentTransport implements ClientTransport {
 
   @override
   void disconnect(int session) => calls.add('disconnect:$session');
+
+  @override
+  void connect(ConnectRequest request) => calls.add('connect:${request.address}');
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -96,6 +101,14 @@ class _FixedVoiceStatus extends VoiceStatusNotifier {
     transmitting: true,
     input: DeviceStatus(id: 'mic-1', name: '麦克风（ROG CARNYX）'),
     output: DeviceStatus(id: 'spk-1', name: '扬声器（Realtek）'),
+  );
+}
+
+/// One saved server, so the connect page has a row to click.
+class _FixedBookmarks extends BookmarksNotifier {
+  @override
+  BookmarkList? build() => const BookmarkList(
+    bookmarks: [Bookmark(name: '局域网测试服', host: '192.168.31.128', port: 9987)],
   );
 }
 
@@ -192,6 +205,7 @@ ServerView _view() {
 ProviderContainer _container({
   ServerView? view,
   bool notices = false,
+  bool bookmarks = false,
   _SilentTransport? transport,
 }) => ProviderContainer.test(
       overrides: [
@@ -202,6 +216,7 @@ ProviderContainer _container({
         voiceStatusProvider.overrideWith(() => _FixedVoiceStatus()),
         if (view != null) sessionsProvider.overrideWith(() => _FixedSessions({1: view})),
         if (notices) noticesProvider.overrideWith(() => _FixedNotices()),
+        if (bookmarks) bookmarksProvider.overrideWith(() => _FixedBookmarks()),
       ],
     );
 
@@ -347,6 +362,46 @@ void main() {
       lessThan(bar.center.dy),
       reason: 'the name is sitting on its line box, which draws it low',
     );
+  });
+
+  testWidgets('a saved server fills the form on one click, connects on two', (tester) async {
+    // The connect page's row has both gestures: one click fills the form, so
+    // the details can still be changed; two connect straight away, for someone
+    // who already knows which server they want.
+    final transport = _SilentTransport();
+    final container = _container(bookmarks: true, transport: transport);
+
+    await tester.pumpWidget(_app(container, const ConnectPage()));
+    await tester.pumpAndSettle();
+
+    final row = find.text('局域网测试服');
+    expect(row, findsOneWidget);
+
+    // One click: the form fills, nothing is dialled.
+    //
+    // The extra pump is the double-tap timeout: with both gestures on the row,
+    // Flutter holds the single tap back until it knows a second one is not
+    // coming. `pumpAndSettle` alone does not get there — it stops as soon as
+    // no *frame* is scheduled, and this wait is a bare timer.
+    await tester.tap(row);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(transport.calls, isEmpty, reason: 'a single click connected');
+    final address = tester.widget<TextField>(
+      find.byType(TextField).first,
+    );
+    expect(address.controller?.text, '192.168.31.128:9987');
+
+    // Two clicks: it connects, without waiting for the button.
+    await tester.tap(row);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(row);
+    // `pump`, not `pumpAndSettle`: connecting turns the button into a
+    // `CircularProgressIndicator`, which schedules frames for as long as it is
+    // on screen. Waiting for the tree to go quiet would wait forever.
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    expect(transport.calls, contains('connect:192.168.31.128:9987'));
   });
 
   testWidgets('the brand mark is on the screens that carry it', (tester) async {
