@@ -44,6 +44,9 @@ class _RecordingTransport implements ClientTransport {
   void connect(ConnectRequest request) => calls.add('connect:${request.address}');
 
   @override
+  void disconnect(int session) => calls.add('disconnect:$session');
+
+  @override
   void dispose() => calls.add('dispose');
 
   @override
@@ -218,6 +221,76 @@ void main() {
       );
 
       expect(container.read(localeProvider), const Locale('zh'));
+    });
+  });
+
+  group('closing a session', () {
+    test('a closed session does not come back when the core says so', () async {
+      // Regression, found by pressing the new disconnect button and watching
+      // the window stay on a dead server page: closing the connection makes
+      // the core publish `disconnected` *for that session*, and the rule that
+      // lets a session publish before `connect` answers rebuilt the view a
+      // moment after the user dismissed it. The only way out was the server
+      // switcher, which reads as the button having failed.
+      final transport = _RecordingTransport();
+      final container = ProviderContainer.test(
+        overrides: [clientTransportProvider.overrideWithValue(transport)],
+      );
+      final subscription = container.listen(sessionsProvider, (_, _) {});
+      addTearDown(subscription.close);
+
+      transport._events.add(
+        const DomainEvent(
+          session: 3,
+          event: ConnectionStateChangedEvent(ConnectionState.connected),
+        ),
+      );
+      await pumpEventQueue();
+      expect(container.read(sessionsProvider), contains(3));
+
+      container.read(sessionsProvider.notifier).disconnect(3);
+      expect(container.read(sessionsProvider), isNot(contains(3)));
+      expect(transport.calls, contains('disconnect:3'));
+
+      // Everything the core has left to say about a connection it just closed.
+      transport._events.add(
+        const DomainEvent(
+          session: 3,
+          event: ConnectionStateChangedEvent(ConnectionState.disconnected),
+        ),
+      );
+      transport._events.add(const DomainEvent(session: 3, event: DisconnectedEvent()));
+      await pumpEventQueue();
+
+      expect(
+        container.read(sessionsProvider),
+        isNot(contains(3)),
+        reason: 'the session the user closed came back',
+      );
+    });
+
+    test('a later connection on the same handle is not held closed', () async {
+      // The closed mark is lifted by a successful `connect`, not by any event
+      // — that distinction is the whole of the fix above.
+      final transport = _RecordingTransport();
+      final container = ProviderContainer.test(
+        overrides: [clientTransportProvider.overrideWithValue(transport)],
+      );
+      final subscription = container.listen(sessionsProvider, (_, _) {});
+      addTearDown(subscription.close);
+
+      container.read(sessionsProvider.notifier).forget(9);
+      await pumpEventQueue();
+      expect(container.read(sessionsProvider), isNot(contains(9)));
+
+      transport._events.add(
+        const CommandResultEvent(
+          CommandResult(command: 'connect', session: 9, outcome: CommandOutcome(ok: true)),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(container.read(sessionsProvider), contains(9));
     });
   });
 

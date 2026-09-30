@@ -76,6 +76,21 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   /// already running would tear down a working stream mid-sentence.
   final Set<int> _voiceStarted = {};
 
+  /// Sessions the user has closed, whose later events are no longer wanted.
+  ///
+  /// Without this, [forget] does not stick: closing a connection makes the core
+  /// publish `disconnected` for that very session, and the rule that a session
+  /// can publish before `connect` answers — the view is created on first sight
+  /// — would build the view again a moment after the user dismissed it. The
+  /// window then sits on a dead server page whose only way out is the server
+  /// switcher, which reads as the disconnect button having failed.
+  ///
+  /// Session ids are handed out by `SessionManager::reserve_id` from a counter
+  /// that only ever goes up, so an id is not reused by a later connection; the
+  /// clear in [_applyCommandResult] is there so that this stays true by
+  /// construction rather than by that argument.
+  final Set<int> _closed = {};
+
   @override
   Map<int, ServerView> build() {
     // `listen` rather than `watch`: this must react to each event without
@@ -91,6 +106,12 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   void _apply(FfiEvent envelope) {
     switch (envelope) {
       case DomainEvent(:final session, :final event):
+        // A session the user closed is over, and the core still has a few
+        // words to say about it — the `disconnected` event for the connection
+        // it was just told to close, at least. Letting those through would
+        // rebuild the view the user dismissed; see `_closed`.
+        if (_closed.contains(session)) return;
+
         // A session can publish before `connect` reports back, so the view is
         // created on first sight rather than waiting for the command result.
         final view = state[session] ?? ServerView(session: session);
@@ -147,6 +168,10 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
       // session's handle, which everything else is addressed by.
       if (result.command == 'connect' && result.session != null) {
         final session = result.session!;
+        // A successful connection is what makes a handle live again, so this
+        // is where the closed mark is lifted — not on any event, which is the
+        // whole thing `_closed` exists to stop.
+        _closed.remove(session);
         state = {...state, session: state[session] ?? ServerView(session: session)};
         ref.read(activeSessionProvider.notifier).select(session);
       }
@@ -202,6 +227,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 
   /// Forgets a session, as after a clean disconnect.
   void forget(int session) {
+    _closed.add(session);
     final next = {...state}..remove(session);
     state = next;
     ref.read(activeSessionProvider.notifier).forget(session);
