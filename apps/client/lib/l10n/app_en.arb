@@ -140,6 +140,26 @@
   "@settingsLanguageEn": {
     "description": "Language option for English, written in its own language"
   },
+  "settingsThemeLabel": "Theme",
+  "@settingsThemeLabel": {
+    "description": "Label of the theme dropdown"
+  },
+  "settingsThemeSystem": "Follow the system",
+  "@settingsThemeSystem": {
+    "description": "Theme option: Black when the system is dark, White when it is light"
+  },
+  "settingsThemeNightcord": "Nightcord",
+  "@settingsThemeNightcord": {
+    "description": "Theme option: the default, and the only one the colour specification defines. A product name, so it is not translated"
+  },
+  "settingsThemeBlack": "Black",
+  "@settingsThemeBlack": {
+    "description": "Theme option: the neutral dark theme"
+  },
+  "settingsThemeWhite": "White",
+  "@settingsThemeWhite": {
+    "description": "Theme option: the neutral light theme"
+  },
   "settingsVoiceNotStarted": "Voice has not started. Once it does, this shows the device actually in use and the microphone level.",
   "@settingsVoiceNotStarted": {
     "description": "Shown in place of the device-in-use line before the engine runs"

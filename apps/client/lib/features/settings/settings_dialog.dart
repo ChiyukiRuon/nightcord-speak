@@ -335,6 +335,36 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   settings.ui.copyWith(language: language, clearLanguage: language == null),
                 ),
               ),
+              SizedBox(height: tokens.space3),
+              DropdownButtonFormField<String>(
+                // `?? 'nightcord'` because this dropdown has no null item:
+                // unlike the language above, an unset theme and the default
+                // theme are the same thing, so "not chosen" is shown as
+                // Nightcord and written back as `'nightcord'`. A null
+                // `initialValue` with no matching item is an assertion inside
+                // `DropdownButtonFormField`, and it would fire on every fresh
+                // settings file.
+                //
+                // The item order is the useful order, not the storage order:
+                // 「跟随系统」 first because it is what most people want, then
+                // the default, then the two neutrals.
+                initialValue: settings.ui.requestedTheme ?? 'nightcord',
+                isExpanded: true,
+                decoration: InputDecoration(labelText: l10n.settingsThemeLabel),
+                items: [
+                  DropdownMenuItem(value: 'system', child: Text(l10n.settingsThemeSystem)),
+                  DropdownMenuItem(
+                    value: 'nightcord',
+                    child: Text(l10n.settingsThemeNightcord),
+                  ),
+                  DropdownMenuItem(value: 'black', child: Text(l10n.settingsThemeBlack)),
+                  DropdownMenuItem(value: 'white', child: Text(l10n.settingsThemeWhite)),
+                ],
+                onChanged: (theme) {
+                  if (theme == null) return;
+                  _ui(settings, settings.ui.copyWith(theme: theme));
+                },
+              ),
 
               const _SectionDivider(),
               _SectionHeading(l10n.logLabel),

@@ -7,7 +7,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../tokens/app_colors.dart';
+import '../theme/design_tokens.dart';
 
 /// The unread indicator.
 class UnreadDot extends StatelessWidget {
@@ -26,6 +26,9 @@ class UnreadDot extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: size,
     height: size,
-    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+    decoration: BoxDecoration(
+      color: DesignTokens.of(context).primary,
+      shape: BoxShape.circle,
+    ),
   );
 }

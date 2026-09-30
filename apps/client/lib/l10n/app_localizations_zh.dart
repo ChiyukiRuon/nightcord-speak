@@ -112,6 +112,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageEn => 'English';
 
   @override
+  String get settingsThemeLabel => '主题';
+
+  @override
+  String get settingsThemeSystem => '跟随系统';
+
+  @override
+  String get settingsThemeNightcord => 'Nightcord';
+
+  @override
+  String get settingsThemeBlack => '黑色';
+
+  @override
+  String get settingsThemeWhite => '白色';
+
+  @override
   String get settingsVoiceNotStarted => '尚未开始语音。开始语音后，这里会显示实际在用的设备与麦克风电平。';
 
   @override

@@ -2,109 +2,121 @@
 //
 // `docs/UI设计与配色规范.md` §39 asks for a `ThemeExtension` carrying the tokens
 // Material has no slot for. This is that, and it is also the *only* thing
-// widgets should read: `AppColors` is the palette the theme is built from, not
-// an API.
+// widgets read — which is what makes a theme switch cost nothing outside this
+// layer: none of the call sites names a colour directly.
 //
-// The extension has no fields. The design is dark-only (§37 is explicit that a
-// light theme must be designed rather than derived), so every value is a
-// compile-time constant and there is nothing for a theme to vary — see `lerp`
-// below. Keeping the indirection anyway means a future light theme, or a test
-// that wants different colours, has exactly one place to intervene, and it is
-// the shape §39 asked for.
+// The extension holds a whole [AppPalette] rather than forwarding to a class of
+// constants. That is the difference that let a second and third theme exist at
+// all: a constant cannot vary, and a widget reading `AppColors.textPrimary`
+// would have gone on drawing the purple one after the theme changed.
 
 import 'package:flutter/material.dart';
 
-import '../tokens/app_colors.dart';
+import '../tokens/app_palette.dart';
 import '../tokens/app_radius.dart';
 import '../tokens/app_shadows.dart';
 import '../tokens/app_spacing.dart';
 
-/// Every design token, grouped the way the specifications group them.
+/// The colours of the current theme, plus the metrics that never vary.
 @immutable
 class DesignTokens extends ThemeExtension<DesignTokens> {
-  /// The single instance the theme installs.
-  const DesignTokens();
+  /// Wraps `palette` for the theme.
+  const DesignTokens(this.palette);
 
-  /// The tokens in scope, or the standard ones if the theme has not installed
-  /// them.
+  /// The theme's colours.
+  final AppPalette palette;
+
+  /// The tokens in scope, or Nightcord's if the theme has not installed them.
   ///
   /// Falls back rather than asserting because there is a second `MaterialApp`
   /// in this app — `StartupFailureApp`, which exists precisely for the case
   /// where the core never started — and a crash inside the screen that reports
-  /// a crash would be the worst possible trade.
+  /// a crash would be the worst possible trade. Nightcord is the default theme,
+  /// so it is also the least surprising thing to draw with.
   static DesignTokens of(BuildContext context) =>
-      Theme.of(context).extension<DesignTokens>() ?? const DesignTokens();
+      Theme.of(context).extension<DesignTokens>() ??
+      const DesignTokens(AppPalette.nightcord);
+
+  /// Which theme this is, by the settings file's spelling.
+  ///
+  /// Exposed for the tests that have to reason about the palette rather than
+  /// draw it.
+  String get name => palette.name;
+
+  /// Whether this is a dark theme.
+  Brightness get brightness => palette.brightness;
 
   // --- Background (§3.1) ---------------------------------------------------
 
   /// Modals, context menus, deep popups.
-  Color get bgDeep => AppColors.bgDeep;
+  Color get bgDeep => palette.bgDeep;
 
   /// Sidebars and navigation.
-  Color get bgSidebar => AppColors.bgSidebar;
+  Color get bgSidebar => palette.bgSidebar;
 
   /// The chat and the page behind everything else.
-  Color get bgMain => AppColors.bgMain;
+  Color get bgMain => palette.bgMain;
 
   /// Floating panels.
-  Color get bgElevated => AppColors.bgElevated;
+  Color get bgElevated => palette.bgElevated;
 
   // --- Surface (§4) --------------------------------------------------------
 
-  Color get surface1 => AppColors.surface1;
-  Color get surface2 => AppColors.surface2;
-  Color get surface3 => AppColors.surface3;
+  Color get surface1 => palette.surface1;
+  Color get surface2 => palette.surface2;
+  Color get surface3 => palette.surface3;
 
   // --- Text (§6) -----------------------------------------------------------
 
-  Color get textPrimary => AppColors.textPrimary;
-  Color get textSecondary => AppColors.textSecondary;
-  Color get textTertiary => AppColors.textTertiary;
-  Color get textDisabled => AppColors.textDisabled;
-  Color get textOnPrimary => AppColors.textOnPrimary;
+  Color get textPrimary => palette.textPrimary;
+  Color get textSecondary => palette.textSecondary;
+  Color get textTertiary => palette.textTertiary;
+  Color get textDisabled => palette.textDisabled;
+  Color get textOnPrimary => palette.textOnPrimary;
 
   // --- Border (§7) ---------------------------------------------------------
 
-  Color get borderSubtle => AppColors.borderSubtle;
-  Color get borderDefault => AppColors.borderDefault;
-  Color get borderStrong => AppColors.borderStrong;
+  Color get borderSubtle => palette.borderSubtle;
+  Color get borderDefault => palette.borderDefault;
+  Color get borderStrong => palette.borderStrong;
 
   // --- Primary and the states around it (§5, §19, §35) ---------------------
 
-  Color get primary => AppColors.primary;
-  Color get primaryHover => AppColors.primaryHover;
-  Color get primaryPressed => AppColors.primaryPressed;
-  Color get primaryFocus => AppColors.primaryFocus;
-  Color get primaryDisabled => AppColors.primaryDisabled;
+  Color get primary => palette.primary;
+  Color get primaryHover => palette.primaryHover;
+  Color get primaryPressed => palette.primaryPressed;
+  Color get primaryFocus => palette.primaryFocus;
+  Color get primaryDisabled => palette.primaryDisabled;
 
   /// A channel row under the pointer (§19).
-  Color get channelHoverBg => AppColors.channelHoverBg;
+  Color get channelHoverBg => palette.channelHoverBg;
 
   /// The message composer and every other text field (§18).
-  Color get inputBg => AppColors.inputBg;
+  Color get inputBg => palette.inputBg;
 
   // --- Semantic (§8) -------------------------------------------------------
 
-  Color get success => AppColors.success;
-  Color get successBg => AppColors.successBg;
-  Color get warning => AppColors.warning;
-  Color get warningBg => AppColors.warningBg;
-  Color get error => AppColors.error;
-  Color get errorBg => AppColors.errorBg;
-  Color get info => AppColors.info;
-  Color get infoBg => AppColors.infoBg;
+  Color get success => palette.success;
+  Color get successBg => palette.successBg;
+  Color get warning => palette.warning;
+  Color get warningBg => palette.warningBg;
+  Color get error => palette.error;
+  Color get errorBg => palette.errorBg;
+  Color get info => palette.info;
+  Color get infoBg => palette.infoBg;
 
   // --- Presence (§9) -------------------------------------------------------
 
-  Color get online => AppColors.online;
-  Color get idle => AppColors.idle;
-  Color get busy => AppColors.busy;
-  Color get offline => AppColors.offline;
+  Color get online => palette.online;
+  Color get idle => palette.idle;
+  Color get busy => palette.busy;
+  Color get offline => palette.offline;
 
   // --- Layout and motion ---------------------------------------------------
   //
-  // Re-exported so a component needs one import rather than five. They are not
-  // theme-dependent either; the same note as the class comment applies.
+  // Re-exported so a component needs one import rather than five. Not fields:
+  // these are the same in every theme, which is §43's "same spacing language"
+  // and the reason a theme switch does not move anything.
 
   double get space1 => AppSpacing.space1;
   double get space2 => AppSpacing.space2;
@@ -127,18 +139,26 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   List<BoxShadow> get shadow1 => AppShadows.level1;
   List<BoxShadow> get shadow2 => AppShadows.level2;
   List<BoxShadow> get shadow3 => AppShadows.level3;
+
+  /// The modal scrim.
+  ///
+  /// Part of the palette in spirit but not in shape: §25 gives it as
+  /// `rgba(10, 8, 20, 0.55)` regardless of what is behind it, and a dim scrim
+  /// over a light page is how every light modal is drawn too.
   Color get scrim => AppShadows.scrim;
 
   @override
-  DesignTokens copyWith() => this;
+  DesignTokens copyWith({AppPalette? palette}) =>
+      DesignTokens(palette ?? this.palette);
 
-  /// Returns `this`, because there is nothing to interpolate.
+  /// Blends towards `other`, so a theme switch cross-fades.
   ///
-  /// Every token is a constant and the app ships one theme, so a lerp between
-  /// two `DesignTokens` would be interpolating a value with itself. §37 is why
-  /// there is no second theme to blend towards: it says a light theme has to be
-  /// designed rather than derived by `Color.lerp`, and dark is the only one
-  /// this client has.
+  /// `MaterialApp` wraps its subtree in an `AnimatedTheme`, which calls this on
+  /// every frame of the switch. Returning one palette or the other — which is
+  /// what this did while there was only one theme — would make the change snap
+  /// at the half-way point instead.
   @override
-  DesignTokens lerp(covariant DesignTokens? other, double t) => this;
+  DesignTokens lerp(covariant DesignTokens? other, double t) => other == null
+      ? this
+      : DesignTokens(AppPalette.lerp(palette, other.palette, t));
 }

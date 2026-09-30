@@ -280,7 +280,7 @@ class ConnectionSettings {
 /// The core stores these but never reads them — they are here because
 /// `settings.json` is the application's single preferences file.
 class UiSettings {
-  const UiSettings({this.language});
+  const UiSettings({this.language, this.theme});
 
   /// The language the front-end renders in: `'zh'` or `'en'`.
   ///
@@ -288,6 +288,15 @@ class UiSettings {
   /// the UI does not know is kept in the file but read through
   /// [requestedLanguage], which treats it as unset.
   final String? language;
+
+  /// Which theme the front-end draws in.
+  ///
+  /// `'nightcord'`, `'black'`, `'white'` or `'system'`. Null is **not** "follow
+  /// the system" here, unlike [language] — it is the default theme, Nightcord.
+  /// Both spellings resolve to the same thing; keeping the null is what lets a
+  /// settings file written before this key existed mean "whatever the app
+  /// ships with" rather than freezing today's default into the file.
+  final String? theme;
 
   /// The language actually asked for, or null for "follow the system".
   ///
@@ -299,16 +308,37 @@ class UiSettings {
     _ => null,
   };
 
-  UiSettings copyWith({String? language, bool clearLanguage = false}) => UiSettings(
+  /// The theme actually asked for, or null for the default.
+  ///
+  /// The whitelist, for the same reason as [requestedLanguage]: a theme this
+  /// build does not know must fall back rather than reach the palette lookup
+  /// and match nothing. `'system'` survives it — it is a real choice, not the
+  /// absence of one.
+  String? get requestedTheme => switch (theme) {
+    'nightcord' || 'black' || 'white' || 'system' => theme,
+    _ => null,
+  };
+
+  UiSettings copyWith({
+    String? language,
+    bool clearLanguage = false,
+    String? theme,
+  }) => UiSettings(
     // Same convention as `AudioSettings`: null cannot mean "clear", so
     // choosing 「跟随系统」 says so explicitly.
     language: clearLanguage ? null : (language ?? this.language),
+    // No `clearTheme`: there is no "unset" item in the theme dropdown, because
+    // an unset theme and Nightcord are the same choice. Every edit writes one
+    // of the four concrete values.
+    theme: theme ?? this.theme,
   );
 
-  factory UiSettings.fromJson(Map<String, dynamic> json) =>
-      UiSettings(language: json['language'] as String?);
+  factory UiSettings.fromJson(Map<String, dynamic> json) => UiSettings(
+    language: json['language'] as String?,
+    theme: json['theme'] as String?,
+  );
 
-  Map<String, dynamic> toJson() => {'language': language};
+  Map<String, dynamic> toJson() => {'language': language, 'theme': theme};
 }
 
 /// Reads a nested object, tolerating anything else.

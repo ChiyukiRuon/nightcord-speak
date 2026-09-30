@@ -19,7 +19,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../tokens/app_colors.dart';
+import '../theme/design_tokens.dart';
 import '../tokens/app_typography.dart';
 
 /// A circular mark standing in for a user's picture.
@@ -41,6 +41,7 @@ class Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final initial = name.isEmpty ? '?' : name.characters.first.toUpperCase();
     final hue = _hueFor(name);
+    final tokens = DesignTokens.of(context);
 
     return Container(
       width: size,
@@ -65,7 +66,7 @@ class Avatar extends StatelessWidget {
           // The initial sits *on* a saturated fill, which is the case §6's
           // `textOnPrimary` is for — its warning against pure white is about
           // text on a background, not text on a colour.
-          color: dimmed ? AppColors.textDisabled : AppColors.textOnPrimary,
+          color: dimmed ? tokens.textDisabled : tokens.textOnPrimary,
         ),
       ),
     );

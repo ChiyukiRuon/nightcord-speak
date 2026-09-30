@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'design/theme/app_theme.dart';
+import 'design/tokens/app_palette.dart';
 import 'ffi/rust_client.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
@@ -46,7 +47,9 @@ void main() {
       StartupFailureApp(
         error: failure,
         stackTrace: trace,
-        theme: buildAppTheme(PlatformDispatcher.instance.locale),
+        // Nightcord, not the theme setting: the setting lives in the
+        // core, and the core is what failed to start.
+        theme: buildAppTheme(AppPalette.nightcord, PlatformDispatcher.instance.locale),
       ),
     );
     return;
@@ -98,18 +101,30 @@ class NightcordApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // A concrete locale, resolved once in `localeProvider` — see there for why
-    // it is not left to MaterialApp's own resolution.
+    // Both resolved to concrete values in `providers.dart` — see there for why
+    // neither is left to `MaterialApp`'s own resolution.
     final locale = ref.watch(localeProvider);
+    final themes = ref.watch(themeChoiceProvider);
 
     return MaterialApp(
       title: 'Nightcord Speak',
       debugShowCheckedModeBanner: false,
-      // Rebuilt when the language changes, which is the only thing the theme
-      // depends on: the font family follows the locale
-      // (`docs/UI字体规范.md` §5). Everything else in it is constant, so this
-      // is one `ThemeData` per language rather than one per frame.
-      theme: buildAppTheme(locale),
+      // Two slots rather than one. Choosing a theme explicitly fills both with
+      // it, so the system's brightness cannot override the choice; "follow the
+      // system" is the one case where they differ (White by day, Black by
+      // night).
+      //
+      // `themeMode` stays `system` in every case, which is what makes the
+      // follow-the-system case live: `MaterialApp` watches
+      // `didChangePlatformBrightness` itself, so flipping the operating
+      // system's theme changes the client without a restart.
+      //
+      // Each theme is rebuilt when the language changes too, because the font
+      // family follows the locale (`docs/UI字体规范.md` §5) — so this is one
+      // `ThemeData` per (theme, language) pair rather than one per frame.
+      theme: buildAppTheme(themes.light, locale),
+      darkTheme: buildAppTheme(themes.dark, locale),
+      themeMode: ThemeMode.system,
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

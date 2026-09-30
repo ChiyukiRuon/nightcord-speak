@@ -115,6 +115,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageEn => 'English';
 
   @override
+  String get settingsThemeLabel => 'Theme';
+
+  @override
+  String get settingsThemeSystem => 'Follow the system';
+
+  @override
+  String get settingsThemeNightcord => 'Nightcord';
+
+  @override
+  String get settingsThemeBlack => 'Black';
+
+  @override
+  String get settingsThemeWhite => 'White';
+
+  @override
   String get settingsVoiceNotStarted =>
       'Voice has not started. Once it does, this shows the device actually in use and the microphone level.';
 

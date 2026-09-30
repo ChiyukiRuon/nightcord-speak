@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart' show Locale, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/transport/client_transport.dart';
+import '../design/tokens/app_palette.dart';
 import '../ffi/rust_client.dart';
 import '../l10n/app_localizations.dart';
 import '../models/domain.dart';
@@ -264,6 +265,39 @@ final localeProvider = Provider<Locale>((ref) {
       ? ref.watch(systemLocalesProvider)
       : <Locale>[Locale(requested)];
   return basicLocaleListResolution(preferred, AppLocalizations.supportedLocales);
+});
+
+/// The two themes to hand `MaterialApp`, resolved from the setting.
+///
+/// **Two**, because "follow the system" is a pair here rather than a mode: the
+/// light half is White and the dark half is Black, and which one is in force is
+/// the platform's business. Naming a theme explicitly puts it in *both* slots,
+/// which is what makes the system's brightness irrelevant to that choice — one
+/// mechanism covering both cases instead of a branch.
+///
+/// Deliberately concrete, like [localeProvider]: null covers both "the core has
+/// not answered yet" and "the file predates the key", and both mean the default
+/// theme, so the first frame is drawn in Nightcord rather than flashing
+/// something else. An unrecognised value resolves the same way.
+///
+/// Using `MaterialApp`'s own slots rather than listening for a brightness
+/// change is also what makes "follow the system" live: `AnimatedTheme` inside
+/// `MaterialApp` already rebuilds on `didChangePlatformBrightness`, so a user
+/// who flips their system theme sees the client follow without a restart.
+final themeChoiceProvider = Provider<({AppPalette light, AppPalette dark})>((ref) {
+  final requested = ref.watch(settingsProvider)?.ui.requestedTheme;
+
+  if (requested == null || requested == 'nightcord') {
+    return (light: AppPalette.nightcord, dark: AppPalette.nightcord);
+  }
+  if (requested != 'system') {
+    // `requestedTheme` only lets through the four it knows, so this is one of
+    // black or white.
+    final palette = AppPalette.byName(requested) ?? AppPalette.nightcord;
+    return (light: palette, dark: palette);
+  }
+
+  return (light: AppPalette.white, dark: AppPalette.black);
 });
 
 final audioDevicesProvider =

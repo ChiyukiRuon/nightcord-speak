@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
+import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/features/connect/connect_page.dart';
 import 'package:nightcord_client/features/notifications/notice_stack.dart';
 import 'package:nightcord_client/features/server/server_page.dart';
@@ -189,10 +190,14 @@ ProviderContainer _container({ServerView? view, bool notices = false}) =>
       ],
     );
 
-Widget _app(ProviderContainer container, Widget home) => UncontrolledProviderScope(
+Widget _app(
+  ProviderContainer container,
+  Widget home, {
+  AppPalette palette = AppPalette.nightcord,
+}) => UncontrolledProviderScope(
   container: container,
   child: MaterialApp(
-    theme: buildAppTheme(const Locale('zh')),
+    theme: buildAppTheme(palette, const Locale('zh')),
     locale: const Locale('zh'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -254,5 +259,29 @@ void main() {
     await tester.pumpWidget(_app(_container(), const ServerPage(session: 99)));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('every theme builds every page', (tester) async {
+    // The pages read their colours from `DesignTokens.of(context)`, so a new
+    // palette reaches all of them without a code change — this is what proves
+    // it, rather than assuming it. It cannot prove the result *looks* right;
+    // `design_test.dart` has the assertions for that.
+    for (final palette in AppPalette.all) {
+      for (final home in <Widget>[
+        const ConnectPage(),
+        const ServerPage(session: 1),
+        const Scaffold(body: Center(child: SettingsDialog(session: 1))),
+      ]) {
+        await tester.pumpWidget(
+          _app(_container(view: _view(), notices: true), home, palette: palette),
+        );
+        await tester.pump();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '${palette.name} failed to build ${home.runtimeType}',
+        );
+      }
+    }
   });
 }

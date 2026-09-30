@@ -149,5 +149,46 @@ void main() {
       expect(chosen.copyWith().language, 'en');
       expect(chosen.copyWith(clearLanguage: true).language, isNull);
     });
+
+    test('the theme defaults to the app default and round trips', () {
+      // Unlike the language, an absent theme is *not* "follow the system" — it
+      // is Nightcord, so that a file written before the key existed means
+      // "whatever the app ships with" rather than freezing today's default.
+      final bare = Settings.fromJson(const <String, dynamic>{});
+      expect(bare.ui.theme, isNull);
+      expect(bare.ui.requestedTheme, isNull);
+
+      const black = Settings(ui: UiSettings(theme: 'black'));
+      final back = Settings.fromJson(black.toJson());
+      expect(back.ui.theme, 'black');
+      expect(back.ui.requestedTheme, 'black');
+    });
+
+    test('an unrecognized theme reads as the default', () {
+      // A hand-edited file, or a theme a newer build has. The stored value
+      // stays — see the round trip above — but the UI falls back rather than
+      // matching no palette.
+      const unknown = UiSettings(theme: 'solarized');
+      expect(unknown.requestedTheme, isNull);
+      expect(unknown.toJson()['theme'], 'solarized');
+
+      for (final known in ['nightcord', 'black', 'white', 'system']) {
+        expect(UiSettings(theme: known).requestedTheme, known);
+      }
+    });
+
+    test('every theme value survives a round trip', () {
+      for (final name in ['nightcord', 'black', 'white', 'system']) {
+        final settings = Settings(ui: UiSettings(theme: name));
+        expect(Settings.fromJson(settings.toJson()).ui.theme, name);
+      }
+    });
+
+    test('a theme change leaves the language alone', () {
+      const both = UiSettings(language: 'en', theme: 'black');
+      final changed = both.copyWith(theme: 'white');
+      expect(changed.theme, 'white');
+      expect(changed.language, 'en', reason: 'the two settings are independent');
+    });
   });
 }

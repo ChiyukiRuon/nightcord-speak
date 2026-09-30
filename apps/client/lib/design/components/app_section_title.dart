@@ -6,7 +6,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../tokens/app_colors.dart';
+import '../theme/design_tokens.dart';
 
 /// The label above a section.
 class SectionTitle extends StatelessWidget {
@@ -25,7 +25,7 @@ class SectionTitle extends StatelessWidget {
     // nothing else in the app uses. A section heading is a label; this is the
     // level that says so.
     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: AppColors.textSecondary,
+      color: DesignTokens.of(context).textSecondary,
     ),
   );
 }

@@ -11,6 +11,7 @@ import 'dart:ui' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
+import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/models/connect_request.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
@@ -217,6 +218,63 @@ void main() {
       );
 
       expect(container.read(localeProvider), const Locale('zh'));
+    });
+  });
+
+  group('themeChoiceProvider', () {
+    test('an explicit theme fills both slots', () {
+      // Which is what makes the system's brightness irrelevant to an explicit
+      // choice: `MaterialApp` has nothing to switch between.
+      for (final name in ['nightcord', 'black', 'white']) {
+        final container = containerWith(settings: Settings(ui: UiSettings(theme: name)));
+        final choice = container.read(themeChoiceProvider);
+
+        expect(choice.light.name, name);
+        expect(choice.dark.name, name);
+      }
+    });
+
+    test('following the system is White by day and Black by night', () {
+      final container = containerWith(
+        settings: const Settings(ui: UiSettings(theme: 'system')),
+      );
+      final choice = container.read(themeChoiceProvider);
+
+      expect(choice.light, AppPalette.white);
+      expect(choice.dark, AppPalette.black);
+    });
+
+    test('before the core has answered, the default theme is drawn', () {
+      // Settings are null while the round trip is in flight. The first frame
+      // must not flash a theme the user did not choose — and the default is
+      // Nightcord, not "follow the system".
+      final container = containerWith();
+      final choice = container.read(themeChoiceProvider);
+
+      expect(choice.light, AppPalette.nightcord);
+      expect(choice.dark, AppPalette.nightcord);
+    });
+
+    test('an unrecognized stored theme falls back to the default', () {
+      final container = containerWith(
+        settings: const Settings(ui: UiSettings(theme: 'solarized')),
+      );
+      final choice = container.read(themeChoiceProvider);
+
+      expect(choice.light, AppPalette.nightcord);
+      expect(choice.dark, AppPalette.nightcord);
+    });
+
+    test('the two halves are always a real pair', () {
+      // Whatever the setting says, neither slot may be "nothing" — the widget
+      // that draws them does not handle a null theme.
+      for (final theme in [null, 'nightcord', 'black', 'white', 'system', 'nonsense']) {
+        final container = containerWith(settings: Settings(ui: UiSettings(theme: theme)));
+        final choice = container.read(themeChoiceProvider);
+
+        expect(AppPalette.all, contains(choice.light));
+        expect(AppPalette.all, contains(choice.dark));
+      }
     });
   });
 }

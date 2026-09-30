@@ -296,6 +296,36 @@ abstract class AppLocalizations {
   /// **'English'**
   String get settingsLanguageEn;
 
+  /// Label of the theme dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsThemeLabel;
+
+  /// Theme option: Black when the system is dark, White when it is light
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the system'**
+  String get settingsThemeSystem;
+
+  /// Theme option: the default, and the only one the colour specification defines. A product name, so it is not translated
+  ///
+  /// In en, this message translates to:
+  /// **'Nightcord'**
+  String get settingsThemeNightcord;
+
+  /// Theme option: the neutral dark theme
+  ///
+  /// In en, this message translates to:
+  /// **'Black'**
+  String get settingsThemeBlack;
+
+  /// Theme option: the neutral light theme
+  ///
+  /// In en, this message translates to:
+  /// **'White'**
+  String get settingsThemeWhite;
+
   /// Shown in place of the device-in-use line before the engine runs
   ///
   /// In en, this message translates to:
