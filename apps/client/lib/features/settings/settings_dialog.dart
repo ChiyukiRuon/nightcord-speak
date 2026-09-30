@@ -19,7 +19,9 @@ import '../../models/domain.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../models/shortcuts.dart';
 import '../../models/voice_status.dart';
+import '../shortcuts/chord_field.dart';
 import '../../util/reveal.dart';
 
 /// Settings, opened from the voice bar.
@@ -267,6 +269,22 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 onChanged: (notifications) => ref
                     .read(settingsProvider.notifier)
                     .update(settings.copyWith(notifications: notifications)),
+              ),
+
+              const Divider(height: 32),
+              const _SectionTitle('快捷键'),
+              for (final action in ShortcutAction.values)
+                ChordField(
+                  label: action.label,
+                  chord: settings.shortcuts[action],
+                  onChanged: (chord) => ref
+                      .read(settingsProvider.notifier)
+                      .update(settings.copyWith(shortcuts: settings.shortcuts.withBinding(action, chord))),
+                ),
+              const SizedBox(height: 4),
+              const Text(
+                '点一下右边的框，然后按下你想要的组合。Esc 取消，Delete 清空（清空后不再触发）。',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
               ),
 
               const Divider(height: 32),

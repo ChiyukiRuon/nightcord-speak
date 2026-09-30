@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/connect/connect_page.dart';
+import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
-import '../features/voice/voice_bar.dart';
 import '../ffi/rust_client.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
@@ -187,16 +187,14 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
     // The notices ride above whichever screen is showing, including the connect
     // one: a private message can arrive for a server you are not looking at.
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (active == null)
-          const ConnectPage()
-        else
-          // Push-to-talk watches the keyboard whenever a server is on screen (§30).
-          PushToTalkListener(session: active, child: ServerPage(session: active)),
-        const NoticeStack(),
-      ],
+    return ShortcutHost(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (active == null) const ConnectPage() else ServerPage(session: active),
+          const NoticeStack(),
+        ],
+      ),
     );
   }
 }

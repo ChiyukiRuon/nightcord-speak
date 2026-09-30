@@ -57,9 +57,18 @@
     "direct_message": true,
     "connection": true,
     "system": true
+  },
+  "shortcuts": {
+    "mute":         { "key": 458768, "ctrl": true, "shift": true, "alt": false, "meta": false },
+    "deafen":       { "key": 458759, "ctrl": true, "shift": true, "alt": false, "meta": false },
+    "push_to_talk": { "key": 458771, "ctrl": true, "shift": true, "alt": false, "meta": false }
   }
 }
 ```
+
+`shortcuts` 的 `key` 是 **Flutter 的 `PhysicalKeyboardKey.usbHidUsage`**——物理键而不是
+字母，因为快捷键要的是「手放在哪里」。代价是这一节不便手改，界面是它的编辑器，
+见 [`docs/shortcuts.md`](shortcuts.md)。
 
 `input_device` / `output_device` 是 cpal 的 `"<host>:<device>"`，`null` 表示系统默认。
 想知道该填什么，`cargo run -p ts-audio --example list_devices`。
@@ -110,6 +119,7 @@ WARN ts_core::client: using default settings
 | 传输方式 | 同上，另外**改了就应用**到活着的引擎 | 立即 |
 | 灵敏度 | 同上，同上 | 立即 |
 | 通知开关 | 前端 | 立即（见 [`docs/notifications.md`](notifications.md)） |
+| 快捷键 | 前端 | 立即重新注册系统热键（见 [`docs/shortcuts.md`](shortcuts.md)） |
 
 设备是唯一不能立即生效的：替换一条活着的 cpal 流意味着拆掉重开，在别人说话的时候做
 这件事比等一等更糟。设置界面在设备下拉下面写明了这一点。

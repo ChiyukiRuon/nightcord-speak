@@ -1,7 +1,6 @@
 // The voice controls pinned to the bottom of the sidebar (§21).
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/domain.dart';
@@ -46,16 +45,9 @@ class VoiceBar extends ConsumerWidget {
             active: voice.inputMuted,
             colour: AppColors.danger,
             enabled: online,
-            onPressed: () {
-              final muted = !voice.inputMuted;
-              ref.read(rustClientProvider).setInputMuted(muted);
-              // Reflected locally at once so the button feels responsive; the
-              // core's `voice_state_changed` is what makes it stick.
-              ref.read(sessionsProvider.notifier).reportVoiceState(
-                session,
-                voice.copyWith(inputMuted: muted),
-              );
-            },
+            // The shortcut system calls the same method, so there is one
+            // definition of what muting does.
+            onPressed: () => ref.read(sessionsProvider.notifier).toggleInputMuted(session),
           ),
           _VoiceButton(
             icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
@@ -63,14 +55,7 @@ class VoiceBar extends ConsumerWidget {
             active: voice.outputMuted,
             colour: AppColors.danger,
             enabled: online,
-            onPressed: () {
-              final muted = !voice.outputMuted;
-              ref.read(rustClientProvider).setOutputMuted(muted);
-              ref.read(sessionsProvider.notifier).reportVoiceState(
-                session,
-                voice.copyWith(outputMuted: muted),
-              );
-            },
+            onPressed: () => ref.read(sessionsProvider.notifier).toggleOutputMuted(session),
           ),
           _VoiceButton(
             icon: Icons.settings,
@@ -123,69 +108,6 @@ class _VoiceButton extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       padding: const EdgeInsets.all(6),
       icon: Icon(icon, color: tint),
-    );
-  }
-}
-
-/// Reads a held key as push-to-talk (§30).
-///
-/// A `Focus` wrapper rather than a global shortcut: registering a system-wide
-/// hotkey needs a plugin, and the roadmap puts that in the polish phase. This
-/// works whenever the window has focus, which is enough to use it.
-class PushToTalkListener extends ConsumerStatefulWidget {
-  /// Wraps `child`.
-  const PushToTalkListener({required this.session, required this.child, super.key});
-
-  /// The session the engine feeds.
-  final int session;
-
-  /// What to wrap.
-  final Widget child;
-
-  @override
-  ConsumerState<PushToTalkListener> createState() => _PushToTalkListenerState();
-}
-
-class _PushToTalkListenerState extends ConsumerState<PushToTalkListener> {
-  final _focus = FocusNode(debugLabel: 'push-to-talk');
-  bool _held = false;
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  /// Whether this key event is the push-to-talk chord.
-  bool _isChord(KeyEvent event) =>
-      event.logicalKey == LogicalKeyboardKey.keyP &&
-      HardwareKeyboard.instance.isControlPressed &&
-      HardwareKeyboard.instance.isShiftPressed;
-
-  void _setHeld(bool held) {
-    if (_held == held) return;
-    _held = held;
-    ref.read(rustClientProvider).setPushToTalk(held);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: (_, event) {
-        if (!_isChord(event)) return KeyEventResult.ignored;
-        switch (event) {
-          case KeyDownEvent():
-            _setHeld(true);
-          case KeyUpEvent():
-            _setHeld(false);
-          case KeyRepeatEvent():
-            break; // already held
-        }
-        return KeyEventResult.handled;
-      },
-      child: widget.child,
     );
   }
 }

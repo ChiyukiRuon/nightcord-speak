@@ -180,8 +180,8 @@ cd apps/client && flutter run -d windows
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 304 个
-cd apps/client && flutter analyze && flutter test                  # 98 个
+cargo test  --workspace --all-features                             # 307 个
+cd apps/client && flutter analyze && flutter test                  # 107 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -260,7 +260,7 @@ cd apps/client && flutter analyze && flutter test                  # 98 个
 | **M0.3** | Flutter Client                  | ✅ **实测** |
 | **M0.4** | TS6                             | ✅ **实测** |
 | **M0.5** | Multi Session                   | ✅ **实测** |
-| M0.6     | Production Client               | 🚧 前五项已完成，剩快捷键 / 本地化 / 崩溃上报 |
+| M0.6     | Production Client               | 🚧 只剩本地化 / 崩溃上报 |
 | Phase 7  | Web Gateway                     | ⏳ 未开始   |
 
 §90 的实际顺序：
@@ -277,9 +277,9 @@ cd apps/client && flutter analyze && flutter test                  # 98 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **16,544 行**，13 crates + CLI |
-| Dart | **8,192 行**，34 文件          |
-| 测试 | **304 Rust + 98 Dart**，全绿   |
+| Rust | **16,696 行**，13 crates + CLI |
+| Dart | **8,811 行**，38 文件          |
+| 测试 | **307 Rust + 107 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -389,6 +389,20 @@ cd apps/client && flutter analyze && flutter test                  # 98 个
 | `voice_status` 无引擎时的回答 | ✅ 单测：回「都不可用」而不是失败 |
 | **设备被拔掉时的提示** | ⚠️ 只有代码路径——没有真的拔过设备 |
 
+**快捷键（M0.6 第七项）**
+
+| 项 | 结果 |
+| --- | --- |
+| **系统级热键**（本轮重点） | ✅ 实测截图：切到**记事本**后发 Ctrl+Shift+M，切回来麦克风图标是红的——窗口不在前台也生效 |
+| 插件与当前 Flutter 兼容 | ✅ `flutter build windows` 通过（该包最后发布于 2024-05，是这一轮唯一的依赖风险） |
+| 匹配是精确的 | ✅ 单测：Ctrl+M 不会被 Ctrl+Shift+M 触发，加一个修饰键也不是同一个组合 |
+| 清空 ≠ 没设置过 | ✅ 单测：`"mute": null` 保持未绑定，缺这个键才回落到 §42 的默认 |
+| 默认值写在模型里 | ✅ 单测：一个写在快捷键存在之前的设置文件读回来是 Ctrl+Shift+M/D/P |
+| 按钮与快捷键同一条路 | ✅ 两者都调 `SessionsNotifier.toggleInputMuted` / `toggleOutputMuted` |
+| **旧 PTT 的卡住 bug** | ✅ 机制上消失（插件按注册的组合投递松开事件）——但**没有手工复现过旧行为** |
+| 设置里的记录器 | ⚠️ **没能截图确认**（滚动截图两次都不稳定），只有 `flutter analyze` 与代码审查 |
+| PTT 的按住/松开 | ⚠️ 未实测（`SendKeys` 无法按住不放） |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -449,7 +463,8 @@ cd apps/client && flutter analyze && flutter test                  # 98 个
       热插拔轮询，全部走一个新命令 `nightcord_voice_status`。顺带修掉两个真 bug：
       `VoiceStateChanged` 从未被发布过、下拉的 `initialValue` 从不自我纠正。
       见 [`docs/devices.md`](docs/devices.md)。
-- [ ] 快捷键（目前 PTT 用 `Focus`，非全局）
+- [x] **快捷键** —— 三个动作、系统级、可配置。顺带修掉旧 PTT 的一个真 bug
+      （先松 Ctrl 会卡在「一直发着」）。见 [`docs/shortcuts.md`](docs/shortcuts.md)。
 - [ ] 本地化
 - [ ] 崩溃上报
 
@@ -497,6 +512,7 @@ cd apps/client && flutter analyze && flutter test                  # 98 个
 | `docs/bookmarks.md`        | 书签：文件格式、明文密码这件事、地址归一化、两处入口的分工   |
 | `docs/notifications.md`    | 通知：三种送达方式、两个坑、为什么不打扰正在看的、Windows toast 依赖 |
 | `docs/devices.md`          | 设备：状态出口、为什么电平是拉不是推、静音着采集就是麦克风测试 |
+| `docs/shortcuts.md`        | 快捷键：为什么系统级、物理键与 HID 码的代价、旧 PTT 的卡住 bug |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 

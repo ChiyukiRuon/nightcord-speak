@@ -69,6 +69,10 @@ pub struct Settings {
     /// What is worth interrupting the user for.
     #[serde(default)]
     pub notifications: NotificationSettings,
+
+    /// Which keys do what (§42).
+    #[serde(default)]
+    pub shortcuts: ShortcutSettings,
 }
 
 impl Default for Settings {
@@ -78,8 +82,100 @@ impl Default for Settings {
             audio: AudioSettings::default(),
             connection: ConnectionSettings::default(),
             notifications: NotificationSettings::default(),
+            shortcuts: ShortcutSettings::default(),
         }
     }
+}
+
+/// The key combinations that raise the three actions §42 names.
+///
+/// Each is an `Option` so a binding can be *cleared* as well as changed: an
+/// explicitly unbound action and one that was never configured are different
+/// things, and only the second should fall back to a default. A file written
+/// before this section existed has no keys at all, so the serde defaults supply
+/// §42's combinations rather than leaving someone with nothing bound.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShortcutSettings {
+    #[serde(default = "default_mute_shortcut")]
+    pub mute: Option<Chord>,
+
+    #[serde(default = "default_deafen_shortcut")]
+    pub deafen: Option<Chord>,
+
+    #[serde(default = "default_push_to_talk_shortcut")]
+    pub push_to_talk: Option<Chord>,
+}
+
+impl Default for ShortcutSettings {
+    fn default() -> Self {
+        Self {
+            mute: default_mute_shortcut(),
+            deafen: default_deafen_shortcut(),
+            push_to_talk: default_push_to_talk_shortcut(),
+        }
+    }
+}
+
+/// One key combination.
+///
+/// `key` is Flutter's `PhysicalKeyboardKey.usbHidUsage` — the full value
+/// including the 0x0007 usage-page prefix, because that is what
+/// `PhysicalKeyboardKey.findKeyByCode` takes and the round trip has to be
+/// lossless. A *physical* key rather than a letter: on an AZERTY keyboard the
+/// key where QWERTY has M is somewhere else entirely, and a shortcut — push to
+/// talk above all — is about where the hand goes, not what letter comes out.
+///
+/// The cost is that this section of `settings.json` is written for a machine
+/// rather than for a person. The settings dialog is the editor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Chord {
+    /// `PhysicalKeyboardKey.usbHidUsage`.
+    pub key: u32,
+
+    #[serde(default)]
+    pub ctrl: bool,
+
+    #[serde(default)]
+    pub shift: bool,
+
+    #[serde(default)]
+    pub alt: bool,
+
+    #[serde(default)]
+    pub meta: bool,
+}
+
+fn default_mute_shortcut() -> Option<Chord> {
+    Some(Chord {
+        // 0x00070010 — the key labelled M on a US layout.
+        key: 0x0007_0010,
+        ctrl: true,
+        shift: true,
+        alt: false,
+        meta: false,
+    })
+}
+
+fn default_deafen_shortcut() -> Option<Chord> {
+    Some(Chord {
+        // 0x00070007 — the key labelled D on a US layout.
+        key: 0x0007_0007,
+        ctrl: true,
+        shift: true,
+        alt: false,
+        meta: false,
+    })
+}
+
+fn default_push_to_talk_shortcut() -> Option<Chord> {
+    Some(Chord {
+        // 0x00070013 — the key labelled P on a US layout.
+        key: 0x0007_0013,
+        ctrl: true,
+        shift: true,
+        alt: false,
+        meta: false,
+    })
 }
 
 /// What raises a notification (§43).
@@ -375,6 +471,7 @@ mod tests {
                 max_reconnect_attempts: Some(3),
             },
             notifications: NotificationSettings::default(),
+            shortcuts: ShortcutSettings::default(),
         };
 
         store.save(&settings).unwrap();
@@ -483,6 +580,61 @@ mod tests {
         let loaded = store.load().unwrap();
         assert!(!loaded.notifications.presence);
         assert!(loaded.notifications.direct_message);
+    }
+
+    #[test]
+    fn shortcuts_default_to_the_combinations_the_design_doc_names() {
+        // §42. A file written before this section existed comes back with these
+        // rather than with nothing bound — a client whose shortcuts silently
+        // stopped working is worse than one that never had them.
+        let shortcuts = Settings::default().shortcuts;
+
+        for (chord, label) in [
+            (shortcuts.mute, "mute"),
+            (shortcuts.deafen, "deafen"),
+            (shortcuts.push_to_talk, "push to talk"),
+        ] {
+            let chord = chord.unwrap_or_else(|| panic!("{label} has no default"));
+            assert!(chord.ctrl && chord.shift, "{label} should be Ctrl+Shift");
+            // Not the letter: the *physical* key, USB HID usage and all.
+            assert!(
+                chord.key > 0x0007_0000,
+                "{label} lost the usage-page prefix"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bound_shortcut_can_be_cleared_without_being_reset() {
+        // An explicitly unbound action and one that was never configured are
+        // different, and only the second should fall back to a default.
+        let dir = TempDir::new("unbound");
+        let store = dir.store();
+
+        let mut settings = Settings::default();
+        settings.shortcuts.mute = None;
+        store.save(&settings).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.shortcuts.mute, None, "cleared stays cleared");
+        assert!(
+            loaded.shortcuts.deafen.is_some(),
+            "clearing one must not clear the others"
+        );
+    }
+
+    #[test]
+    fn a_file_written_before_shortcuts_existed_still_gets_them() {
+        let dir = TempDir::new("noshortcuts");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"version":1,"connection":{"nickname":"Bob"}}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.shortcuts, ShortcutSettings::default());
     }
 
     #[test]

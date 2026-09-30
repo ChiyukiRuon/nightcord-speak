@@ -80,7 +80,7 @@ sink.push() ─▶ 环形缓冲 ─▶ 回调取用
 | 模式 | 行为 |
 | --- | --- |
 | `VoiceActivation` | 交给门限（阈值 + attack/release） |
-| `PushToTalk` | 只看按键是否按下，**绕过门限**（§30） |
+| `PushToTalk` | 只看按键是否按下，**绕过门限**（§30）。按键由系统级热键驱动，见 [`docs/shortcuts.md`](shortcuts.md) |
 | `Continuous` | 始终发送 |
 | `Muted` | 从不发送 |
 

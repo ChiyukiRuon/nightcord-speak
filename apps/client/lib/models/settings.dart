@@ -6,6 +6,7 @@
 // by hand, does not break the UI.
 
 import 'domain.dart';
+import 'shortcuts.dart';
 
 /// Everything the client remembers between runs.
 class Settings {
@@ -14,6 +15,7 @@ class Settings {
     this.audio = const AudioSettings(),
     this.connection = const ConnectionSettings(),
     this.notifications = const NotificationSettings(),
+    this.shortcuts = const ShortcutSettings(),
   });
 
   /// On-disk format version. The core refuses one it does not know.
@@ -22,16 +24,19 @@ class Settings {
   final AudioSettings audio;
   final ConnectionSettings connection;
   final NotificationSettings notifications;
+  final ShortcutSettings shortcuts;
 
   Settings copyWith({
     AudioSettings? audio,
     ConnectionSettings? connection,
     NotificationSettings? notifications,
+    ShortcutSettings? shortcuts,
   }) => Settings(
     version: version,
     audio: audio ?? this.audio,
     connection: connection ?? this.connection,
     notifications: notifications ?? this.notifications,
+    shortcuts: shortcuts ?? this.shortcuts,
   );
 
   factory Settings.fromJson(Map<String, dynamic> json) => Settings(
@@ -39,6 +44,7 @@ class Settings {
     audio: AudioSettings.fromJson(_object(json['audio'])),
     connection: ConnectionSettings.fromJson(_object(json['connection'])),
     notifications: NotificationSettings.fromJson(_object(json['notifications'])),
+    shortcuts: ShortcutSettings.fromJson(_object(json['shortcuts'])),
   );
 
   Map<String, dynamic> toJson() => {
@@ -46,6 +52,7 @@ class Settings {
     'audio': audio.toJson(),
     'connection': connection.toJson(),
     'notifications': notifications.toJson(),
+    'shortcuts': shortcuts.toJson(),
   };
 }
 

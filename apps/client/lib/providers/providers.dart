@@ -124,6 +124,34 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     );
   }
 
+  /// Flips the microphone for [session].
+  ///
+  /// The voice bar's button and the mute shortcut both come through here, so
+  /// there is one definition of what muting does: tell the core, and reflect it
+  /// locally at once so the control does not appear stuck for the round trip.
+  void toggleInputMuted(int session) => _toggleMute(session, input: true);
+
+  /// Flips the speakers for [session]. See [toggleInputMuted].
+  void toggleOutputMuted(int session) => _toggleMute(session, input: false);
+
+  void _toggleMute(int session, {required bool input}) {
+    final view = state[session];
+    // Nothing to mute without a live session; a shortcut pressed on the wrong
+    // screen should do nothing rather than queue a command the core refuses.
+    if (view == null || !view.isConnected) return;
+
+    final voice = view.voice;
+    if (input) {
+      final muted = !voice.inputMuted;
+      ref.read(rustClientProvider).setInputMuted(muted);
+      reportVoiceState(session, voice.copyWith(inputMuted: muted));
+    } else {
+      final muted = !voice.outputMuted;
+      ref.read(rustClientProvider).setOutputMuted(muted);
+      reportVoiceState(session, voice.copyWith(outputMuted: muted));
+    }
+  }
+
   /// Asks the core to close a session, and stops showing it.
   ///
   /// Optimistic: the view goes as soon as the user asks, rather than when the
