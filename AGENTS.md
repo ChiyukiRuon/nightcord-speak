@@ -274,7 +274,7 @@ cd apps/client && flutter gen-l10n
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test  --workspace --all-features                             # 357 个
-cd apps/client && flutter analyze && flutter test                  # 204 个
+cd apps/client && flutter analyze && flutter test                  # 208 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -353,7 +353,7 @@ cd apps/client && flutter analyze && flutter test                  # 204 个
 
 ## 5. 当前进度
 
-**最后更新：2026-09-30**
+**最后更新：2026-10-01**
 
 ### 5.1 里程碑
 
@@ -393,8 +393,8 @@ cd apps/client && flutter analyze && flutter test                  # 204 个
 |      | 数量                           |
 |------|--------------------------------|
 | Rust | **21,105 行**，16 crates + CLI + gateway |
-| Dart | **14,963 行**，64 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **357 Rust + 204 Dart**，全绿  |
+| Dart | **15,576 行**，65 文件（含 l10n 生成文件，约 1,400 行） |
+| 测试 | **357 Rust + 208 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -547,6 +547,17 @@ cd apps/client && flutter analyze && flutter test                  # 204 个
 | **真实原生崩溃（非模拟）** | ⚠️ 未触发过；且 Dart↔FFI 路径上的 UEF 已知盲区（dart-lang/sdk#51726）——SEH 笔记按「尽力而为」理解，承重信号是 panic 笔记与运行标记 |
 | minidump | ❌ 明确不做（v1），升级路径写进 [`docs/crash.md`](docs/crash.md) |
 
+**品牌与细节（视觉层这一轮，2026-10-01）**
+
+| 项 | 结果 |
+| --- | --- |
+| **品牌标记** | ✅ 实机截图：连接页标题行（32px）与服务器头部（24px）画的是 `AppLogo`，`Icons.bubble_chart` 一处不剩 |
+| **应用图标** | ✅ `scripts/make-app-icon.py` 生成的 7 个尺寸（16–256）；实机看过浅色标题栏下的 16px，两只眼仍认得出 |
+| **底栏名字的位置** | ✅ 屏幕取像素：墨迹中心从偏离底栏中线 **+4.5** 物理像素改到 **−0.5**。前两次改行高都没修对——行高不是那个杠杆，理由写在 `_opticalLift` 的注释里 |
+| 已保存服务器的图标边距 | ✅ 屏幕量：图标墨迹 x 663 → **675**，左边框仍在 660，不再贴着 |
+| 双击直连 | ✅ 单测两条：单击只填表单（transport 零调用）、双击发出 `connect:192.168.31.128:9987`。单击被押后约 300ms 是双击判定的固有代价，见 §7 |
+| 新标记的各尺寸绘制 | ✅ 单测：16 / 24 / 32 / 256 都能画不报错。**画得像不像**只能人眼看——测试字体没有真实字形度量（底栏那轮因此量错过两次） |
+
 ### 5.4 未验证
 
 - **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
@@ -643,6 +654,9 @@ cd apps/client && flutter analyze && flutter test                  # 204 个
 ### 其他
 
 - [ ] TS3 成功换频道的验证（需要多频道服务器）
+- [ ] 连接页保存行的单击被押后约 300ms——同一行上还有双击，Flutter 要等它确认
+      没有第二次点击。嫌钝就自己判「同一行、300ms 内的第二次点击」（约十来行手写手势），
+      单击即刻生效。落地在 `_SavedServerRow`。
 - [ ] `Session::poke()` —— trait、事件、权限位都在，只缺这个方法
 - [ ] kick / ban 同上
 - [ ] 音质人耳确认
