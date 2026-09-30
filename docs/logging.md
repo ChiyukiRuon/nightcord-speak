@@ -21,7 +21,7 @@ bug ③（启动语音前按静音弹红错）当时查不动，原因不是代�
 ## 日志落在哪
 
 ```text
-<应用数据目录>/logs/nightcord.log.YYYY-MM-DD
+<应用数据目录>/logs/nightcord.YYYY-MM-DD.log
 
 Windows   %APPDATA%\Nightcord Speak\logs\
 macOS     ~/Library/Application Support/Nightcord Speak/logs/
@@ -30,6 +30,10 @@ Linux     $XDG_CONFIG_HOME/nightcord-speak/logs/（或 ~/.config/…）
 
 - **每日轮转，保留 7 份**，最旧的自动删除。上限存在的原因很简单：无上限的日志
   最终会变成用户的问题，而有用的部分永远在最近那一端。
+- 日期在中间、`.log` 在最后，是因为 `tracing-appender` 把日期**追加在 prefix 之后**。
+  传给它 `"nightcord.log"` 会得到 `nightcord.log.2026-09-30`——日期成了扩展名，文件
+  在文件管理器和所有日志查看器眼里是"没有扩展名"。所以 stem 和扩展名分开传
+  （`filename_prefix` + `filename_suffix`）。
 - 目录由 `ts_identity::app_data_root()` 给出——身份存在它下面的 `identity/`，
   日志在 `logs/`，设置在 `settings.json`，书签在 `bookmarks.json`。平台路径的知识只有
   这一份——见 [`docs/settings.md`](settings.md) 与 [`docs/bookmarks.md`](bookmarks.md)。

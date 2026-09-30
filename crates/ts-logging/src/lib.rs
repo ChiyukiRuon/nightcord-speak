@@ -57,8 +57,16 @@ pub const DEFAULT_FILTER: &str =
 /// user's problem, and the useful part of it is always the recent end.
 const KEEP_FILES: usize = 7;
 
-/// The file name logs are written under, before the date suffix.
-const FILE_PREFIX: &str = "nightcord.log";
+/// The file name logs are written under: `nightcord.2026-09-30.log`.
+///
+/// Stem and extension are separate because the appender inserts the date
+/// *after* whatever prefix it is given. Handing it `"nightcord.log"` produced
+/// `nightcord.log.2026-09-30`, where the date is the extension and the file
+/// reads as having none — backwards for anything that groups or opens files by
+/// type, which is most of what will ever touch these.
+const FILE_STEM: &str = "nightcord";
+/// See [`FILE_STEM`].
+const FILE_EXTENSION: &str = "log";
 
 /// Where log records ended up.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +210,8 @@ fn build_file(
 ) -> Result<(BoxedSubscriber, WorkerGuard), Box<dyn std::error::Error + Send + Sync>> {
     let appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
-        .filename_prefix(FILE_PREFIX)
+        .filename_prefix(FILE_STEM)
+        .filename_suffix(FILE_EXTENSION)
         .max_log_files(KEEP_FILES)
         .build(dir)?;
 
@@ -305,6 +314,32 @@ mod tests {
             "got {written}"
         );
         assert!(written.contains("permission=218"), "got {written}");
+    }
+
+    #[test]
+    fn the_log_file_name_ends_in_log() {
+        // Regression: the appender puts the date *after* its prefix, so a
+        // prefix of `nightcord.log` produced `nightcord.log.2026-09-30`. The
+        // date became the extension and the file was extensionless — which is
+        // what a file manager, an "open with" dialog and every log viewer treat
+        // as an unknown type.
+        let dir = TempDir::new("name");
+        let (dispatch, guard) =
+            build_file(dir.path(), EnvFilter::new("info")).expect("open the log file");
+        drop(dispatch);
+        drop(guard);
+
+        let name = fs::read_dir(dir.path())
+            .expect("read the log directory")
+            .next()
+            .expect("one log file")
+            .expect("a directory entry")
+            .file_name()
+            .to_string_lossy()
+            .into_owned();
+
+        assert!(name.starts_with("nightcord."), "got {name}");
+        assert!(name.ends_with(".log"), "got {name}");
     }
 
     #[test]
