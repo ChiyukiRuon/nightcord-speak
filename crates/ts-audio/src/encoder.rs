@@ -361,4 +361,47 @@ mod tests {
             loud.payload.len()
         );
     }
+
+    #[test]
+    fn a_tone_survives_the_codec_at_its_own_level() {
+        // The only test where libopus encodes and libopus decodes, against each
+        // other. It exists because a build whose libopus decodes everything to
+        // a constant drift is invisible everywhere else: the frames are the
+        // right size, the sequence numbers advance, the mixer reports a level,
+        // and the queue drains on time. The one symptom is that nobody hears
+        // anything, which is the hardest kind of failure to trace back here.
+        //
+        // Found on macOS: `audiopus_sys` compiles libopus from source with
+        // whatever cmake is installed, and that build produced a decode path
+        // whose output was a constant +/- one 16-bit LSB (2^-15, i.e. -90 dB) —
+        // silence, with all the machinery around it working.
+        let mut encoder = OpusEncoder::new(2).expect("build encoder");
+        let input = tone(440.0, 0.5, 2);
+        let packet = encoder.encode(&input).expect("encode the tone");
+
+        let mut decoder = audiopus::coder::Decoder::new(
+            audiopus::SampleRate::Hz48000,
+            audiopus::Channels::Stereo,
+        )
+        .expect("build decoder");
+
+        let mut pcm = vec![0.0_f32; crate::format::PLAYBACK_SAMPLES];
+        let decoded = decoder
+            .decode_float(
+                Some(
+                    audiopus::packet::Packet::try_from(packet.payload.as_slice())
+                        .expect("valid packet"),
+                ),
+                audiopus::MutSignals::try_from(pcm.as_mut_slice()).expect("output buffer"),
+                false,
+            )
+            .expect("decode the tone");
+
+        assert!(decoded > 0, "the decoder produced no samples");
+        let loudest = pcm.iter().fold(0.0_f32, |loudest, s| loudest.max(s.abs()));
+        assert!(
+            loudest > 0.2,
+            "a 0.5-amplitude tone came back at {loudest} — libopus is not passing audio through"
+        );
+    }
 }

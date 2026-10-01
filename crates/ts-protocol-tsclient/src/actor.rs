@@ -20,7 +20,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ts_protocol::{AudioSink, Codec, ConnectionConfig, VoicePacket};
 use tsclientlib::audio::AudioHandler;
@@ -65,6 +65,12 @@ const AUDIO_FRAME_SAMPLES: usize = 1920;
 /// exactly 50 frames a second. Draining faster produces frames nothing can
 /// play, and draining slower starves the speaker.
 const AUDIO_FRAME_MS: u64 = 20;
+
+/// How often to repeat "talking is not reaching the speakers", at most.
+///
+/// Long enough not to flood a log at fifty ticks a second, short enough that a
+/// short test still catches it.
+const AUDIO_REPORT_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Where a command's outcome is delivered.
 pub(crate) type Reply = oneshot::Sender<Result<(), ClientError>>;
@@ -671,6 +677,14 @@ async fn serve(
     // without this the ending would be indistinguishable from a clean close.
     let mut dropped = false;
 
+    // When the audio path last complained. See the `AudioTick` arm.
+    let mut last_audio_report: Option<Instant> = None;
+
+    // Whether a frame has ever made it all the way to the sink on this
+    // connection. The other half of the same report: with both, the log says
+    // whether incoming audio is being played at all.
+    let mut audio_flowing = false;
+
     // The audio clock.
     //
     // `StreamItem::Audio` only *fills* the jitter buffer; draining it happens
@@ -706,7 +720,41 @@ async fn serve(
                 // from a quiet room. `tsclientlib` keeps a queue only while a
                 // talker is live, so this is exactly "somebody is talking".
                 if !audio.handler.get_queues().is_empty() {
-                    pump_audio(audio, context);
+                    match pump_audio(audio, context) {
+                        // Somebody is talking and none of it is reaching the
+                        // speakers. That is a thing the user can see (a name is
+                        // lit up) and cannot hear, so the log has to say which
+                        // link broke — otherwise the only symptom is silence,
+                        // and every candidate cause looks identical from
+                        // outside.
+                        //
+                        // Rate-limited rather than logged per tick: the tick is
+                        // 20 ms and this condition is steady, so an unthrottled
+                        // line would be fifty of them a second.
+                        Some(reason) => {
+                            if last_audio_report
+                                .is_none_or(|at| at.elapsed() >= AUDIO_REPORT_INTERVAL)
+                            {
+                                last_audio_report = Some(Instant::now());
+                                tracing::warn!(
+                                    reason,
+                                    "talking is audible in the tree but not in the speakers"
+                                );
+                            }
+                        }
+                        // The other half of the same report, once per
+                        // connection: audio is going out to the device. With
+                        // this and the warning above, the log distinguishes
+                        // "the mixer produced nothing" from "the device is not
+                        // making a sound" — the two look identical from
+                        // outside, and only one of them is this layer's fault.
+                        None => {
+                            if !audio_flowing {
+                                audio_flowing = true;
+                                tracing::info!("incoming audio is reaching the speakers");
+                            }
+                        }
+                    }
                 }
             }
             Outcome::Stream(Some(Ok(StreamItem::DisconnectedTemporarily(reason)))) => {
@@ -982,15 +1030,15 @@ fn sender_of(packet: &InAudioBuf) -> Option<tsclientlib::ClientId> {
 /// buffer and the clock drains it, and the two rates are independent — one
 /// packet per 20 ms is a property of the talker, not a promise the receiver can
 /// build on.
-fn pump_audio(audio: &mut Audio, context: &Arc<Context>) {
+fn pump_audio(audio: &mut Audio, context: &Arc<Context>) -> Option<&'static str> {
     let Some(sink) = context.audio_sink() else {
-        return;
+        return Some("no output device is open");
     };
 
     // Skip the work entirely when the sink is full: nobody would hear the
     // result, and the handler keeps its own buffer.
     if sink.space() < AUDIO_FRAME_SAMPLES {
-        return;
+        return Some("the playback queue is full and not draining");
     }
 
     // `fill_buffer` *adds* into the buffer, so it has to start at silence.
@@ -1008,6 +1056,8 @@ fn pump_audio(audio: &mut Audio, context: &Arc<Context>) {
             speaking: false,
         }));
     }
+
+    None
 }
 
 /// Builds the outgoing packet for one encoded frame.
