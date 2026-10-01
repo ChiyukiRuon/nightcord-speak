@@ -336,7 +336,17 @@ async fn run(
     loop {
         tokio::select! {
             command = commands.recv() => match command {
-                Some(command) if command.is_shutdown() => break,
+                Some(command) if command.is_shutdown() => {
+                    // The doc on `NightcordClient::shutdown` has always claimed
+                    // this happened; until now the worker simply broke out of
+                    // the loop. A process that vanishes without saying goodbye
+                    // leaves the server holding the session, and TS3 refuses a
+                    // second connection from the same identity until it times
+                    // out — so the next launch looks like "that nickname is
+                    // already in use".
+                    close_every_session(&mut core).await;
+                    break;
+                }
                 Some(command) => {
                     handle(command, &mut core, &mut voice, &mut voice_intent, &events).await;
                 }
@@ -384,6 +394,19 @@ macro_rules! with_session {
             None => Err(no_such_session()),
         }
     };
+}
+
+/// Says goodbye to every server before the worker stops.
+///
+/// Best-effort: the process is on its way out, and a server that refuses the
+/// disconnect is not a reason to fail the exit. What matters is that the
+/// ordinary case — close the window, open it again — does not leave the
+/// previous session counted against the user's own identity.
+async fn close_every_session(core: &mut CoreClient) {
+    match core.disconnect_all().await {
+        Ok(()) => tracing::debug!("closed every session on the way out"),
+        Err(error) => tracing::warn!(%error, "could not close every session on the way out"),
+    }
 }
 
 /// Runs one command and reports its outcome.
