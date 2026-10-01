@@ -39,6 +39,10 @@ cpal = "0.18"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Named only because `tsclientlib`'s generated ban message takes a
+# `time::SignedDuration`, and it is not re-exported. Pinned to the same range
+# the vendored library asks for, so the two cannot resolve to different majors.
+time = "0.3"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"

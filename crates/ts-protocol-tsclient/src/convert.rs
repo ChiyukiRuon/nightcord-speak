@@ -9,9 +9,12 @@ use ts_model::{
 };
 
 use tsclientlib::data::{
-    Channel as BookChannel, Client as BookClient, Connection as BookConnection,
+    Channel as BookChannel, Client as BookClient, Connection as BookConnection, OptionalServerData,
 };
-use tsclientlib::{ChannelPermissionHint, ChannelType, ClientPermissionHint, MaxClients};
+use tsclientlib::{
+    ChannelPermissionHint, ChannelType, ClientPermissionHint, ClientType as BookClientType,
+    MaxClients,
+};
 
 /// Builds a full snapshot of a server from the protocol library's book.
 ///
@@ -76,6 +79,8 @@ pub fn snapshot(book: &BookConnection, server: Server) -> ServerState {
 #[must_use]
 pub fn server_info(book: &BookConnection) -> ServerInfo {
     let server = &book.server;
+    let optional = server.optional_data.as_ref();
+
     ServerInfo {
         name: server.name.clone(),
         // The book always carries these as strings; an empty one means "unset".
@@ -83,11 +88,67 @@ pub fn server_info(book: &BookConnection) -> ServerInfo {
         platform: non_empty(&server.platform),
         version: non_empty(&server.version),
         max_clients: u32::from(server.max_clients),
-        clients_online: book.clients.len() as u32,
-        channels_online: book.channels.len() as u32,
-        // Not part of the book — it comes from the server-variables query, which
-        // Milestone 0.1 does not make. Left absent rather than guessed.
-        uptime: None,
+        clients_online: clients_online(book, optional),
+        channels_online: channels_online(book, optional),
+        // From the same query as the counts above; absent until the server
+        // answers `servergetvariables`.
+        uptime: optional.map(|data| data.uptime.whole_seconds().max(0) as u64),
+    }
+}
+
+/// How many people are on the server.
+///
+/// The server's own number is preferred, because it is the only one that counts
+/// clients we cannot see: a client in a channel we are not subscribed to, or one
+/// hidden by permissions, is real and absent from our client list. What it is
+/// *not* is people — it includes the server-query connections, so `serveradmin`
+/// is subtracted before the number is shown.
+///
+/// The visible count is a floor: TeamSpeak pushes `notifyserverupdated` only
+/// when asked, and the optional data can be a while old, so a number smaller
+/// than what is on screen would be plainly wrong.
+fn clients_online(book: &BookConnection, optional: Option<&OptionalServerData>) -> u32 {
+    let queries = book
+        .clients
+        .values()
+        .filter(|c| matches!(c.client_type, tsclientlib::ClientType::Query { .. }))
+        .count();
+    let visible = book.clients.len().saturating_sub(queries);
+
+    count_of(
+        visible,
+        queries,
+        optional.map(|data| u32::from(data.client_count)),
+    )
+}
+
+/// How many channels the server has. See [`clients_online`] for the shape.
+fn channels_online(book: &BookConnection, optional: Option<&OptionalServerData>) -> u32 {
+    // No equivalent of the query adjustment: nothing in a channel count is a
+    // connection rather than a channel.
+    count_of(
+        book.channels.len(),
+        0,
+        optional.map(|data| data.channel_count as u32),
+    )
+}
+
+/// The arithmetic behind both counts, split out so it can be tested without
+/// building a whole `BookConnection`.
+///
+/// `visible` already excludes the server-query connections; `queries` is how
+/// many were excluded, because the server's own number still counts them.
+///
+/// A reported number *smaller* than what is on screen is plainly wrong — the
+/// optional data can be a while old — so the visible count is a floor rather
+/// than only a fallback.
+fn count_of(visible: usize, queries: usize, reported: Option<u32>) -> u32 {
+    let visible = visible as u32;
+    match reported {
+        None => visible,
+        Some(reported) => reported
+            .saturating_sub(u32::try_from(queries).unwrap_or(u32::MAX))
+            .max(visible),
     }
 }
 
@@ -129,9 +190,15 @@ fn client_of(id: tsclientlib::ClientId, client: &BookClient, own: tsclientlib::C
             channel_commander: client.is_channel_commander,
         },
         unique_id: client.uid.as_ref().map(|uid| base64_encode(&uid.0)),
-        // The book does not report the TS3 client type, so query clients are
-        // indistinguishable here. Cosmetic only: nothing branches on it yet.
-        client_type: ClientType::Voice,
+        // TeamSpeak's own distinction between a person and a server-query
+        // connection, which the book does report. It matters because every
+        // running server has a `serveradmin` query client sitting on it, and a
+        // member list that draws it beside real users is a member list nobody
+        // trusts.
+        client_type: match client.client_type {
+            BookClientType::Query { .. } => ClientType::Query,
+            BookClientType::Normal => ClientType::Voice,
+        },
         is_self: id == own,
     }
 }
@@ -153,10 +220,16 @@ pub fn permissions(book: &BookConnection) -> Permissions {
     let own = book.clients.get(&book.own_client);
     let channel = own.and_then(|client| book.channels.get(&client.channel));
 
-    permissions_from(
-        channel.and_then(|c| c.permission_hints),
-        own.and_then(|c| c.permission_hints),
-    )
+    let channel_hints = channel.and_then(|c| c.permission_hints);
+    let client_hints = own.and_then(|c| c.permission_hints);
+    let derived = permissions_from(channel_hints, client_hints);
+    tracing::debug!(
+        channel_hints = channel_hints.is_some(),
+        client_hints = client_hints.is_some(),
+        ?derived,
+        "what the server says we may do"
+    );
+    derived
 }
 
 /// Maps the two hint sets onto the domain's permissions.
@@ -182,6 +255,9 @@ fn permissions_from(
             h.intersects(ClientPermissionHint::KICK_SERVER | ClientPermissionHint::KICK_CHANNEL)
         }),
         can_ban: client_hints.is_none_or(|h| h.contains(ClientPermissionHint::BAN)),
+        // What the two `is_none_or`s above hide. See `Permissions::channel_known`.
+        channel_known: channel_hints.is_some(),
+        client_known: client_hints.is_some(),
     }
 }
 
@@ -248,12 +324,55 @@ mod tests {
     }
 
     #[test]
-    fn absent_hints_read_as_allowed() {
+    fn the_online_count_leaves_out_the_query_connections() {
+        // Regression: 「4 在线」 on a server with one other person and a
+        // `serveradmin`, because the server counts its query connections as
+        // clients and we were reporting its number untouched.
+        assert_eq!(count_of(3, 1, Some(4)), 3);
+    }
+
+    #[test]
+    fn the_visible_count_is_a_floor() {
+        // `notifyserverupdated` is pushed only when asked and can be a while
+        // old, and a number smaller than what is on screen is plainly wrong.
+        assert_eq!(count_of(5, 0, Some(2)), 5);
+    }
+
+    #[test]
+    fn without_the_servers_answer_there_is_only_what_we_can_see() {
+        // Before `servergetvariables` is answered, and on a server that refuses
+        // it. Still better than nothing, and still free of query connections.
+        assert_eq!(count_of(7, 0, None), 7);
+    }
+
+    #[test]
+    fn a_server_reporting_only_queries_counts_as_empty() {
+        // Degenerate but reachable: our own connection plus its admin. The
+        // subtraction must not underflow into a huge number.
+        assert_eq!(count_of(0, 2, Some(2)), 0);
+    }
+
+    #[test]
+    fn absent_hints_read_as_allowed_but_not_as_confirmed() {
         // Regression: hints are optional, and reading their absence as a denial
         // is how the message composer ended up disabled on servers that simply
         // do not volunteer them. The server stays the authority — it refuses
         // with an error the user can see — so unknown must mean allowed.
-        assert_eq!(permissions_from(None, None), Permissions::all());
+        let permissions = permissions_from(None, None);
+
+        // Every gating bit, which is what "allowed" means.
+        assert!(permissions.can_join_channel);
+        assert!(permissions.can_move_clients);
+        assert!(permissions.can_send_channel_message);
+        assert!(permissions.can_send_private_message);
+        assert!(permissions.can_kick);
+        assert!(permissions.can_ban);
+
+        // And the other half of the same fact: allowed by default, but not
+        // *reported* as allowed. These two are what a panel must consult before
+        // telling the user they hold a right.
+        assert!(!permissions.channel_known);
+        assert!(!permissions.client_known);
     }
 
     #[test]
@@ -272,8 +391,21 @@ mod tests {
                 can_send_channel_message: true,
                 // Either kick hint on its own is enough.
                 can_kick: true,
+                channel_known: true,
+                client_known: true,
                 ..Permissions::none()
             }
         );
+    }
+
+    #[test]
+    fn one_hint_set_answers_only_its_own_questions() {
+        // The channel's hints say nothing about whether we may kick, and the
+        // other way round. Reading a missing set as an answer is how a server
+        // that reports one of the two ends up credited with the other.
+        let permissions = permissions_from(Some(ChannelPermissionHint::JOIN), None);
+
+        assert!(permissions.channel_known);
+        assert!(!permissions.client_known);
     }
 }

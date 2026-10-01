@@ -24,25 +24,28 @@ use std::time::Duration;
 
 use ts_protocol::{AudioSink, Codec, ConnectionConfig, VoicePacket};
 use tsclientlib::audio::AudioHandler;
-use tsproto_packets::packets::{AudioData, CodecType, InAudioBuf, OutAudio, OutPacket};
+use tsproto_packets::packets::{
+    AudioData, CodecType, Direction, Flags, InAudioBuf, OutAudio, OutCommand, OutPacket, PacketType,
+};
 
 use futures::StreamExt as _;
 use tokio::sync::{mpsc, oneshot};
 use ts_events::{ClientEvent, EventBus, SessionEvent};
 use ts_identity::IdentityStore;
 use ts_model::{
-    ChannelId, ClientError, ClientId, ConnectionState, Message, MessageId, MessageTarget,
-    NetworkError, PermissionError, Permissions, ProtocolError, ReconnectPolicy, Server, ServerInfo,
-    ServerState, SessionId, Speaking, VoiceError, VoiceState,
+    BanDuration, ChannelId, ClientError, ClientId, ConnectionState, KickScope, Message, MessageId,
+    MessageTarget, NetworkError, PermissionError, Permissions, ProtocolError, ReconnectPolicy,
+    Server, ServerInfo, ServerState, SessionId, Speaking, VoiceError, VoiceState,
 };
 
 use tsclientlib::events::Event as BookEvent;
 use tsclientlib::messages::c2s::{
-    OutClientMovePart, OutClientPokeRequestPart, OutSendTextMessagePart,
+    OutBanClientPart, OutClientKickPart, OutClientMovePart, OutClientPokeRequestPart,
+    OutSendTextMessagePart,
 };
 use tsclientlib::prelude::M2BClientUpdateExt as _;
 use tsclientlib::{
-    CommandError, Connection, DisconnectOptions, MessageHandle, OutCommandExt, StreamItem,
+    CommandError, Connection, DisconnectOptions, MessageHandle, OutCommandExt, Reason, StreamItem,
     TemporaryDisconnectReason, TextMessageTargetMode,
 };
 
@@ -76,14 +79,85 @@ struct Audio {
     handler: AudioHandler<tsclientlib::ClientId>,
     /// Scratch for one frame of mixed output, reused every frame.
     mix: Vec<f32>,
+    /// Per-client playback gain the user asked for.
+    ///
+    /// Kept outside the handler because `tsclientlib` deletes an `AudioQueue`
+    /// when its talker stops — the queue is the natural place for a volume, and
+    /// the worst possible place to store one, since someone who speaks in bursts
+    /// would lose their setting between every sentence. This is the memory that
+    /// puts it back on the queue that replaces it.
+    volumes: HashMap<ClientId, f32>,
 }
+
+/// The loudest a single client may be turned up, in gain terms: +6 dB.
+///
+/// Above unity because the point of the control is rescuing a quiet microphone.
+/// The mix can then clip when several loud talkers overlap, but `playback`
+/// clamps rather than wrapping, so the worst case is a dull peak rather than a
+/// crack.
+const MAX_CLIENT_VOLUME: f32 = 2.0;
 
 impl Audio {
     fn new() -> Self {
         Self {
             handler: AudioHandler::new(),
             mix: vec![0.0; AUDIO_FRAME_SAMPLES],
+            volumes: HashMap::new(),
         }
+    }
+
+    /// Sets one client's gain, remembered for the queues they have not opened
+    /// yet.
+    fn set_volume(&mut self, client_id: ClientId, volume: f32) {
+        let volume = clamp_client_volume(volume);
+        self.volumes.insert(client_id, volume);
+        if let Some(queue) = self
+            .queues_mut()
+            .get_mut(&tsclientlib::ClientId(client_id.get()))
+        {
+            queue.volume = volume;
+        }
+    }
+
+    /// Feeds one incoming packet to the mixer.
+    ///
+    /// Deliberately the only way in: a queue comes into existence inside this
+    /// call, so this is where the remembered per-client gain has to be applied
+    /// — and keeping it here rather than at the call site means no future
+    /// caller can create a queue that skipped it.
+    fn receive(
+        &mut self,
+        from: tsclientlib::ClientId,
+        packet: InAudioBuf,
+    ) -> Result<Option<tsclientlib::ClientId>, tsclientlib::audio::Error> {
+        let started = self.handler.handle_packet(from, packet)?;
+        if let Some(id) = started {
+            let model_id = ClientId::new(id.0);
+            if let Some(volume) = self.volumes.get(&model_id).copied()
+                && let Some(queue) = self.queues_mut().get_mut(&id)
+            {
+                queue.volume = volume;
+            }
+        }
+        Ok(started)
+    }
+
+    fn queues_mut(
+        &mut self,
+    ) -> &mut std::collections::HashMap<tsclientlib::ClientId, tsclientlib::audio::AudioQueue> {
+        self.handler.get_mut_queues()
+    }
+}
+
+/// Pulls a requested per-client gain into the range the mixer can use.
+///
+/// Non-finite becomes unity: a `NaN` gain would spread across the whole mix
+/// buffer and silence everybody, not just the one client it was set for.
+fn clamp_client_volume(volume: f32) -> f32 {
+    if volume.is_finite() {
+        volume.clamp(0.0, MAX_CLIENT_VOLUME)
+    } else {
+        1.0
     }
 }
 
@@ -113,6 +187,26 @@ pub(crate) enum Command {
         message: String,
         reply: Reply,
     },
+    /// Kick another client off the channel or the server.
+    Kick {
+        client_id: ClientId,
+        scope: KickScope,
+        message: Option<String>,
+        reply: Reply,
+    },
+    /// Ban another client, optionally for a limited time.
+    Ban {
+        client_id: ClientId,
+        duration: BanDuration,
+        message: Option<String>,
+        reply: Reply,
+    },
+    /// Set one client's playback gain. Local state only; nothing is sent.
+    SetClientVolume {
+        client_id: ClientId,
+        volume: f32,
+        reply: Reply,
+    },
     /// Close the connection.
     Disconnect { reply: Reply },
 }
@@ -130,6 +224,9 @@ impl Command {
             | Self::SendVoice { reply, .. }
             | Self::SetVoiceState { reply, .. }
             | Self::Poke { reply, .. }
+            | Self::Kick { reply, .. }
+            | Self::Ban { reply, .. }
+            | Self::SetClientVolume { reply, .. }
             | Self::Disconnect { reply } => reply,
         }
     }
@@ -170,6 +267,29 @@ impl std::fmt::Debug for Command {
                 .debug_struct("SetVoiceState")
                 .field("state", state)
                 .finish(),
+            Self::Kick {
+                client_id, scope, ..
+            } => f
+                .debug_struct("Kick")
+                .field("client_id", client_id)
+                .field("scope", scope)
+                .finish_non_exhaustive(),
+            Self::Ban {
+                client_id,
+                duration,
+                ..
+            } => f
+                .debug_struct("Ban")
+                .field("client_id", client_id)
+                .field("duration", duration)
+                .finish_non_exhaustive(),
+            Self::SetClientVolume {
+                client_id, volume, ..
+            } => f
+                .debug_struct("SetClientVolume")
+                .field("client_id", client_id)
+                .field("volume", volume)
+                .finish(),
             Self::Disconnect { .. } => f.write_str("Disconnect"),
         }
     }
@@ -182,6 +302,20 @@ pub(crate) struct SharedState {
     server_info: Option<ServerInfo>,
     permissions: Permissions,
     snapshot: Option<ServerState>,
+    /// The permission snapshot the channel subscription was last sent for.
+    ///
+    /// `None` until the first one goes out. A later difference means channels we
+    /// could not see before have become visible, and the server will not push
+    /// them until we ask again.
+    subscribed_for: Option<Permissions>,
+    /// Whether this *connection* has been asked for its subscription and its
+    /// variables.
+    ///
+    /// Per connection and not per session: a `Context` outlives every reconnect,
+    /// so without this the second connection would be greeted with nothing — no
+    /// channel subscription, and no `notifyserverupdated` to carry the online
+    /// count. Reset whenever the state leaves `Connected`.
+    greeted: bool,
 }
 
 impl Default for SharedState {
@@ -190,6 +324,8 @@ impl Default for SharedState {
             connection: ConnectionState::Disconnected,
             server_info: None,
             permissions: Permissions::none(),
+            subscribed_for: None,
+            greeted: false,
             snapshot: None,
         }
     }
@@ -303,7 +439,18 @@ impl Context {
     /// it is how a front-end ends up believing a live session is offline — the
     /// reason the server switcher labelled every connected server 「未连接」.
     fn set_connection(&self, state: ConnectionState) {
-        self.lock().connection = state;
+        {
+            let mut shared = self.lock();
+            shared.connection = state;
+            // Whatever a connection was told dies with it. Both of these are
+            // per-connection facts — a subscription and a variables request —
+            // and every transition out of `Connected` is the moment the next
+            // one has to be told again.
+            if state != ConnectionState::Connected {
+                shared.greeted = false;
+                shared.subscribed_for = None;
+            }
+        }
         self.publish(ClientEvent::ConnectionStateChanged(state));
     }
 
@@ -585,7 +732,7 @@ async fn serve(
                 };
             }
             Outcome::Command(command) => {
-                handle_command(command, connection, pending);
+                handle_command(command, connection, pending, audio);
             }
             Outcome::Closed => {
                 tracing::info!(session = %context.session, "no handles left; closing connection");
@@ -724,15 +871,19 @@ fn handle_item(
             let Some(from) = sender_of(&packet) else {
                 return;
             };
-            match audio.handler.handle_packet(from, packet) {
+            // `Audio::receive` also reinstates the user's per-client volume,
+            // which is why the queue is never touched directly.
+            match audio.receive(from, packet) {
                 // Whoever started talking. The handler reports only the
                 // transition, which is the shape the front-ends want: speaking
                 // is not a property of a client — it flips several times a
                 // second — so it travels as an event and is never stored.
-                Ok(Some(started)) => context.publish(ClientEvent::Speaking(Speaking {
-                    client_id: ClientId::new(started.0),
-                    speaking: true,
-                })),
+                Ok(Some(started)) => {
+                    context.publish(ClientEvent::Speaking(Speaking {
+                        client_id: ClientId::new(started.0),
+                        speaking: true,
+                    }));
+                }
                 Ok(None) => {}
                 Err(error) => tracing::debug!(%error, "dropped an incoming voice packet"),
             }
@@ -758,7 +909,16 @@ fn handle_item(
         }
 
         StreamItem::BookEvents(events) => {
-            refresh(context, connection, ready);
+            let membership_changed = refresh(context, connection, ready);
+            let greeted_now = greet_the_server(connection, context);
+            if membership_changed && !greeted_now {
+                // The server's count is now out of date, and it is the only one
+                // that includes clients we cannot see. It pushes a new one only
+                // when asked — without this, `clients_online` is whatever the
+                // handshake produced, and it neither grows nor shrinks as people
+                // come and go.
+                send_server_variables(connection, context);
+            }
             for event in &events {
                 publish_book_event(event, context, next_message_id);
             }
@@ -838,8 +998,12 @@ fn pump_audio(audio: &mut Audio, context: &Arc<Context>) {
 /// `OutAudio::new` copies the payload into an owned `OutPacket`, so the result
 /// does not borrow the frame it came from.
 fn out_audio(packet: &VoicePacket) -> Result<OutPacket, ClientError> {
+    // The codec byte is how the far end knows whether to expect one channel or
+    // two, so this mapping is not cosmetic: an OpusMusic frame labelled
+    // `OpusVoice` is decoded as mono, and half of it disappears.
     let codec = match packet.codec {
         Codec::Opus => CodecType::OpusVoice,
+        Codec::OpusMusic => CodecType::OpusMusic,
         other => {
             tracing::debug!(?other, "refusing to send a frame in an unencodable codec");
             return Err(ClientError::Voice(VoiceError::UnsupportedCodec));
@@ -854,14 +1018,20 @@ fn out_audio(packet: &VoicePacket) -> Result<OutPacket, ClientError> {
 }
 
 /// Rebuilds the snapshot and publishes whatever changed.
+/// Rebuilds the snapshot, publishes whatever changed, and reports whether the
+/// set of clients did.
+///
+/// The return value is the caller's cue to ask the server for its own counters
+/// again: those are pushed, not pushed *automatically*, and they are the only
+/// numbers that include clients this connection cannot see.
 fn refresh(
     context: &Arc<Context>,
     connection: &Connection,
     ready: &mut Option<oneshot::Sender<Result<(), ClientError>>>,
-) {
+) -> bool {
     let Ok(book) = connection.get_state() else {
         // Called before the handshake finished, or after the connection ended.
-        return;
+        return false;
     };
 
     let mut state = convert::snapshot(book, context.server());
@@ -872,6 +1042,9 @@ fn refresh(
     }
 
     let previous = context.lock().snapshot.take();
+    let membership_changed = previous
+        .as_ref()
+        .is_none_or(|old| old.clients.len() != state.clients.len());
     let events = diff::between(previous.as_ref(), &state);
 
     // The transition belongs to *every* successful handshake, not just the
@@ -899,6 +1072,36 @@ fn refresh(
     }
 
     for event in events {
+        // The tree reacting to people coming and going is the most visible thing
+        // this core does, and until now it left no trace at all: "why did that
+        // person disappear" was unanswerable from the log even though the
+        // answer — which event was published — was right here. Names are logged
+        // because an id alone cannot be checked against what the user saw.
+        match &event {
+            ClientEvent::ClientJoined(client) => {
+                tracing::debug!(session = %context.session, name = %client.name, channel = ?client.channel_id, "client joined");
+            }
+            ClientEvent::ClientLeft(id) => {
+                // Looked up in the *previous* snapshot: the new one is exactly
+                // where they are missing from, which is why this event exists.
+                let name = previous
+                    .as_ref()
+                    .and_then(|old| old.client(*id))
+                    .map_or("<unknown>", |c| c.name.as_str());
+                tracing::debug!(session = %context.session, id = ?id, name, "client left");
+            }
+            ClientEvent::ClientMoved {
+                client_id,
+                channel_id,
+            } => {
+                let name = state
+                    .client(*client_id)
+                    .map_or("<unknown>", |c| c.name.as_str());
+                tracing::debug!(session = %context.session, id = ?client_id, name, channel = ?channel_id, "client moved");
+            }
+            _ => {}
+        }
+
         context.publish(event);
     }
 
@@ -906,6 +1109,101 @@ fn refresh(
     shared.server_info = Some(state.info.clone());
     shared.permissions = state.permissions;
     shared.snapshot = Some(state);
+    drop(shared);
+
+    membership_changed
+}
+
+/// Tells the server what this connection wants, once it is up.
+///
+/// Two separate asks that belong to the same moment:
+///
+/// * `servergetvariables`, because the online count comes from the server
+///   (`virtualserver_clientsonline`) and it pushes that only when asked. Without
+///   the request there is no number to prefer, and a front-end can only count
+///   the clients it happens to be able to see — which is how `serveradmin` ended
+///   up in 「4 在线」.
+/// * the channel subscription, because otherwise the server describes only the
+///   channel we are sitting in.
+fn greet_the_server(connection: &mut Connection, context: &Arc<Context>) -> bool {
+    let first = {
+        let mut shared = context.lock();
+        let was = shared.greeted;
+        // Recorded before the sends: a server that refuses them would otherwise
+        // be asked again on every single book update.
+        shared.greeted = true;
+        !was
+    };
+
+    if first {
+        send_server_variables(connection, context);
+    }
+    subscribe_to_every_channel(connection, context);
+    first
+}
+
+/// Asks for the server's own counters, which arrive as `notifyserverupdated`.
+///
+/// A bare command rather than a book call: the library models the message but
+/// offers no `send` for it, and the answer needs no handling here — the book
+/// reads `notifyserverupdated` already.
+fn send_server_variables(connection: &mut Connection, context: &Arc<Context>) {
+    let command = OutCommand::new(
+        Direction::C2S,
+        Flags::empty(),
+        PacketType::Command,
+        "servergetvariables",
+    );
+
+    match command.send(connection) {
+        Ok(()) => tracing::debug!(session = %context.session, "asked for the server's variables"),
+        Err(error) => tracing::warn!(
+            session = %context.session,
+            %error,
+            "could not ask for the server's variables; the online count falls back to what we can see"
+        ),
+    }
+}
+
+/// Asks the server to describe every channel, not only the one we are in.
+///
+/// Without this the server tells us about a channel only while we occupy it. A
+/// client who moves into a channel we are not in sends us `notifyclientleftview`
+/// — the notification that a client has left *our* view — which the book reads
+/// as a departure, and they vanish from the tree until something re-describes
+/// them. That is the whole bug: someone switching channels looked exactly like
+/// someone logging off, and the reason joining their channel fixed it is that
+/// entering a channel makes the server describe everyone in it.
+///
+/// Re-sent whenever the permission snapshot changes, because a channel that was
+/// invisible a moment ago will not be pushed until we ask again.
+fn subscribe_to_every_channel(connection: &mut Connection, context: &Arc<Context>) {
+    let permissions = context.permissions();
+    {
+        let mut shared = context.lock();
+        if shared.subscribed_for == Some(permissions) {
+            return;
+        }
+        // Recorded before the send, not after: a server that refuses the
+        // command would otherwise be asked on every single book update.
+        shared.subscribed_for = Some(permissions);
+    }
+
+    let command = match connection.get_state() {
+        Ok(book) => book.server.set_subscribed(true),
+        // Not connected, or the handshake has not finished. The next book
+        // update tries again.
+        Err(_) => return,
+    };
+
+    match command.send(connection) {
+        Ok(()) => tracing::debug!(session = %context.session, "subscribed to every channel"),
+        Err(error) => tracing::warn!(
+            session = %context.session,
+            %error,
+            "could not subscribe to the channel list; the tree may miss people"
+        ),
+    }
 }
 
 /// Translates a message or poke out of a book event.
@@ -1003,6 +1301,7 @@ fn handle_command(
     command: Command,
     connection: &mut Connection,
     pending: &mut HashMap<MessageHandle, Reply>,
+    audio: &mut Audio,
 ) {
     match command {
         Command::SendText {
@@ -1065,6 +1364,62 @@ fn handle_command(
                 message: Cow::Borrowed(message.as_str()),
             };
             settle(part.send_with_result(connection), reply, pending);
+        }
+
+        Command::Kick {
+            client_id,
+            scope,
+            message,
+            reply,
+        } => {
+            let part = OutClientKickPart {
+                client_id: tsclientlib::ClientId(client_id.get()),
+                // `Reason` is TeamSpeak's spelling of "how far": the same
+                // command carries both, and the value is what the *kicked*
+                // client is told about where they ended up.
+                reason: match scope {
+                    KickScope::Channel => Reason::KickChannel,
+                    KickScope::Server => Reason::KickServer,
+                },
+                reason_message: message.as_deref().map(Cow::Borrowed),
+            };
+            settle(part.send_with_result(connection), reply, pending);
+        }
+
+        Command::Ban {
+            client_id,
+            duration,
+            message,
+            reply,
+        } => {
+            // No `Client::ban` helper exists to lean on: TeamSpeak's book model
+            // has no rule that reaches `banclient`, so the message part is
+            // constructed here directly.
+            let part = OutBanClientPart {
+                client_id: tsclientlib::ClientId(client_id.get()),
+                // Permanent is an *absent* field, not a zero one — the message
+                // model has no integer to put a sentinel in.
+                time: match duration {
+                    BanDuration::Permanent => None,
+                    BanDuration::Seconds(seconds) => {
+                        Some(time::SignedDuration::seconds(i64::from(seconds)))
+                    }
+                },
+                ban_reason: message.as_deref().map(Cow::Borrowed),
+            };
+            settle(part.send_with_result(connection), reply, pending);
+        }
+
+        Command::SetClientVolume {
+            client_id,
+            volume,
+            reply,
+        } => {
+            // Nothing goes to the server: this only changes what *we* hear, and
+            // telling the server would leak a local preference into a shared
+            // one.
+            audio.set_volume(client_id, volume);
+            let _ = reply.send(Ok(()));
         }
 
         Command::SendVoice { packet, reply } => {
@@ -1208,10 +1563,146 @@ fn now_millis() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tsproto_packets::packets::Direction as PacketDirection;
 
     /// A schedule with §35's numbers, whatever the default may later become.
     fn schedule() -> ReconnectSchedule {
         ReconnectSchedule::new(ReconnectPolicy::exponential())
+    }
+
+    /// Hands the handler one valid voice packet from `id`, and reports whether
+    /// the handler treated them as a new talker.
+    ///
+    /// Built by serialising an outgoing packet and reading it back, which is
+    /// what `tsclientlib`'s own audio tests do: assembling a valid TS3 voice
+    /// header by hand would test this test rather than the code.
+    fn receive(audio: &mut Audio, id: tsclientlib::ClientId) -> bool {
+        // Three bytes is a complete Opus packet meaning "silence" — the
+        // smallest thing the decoder accepts, which is all this needs.
+        let payload = [0xF8_u8, 0xFF, 0xFE];
+        let packet = OutAudio::new(&AudioData::S2C {
+            id: 1,
+            from: id.0,
+            codec: CodecType::OpusVoice,
+            data: &payload,
+        });
+        let input =
+            InAudioBuf::try_new(PacketDirection::S2C, packet.into_vec()).expect("valid packet");
+
+        audio
+            .receive(id, input)
+            .expect("the decoder takes a silence packet")
+            .is_some()
+    }
+
+    /// The gain currently on `id`'s queue, or `None` if they have no queue —
+    /// which is what "they are not talking" looks like from here.
+    fn queue_volume(audio: &Audio, id: tsclientlib::ClientId) -> Option<f32> {
+        audio
+            .handler
+            .get_queues()
+            .get(&id)
+            .map(|queue| queue.volume)
+    }
+
+    /// The gain remembered for `id`, whether or not they have a queue.
+    fn remembered_volume(audio: &Audio, id: ClientId) -> f32 {
+        audio.volumes.get(&id).copied().unwrap_or(1.0)
+    }
+
+    #[test]
+    fn a_client_volume_outlives_the_queue_it_was_set_on() {
+        // The trap this guards: `tsclientlib` deletes an `AudioQueue` as soon
+        // as its talker stops, so a volume stored on the queue alone would
+        // evaporate between every sentence — and the bug would look like "the
+        // slider only works while they are mid-word".
+        let mut audio = Audio::new();
+        let wire_id = tsclientlib::ClientId(7);
+        let model_id = ClientId::new(7);
+
+        assert!(
+            receive(&mut audio, wire_id),
+            "the first packet starts a queue"
+        );
+        audio.set_volume(model_id, 0.5);
+        assert_eq!(queue_volume(&audio, wire_id), Some(0.5));
+
+        // Let them fall silent. The handler drops the queue once it runs dry,
+        // and a bounded loop means a change in that behaviour fails the test
+        // rather than hanging it.
+        let mut buffer = vec![0.0_f32; AUDIO_FRAME_SAMPLES];
+        for _ in 0..10 {
+            if queue_volume(&audio, wire_id).is_none() {
+                break;
+            }
+            audio.handler.fill_buffer(&mut buffer);
+        }
+        assert_eq!(
+            queue_volume(&audio, wire_id),
+            None,
+            "a silent talker should have lost their queue by now"
+        );
+
+        assert!(
+            receive(&mut audio, wire_id),
+            "speaking again makes a new queue"
+        );
+        assert_eq!(
+            queue_volume(&audio, wire_id),
+            Some(0.5),
+            "the volume has to come back with the queue"
+        );
+    }
+
+    #[test]
+    fn a_client_volume_is_clamped_to_the_range_the_mixer_can_use() {
+        let mut audio = Audio::new();
+        let id = ClientId::new(3);
+
+        audio.set_volume(id, 99.0);
+        assert_eq!(remembered_volume(&audio, id), MAX_CLIENT_VOLUME);
+
+        audio.set_volume(id, -1.0);
+        assert_eq!(remembered_volume(&audio, id), 0.0);
+
+        // A NaN gain would spread across the whole mix buffer and silence
+        // everyone, not only the client it was meant for.
+        audio.set_volume(id, f32::NAN);
+        assert_eq!(remembered_volume(&audio, id), 1.0);
+
+        // Untouched clients are at unity, not at whatever the last call used.
+        assert_eq!(remembered_volume(&audio, ClientId::new(4)), 1.0);
+    }
+
+    #[test]
+    fn an_out_of_audio_frame_carries_the_codec_it_was_encoded_with() {
+        // The receiver reads this byte to decide mono or stereo, so a
+        // mislabelled stereo frame loses a channel silently.
+        for (codec, expected) in [
+            (Codec::Opus, CodecType::OpusVoice),
+            (Codec::OpusMusic, CodecType::OpusMusic),
+        ] {
+            let mut packet = VoicePacket::opus(vec![1, 2, 3], 0);
+            packet.codec = codec;
+            let outgoing = out_audio(&packet).expect("encodable");
+            let readback = InAudioBuf::try_new(PacketDirection::C2S, outgoing.into_vec())
+                .expect("valid packet");
+            assert_eq!(readback.data().data().codec(), expected, "for {codec:?}");
+        }
+    }
+
+    #[test]
+    fn an_unencodable_codec_is_refused_rather_than_mislabelled() {
+        let packet = VoicePacket {
+            codec: Codec::SpeexNarrowband,
+            payload: vec![1, 2, 3],
+            sequence: 0,
+            is_dtx_resume: false,
+        };
+        assert!(matches!(
+            out_audio(&packet),
+            Err(ClientError::Voice(VoiceError::UnsupportedCodec))
+        ));
     }
 
     /// The library reported a drop without producing an error.

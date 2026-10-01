@@ -22,6 +22,30 @@ pub struct Permissions {
     pub can_kick: bool,
     /// May ban clients.
     pub can_ban: bool,
+
+    /// Whether the channel-level answers above came from the server.
+    ///
+    /// TeamSpeak's permission hints are *optional*, and a server that omits them
+    /// is not refusing anything — so [`Permissions::can_join_channel`] and
+    /// friends read as allowed when nothing arrives. That is the right answer
+    /// for gating, where a greyed-out button on a server that simply does not
+    /// send hints is worse than one the server will refuse.
+    ///
+    /// It is the wrong answer for *reporting*: a panel that lists what the user
+    /// may do cannot claim a right the server never confirmed. These two flags
+    /// are how that difference survives the trip.
+    ///
+    /// Two of them rather than one because the answers come from two places —
+    /// the channel's hints and our own client's — and a server that sends one
+    /// without the other would otherwise have its silence reported as consent
+    /// for the other group.
+    #[serde(default)]
+    pub channel_known: bool,
+
+    /// Whether [`Permissions::can_move_clients`] and the three after it came
+    /// from the server. See [`Permissions::channel_known`].
+    #[serde(default)]
+    pub client_known: bool,
 }
 
 impl Permissions {
@@ -37,6 +61,8 @@ impl Permissions {
             can_send_private_message: false,
             can_kick: false,
             can_ban: false,
+            channel_known: false,
+            client_known: false,
         }
     }
 
@@ -50,6 +76,10 @@ impl Permissions {
             can_send_private_message: true,
             can_kick: true,
             can_ban: true,
+            // Granted, not merely defaulted: this is only ever built by a caller
+            // that has decided the answers.
+            channel_known: true,
+            client_known: true,
         }
     }
 

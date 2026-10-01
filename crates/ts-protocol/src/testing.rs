@@ -14,8 +14,9 @@ use crate::AudioSink;
 
 use async_trait::async_trait;
 use ts_model::{
-    Capabilities, ChannelId, ClientError, ClientId, ConnectionState, MessageTarget, Permissions,
-    ProtocolKind, ReconnectPolicy, Server, ServerId, ServerInfo, VoiceState,
+    BanDuration, Capabilities, ChannelId, ClientError, ClientId, ConnectionState, KickScope,
+    MessageTarget, Permissions, ProtocolKind, ReconnectPolicy, Server, ServerId, ServerInfo,
+    VoiceState,
 };
 
 use crate::{
@@ -269,6 +270,35 @@ impl ClientOperations for FakeClients {
             .expect("fake state poisoned")
             .record("ClientOperations.poke")
     }
+
+    async fn kick(
+        &mut self,
+        _client_id: ClientId,
+        scope: KickScope,
+        _message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        // The scope is recorded, not just the call: a front-end that wired the
+        // two menu items to the same value would otherwise pass every test.
+        let name = match scope {
+            KickScope::Channel => "ClientOperations.kick_channel",
+            KickScope::Server => "ClientOperations.kick_server",
+        };
+        self.0.lock().expect("fake state poisoned").record(name)
+    }
+
+    async fn ban(
+        &mut self,
+        _client_id: ClientId,
+        duration: BanDuration,
+        _message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let name = if duration.is_permanent() {
+            "ClientOperations.ban_permanent"
+        } else {
+            "ClientOperations.ban_temporary"
+        };
+        self.0.lock().expect("fake state poisoned").record(name)
+    }
 }
 
 #[async_trait]
@@ -301,6 +331,17 @@ impl Voice for FakeVoice {
         let mut state = self.0.lock().expect("fake state poisoned");
         state.calls.push("Voice.set_audio_sink".to_string());
         state.audio_sink = Some(sink);
+    }
+
+    async fn set_client_volume(
+        &mut self,
+        _client_id: ClientId,
+        _volume: f32,
+    ) -> Result<(), ClientError> {
+        self.0
+            .lock()
+            .expect("fake state poisoned")
+            .record("Voice.set_client_volume")
     }
 }
 

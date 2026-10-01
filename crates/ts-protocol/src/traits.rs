@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ts_model::{
-    Capabilities, ChannelId, ClientError, ClientId, ConnectionState, MessageTarget, Permissions,
-    ProtocolKind, ServerInfo, VoiceState,
+    BanDuration, Capabilities, ChannelId, ClientError, ClientId, ConnectionState, KickScope,
+    MessageTarget, Permissions, ProtocolKind, ServerInfo, VoiceState,
 };
 
 use crate::{ConnectionConfig, VoicePacket};
@@ -68,6 +68,27 @@ pub trait ClientOperations: Send + Sync {
 
     /// Pokes `client_id`, which typically makes their client beep.
     async fn poke(&mut self, client_id: ClientId, message: &str) -> Result<(), ClientError>;
+
+    /// Removes `client_id` from a channel or from the server.
+    ///
+    /// The server is the authority on whether we may: a refusal arrives as
+    /// [`ClientError::Permission`] naming the permission that was missing, which
+    /// is more useful than anything the client could work out in advance.
+    async fn kick(
+        &mut self,
+        client_id: ClientId,
+        scope: KickScope,
+        message: Option<&str>,
+    ) -> Result<(), ClientError>;
+
+    /// Bans `client_id`, so they cannot come back until the ban is lifted or
+    /// expires.
+    async fn ban(
+        &mut self,
+        client_id: ClientId,
+        duration: BanDuration,
+        message: Option<&str>,
+    ) -> Result<(), ClientError>;
 }
 
 /// Sending messages.
@@ -119,6 +140,18 @@ pub trait Voice: Send + Sync {
     /// May be called before or after connecting; a backend that has not been
     /// given a sink simply discards incoming audio.
     fn set_audio_sink(&mut self, sink: Arc<dyn AudioSink>);
+
+    /// Scales one client's audio within the mix.
+    ///
+    /// Purely local: the server is not told, because nothing about what anyone
+    /// else receives changes. Whether the setting survives the client going
+    /// quiet and speaking again is the backend's business — it is the backend
+    /// that owns the mixing queue — but it is expected to.
+    async fn set_client_volume(
+        &mut self,
+        client_id: ClientId,
+        volume: f32,
+    ) -> Result<(), ClientError>;
 }
 
 /// Reading the current permission snapshot.
@@ -257,5 +290,15 @@ impl Voice for NoVoice {
 
     fn set_audio_sink(&mut self, _sink: Arc<dyn AudioSink>) {
         // Nothing is decoded, so there is nowhere to send it.
+    }
+
+    async fn set_client_volume(
+        &mut self,
+        _client_id: ClientId,
+        _volume: f32,
+    ) -> Result<(), ClientError> {
+        Err(ClientError::Unsupported(
+            "voice is not implemented for this backend".into(),
+        ))
     }
 }

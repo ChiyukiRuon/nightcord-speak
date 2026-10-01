@@ -46,8 +46,9 @@ use tokio::sync::{mpsc, oneshot};
 use ts_events::EventBus;
 use ts_identity::IdentityStore;
 use ts_model::{
-    Capabilities, ChannelId, ClientError, ClientId, ConnectionState, IdentityError, MessageTarget,
-    NetworkError, Permissions, ProtocolKind, Server, ServerInfo, SessionId, VoiceState,
+    BanDuration, Capabilities, ChannelId, ClientError, ClientId, ConnectionState, IdentityError,
+    KickScope, MessageTarget, NetworkError, Permissions, ProtocolKind, Server, ServerInfo,
+    SessionId, VoiceState,
 };
 use ts_protocol::{
     Backend, ChannelOperations, ClientOperations, Connection, ConnectionConfig, Dialect, Messaging,
@@ -392,6 +393,38 @@ impl ClientOperations for TsClient {
         })
         .await
     }
+
+    async fn kick(
+        &mut self,
+        client_id: ClientId,
+        scope: KickScope,
+        message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let message = message.map(str::to_string);
+        self.call(|reply| Command::Kick {
+            client_id,
+            scope,
+            message,
+            reply,
+        })
+        .await
+    }
+
+    async fn ban(
+        &mut self,
+        client_id: ClientId,
+        duration: BanDuration,
+        message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let message = message.map(str::to_string);
+        self.call(|reply| Command::Ban {
+            client_id,
+            duration,
+            message,
+            reply,
+        })
+        .await
+    }
 }
 
 #[async_trait]
@@ -431,6 +464,19 @@ impl Voice for TsClient {
         if let Some(running) = self.running().as_ref() {
             running.context.set_audio_sink(sink);
         }
+    }
+
+    async fn set_client_volume(
+        &mut self,
+        client_id: ClientId,
+        volume: f32,
+    ) -> Result<(), ClientError> {
+        self.call(|reply| Command::SetClientVolume {
+            client_id,
+            volume,
+            reply,
+        })
+        .await
     }
 }
 

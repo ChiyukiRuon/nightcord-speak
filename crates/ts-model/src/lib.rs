@@ -26,6 +26,7 @@ mod connection;
 mod error;
 mod id;
 mod message;
+mod moderation;
 mod permission;
 mod protocol;
 mod server;
@@ -42,6 +43,7 @@ pub use error::{
 };
 pub use id::{ChannelId, ClientId, MessageId, ServerId, SessionId};
 pub use message::{Message, MessageTarget};
+pub use moderation::{BanDuration, KickScope};
 pub use permission::Permissions;
 pub use protocol::ProtocolKind;
 pub use server::{Server, ServerInfo};
