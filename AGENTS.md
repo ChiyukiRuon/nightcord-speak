@@ -273,8 +273,8 @@ cd apps/client && flutter gen-l10n
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 383 个
-cd apps/client && flutter analyze && flutter test                  # 223 个
+cargo test  --workspace --all-features                             # 388 个
+cd apps/client && flutter analyze && flutter test                  # 245 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -398,8 +398,8 @@ cd apps/client && flutter analyze && flutter test                  # 223 个
 |      | 数量                           |
 |------|--------------------------------|
 | Rust | **22,740 行**，16 crates + CLI + gateway |
-| Dart | **17,403 行**，65 文件（含 l10n 生成文件，约 2,500 行） |
-| 测试 | **383 Rust + 223 Dart**，全绿  |
+| Dart | **20,504 行**，67 文件（含 l10n 生成文件，约 3,000 行） |
+| 测试 | **388 Rust + 245 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -536,6 +536,9 @@ cd apps/client && flutter analyze && flutter test                  # 223 个
 | Windows 窗口标题 | ✅ 截图确认已是 `Nightcord Speak`（品牌，不随语言变；`Runner.rc` 同步） |
 | **顺带修正**：TS6 分段陈旧 UI | ✅ 截图确认两个分段都可选——原先 `enabled: false` + 「尚未实现」停留在 M0.4 之前，见 §6 ⑤ |
 | `flutter gen-l10n` 产物入库 | ✅ 生成文件已提交（`analyze`/`test` 不会自动生成，不提交则克隆后第一次门禁即红） |
+| 四门 CJK 语言 | ✅ 简中 / 繁中 / 日 / 韩，各配一个 Noto 字体（构建前多下约 31 MB） |
+| `zh_Hant` 的 script 判定 | ✅ 单测：`zh_TW`/`zh_HK`/`zh_MO` 解析到 Hant，`zh`/`zh_CN`/`zh_SG` 到 Hans。**没有这一步的话 `basicLocaleListResolution` 先比语言码，`zh_TW` 会停在我们那个光秃秃的 `zh` 上——简体字形** |
+| key 集合守卫改成扫目录 | ✅ **它原本点名比较 en/zh 两份**，所以此后加的每一门语言都不设防，缺 key 只会静默回落英文 |
 
 **崩溃上报（M0.6 第九项）**
 
@@ -686,9 +689,8 @@ cd apps/client && flutter analyze && flutter test                  # 223 个
 - [ ] **§19 的侧栏宽度**：现状 288，规范给 240–280（代码里有注释）。
 - [ ] **§34 的动效**只用到一处（聊天滚到底），其余时长与曲线备好未用。
 - [ ] **§36 的完整无障碍走查**：目前只做到「颜色不是唯一信号」。
-- [ ] **繁中 / 日 / 韩字体**：现在只打包了 en + zh，其余靠逐字系统回退。
-      加一种要三处一起改（字体文件、`pubspec.yaml`、`app_fonts.dart` 的分支），
-      只加分支会指向一个不存在的家族而**静默**用上系统字体。
+- [x] ~~繁中 / 日 / 韩字体~~ —— 已加（`docs/localization.md` §7 记了三处一起改的规则，
+      以及 `zh_Hant` 为什么要在 `providers.dart` 里手动指路）
 
 ### Phase 7 欠账（见 [`docs/gateway.md`](docs/gateway.md)）
 

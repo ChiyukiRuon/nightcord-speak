@@ -15,7 +15,10 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 | --- | --- |
 | `apps/client/l10n.yaml` | 生成配置：模板、输出位置、回退顺序 |
 | `apps/client/lib/l10n/app_en.arb` | **模板**。所有 key 与 `@` 元数据（占位符类型、说明）都在这里 |
-| `apps/client/lib/l10n/app_zh.arb` | 中文翻译，只有 key: 值 |
+| `apps/client/lib/l10n/app_zh.arb` | 简体中文，只有 key: 值 |
+| `apps/client/lib/l10n/app_zh_Hant.arb` | 繁体中文。脚本变体与 `zh` 同类，生成的类 `extends AppLocalizationsZh` |
+| `apps/client/lib/l10n/app_ja.arb` | 日文 |
+| `apps/client/lib/l10n/app_ko.arb` | 韩文 |
 | `apps/client/lib/l10n/app_localizations*.dart` | **生成产物，提交进仓库** |
 | `apps/client/lib/l10n/labels.dart` | 枚举的 UI 标签（模型层不引入 l10n） |
 | `apps/client/lib/l10n/errors.dart` | `ClientError` 的句子（同上） |
@@ -134,9 +137,36 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 **加文案**：`app_en.arb` 加 key 与 `@` 元数据（带占位符的必须写 `"type"`，否则生成
 的参数是 `Object`）→ `app_zh.arb` 加同一个 key → `flutter gen-l10n` → 一起提交。
 
-守卫：`test/l10n_test.dart` 直接比较两份 ARB 的 key 集合——gen-l10n 对「翻译缺失」
-是**静默回退到英文**的，那会表现为中文界面里冒出一句英文，没人会注意到。
+守卫：`test/l10n_test.dart` 把 `lib/l10n/` 里**每一个** ARB 的 key 集合与模板比一遍
+——gen-l10n 对「翻译缺失」是**静默回退到英文**的，那会表现为界面里冒出一句英文，没人会
+注意到。**它扫目录而不是点名比较**：早先那版写死了 `app_zh.arb`，于是此后加的每一门语言
+都不设防，缺 key 只会静默回落。
 
 **加一种语言**：加 `app_xx.arb` → 在 `l10n.yaml` 的 `preferred-supported-locales`
 里排出回退顺序 → `UiSettings.requestedLanguage` 的白名单加值 → 设置里的语言下拉加
-一项。除此之外没有别的地方认识具体的语言代码。
+一项 → **字体**（见下）。除此之外没有别的地方认识具体的语言代码。
+
+### 字体：三处必须一起改
+
+`lib/design/tokens/app_fonts.dart` 的 `forLocale` 要为这门语言挑一个字族，但这**不是**
+一个可以单独做的改动。同一门语言的三处：
+
+1. `scripts/fetch-fonts.sh` 的表里加那一行（连 sha256）；
+2. `pubspec.yaml` 声明这个字族；
+3. `app_fonts.dart` 加分支。
+
+**只加第 3 步不会报错**：Flutter 会去找一个不存在的字族，找不到就用系统字体，一声不吭。
+表现是「这门语言的界面看着有点不对」，而没有任何断言会失败。
+
+为什么每门 CJK 语言一个字体而不是共用一个：同一个字在简中/繁中/日/韩里**画法不同**，
+读其中一种的人一眼就看得出来。`docs/UI字体规范.md` §2 是这条规则的出处，代价是构建前
+要下约 50 MB 字体——那正是 `scripts/fetch-fonts.sh` 存在的理由。
+
+### 中文的 script：`zh_Hant` 要手动指路
+
+`basicLocaleListResolution` **先比语言码、再比 script**。所以一个 `zh_TW` 的系统语言会
+先匹配到我们那个光秃秃的 `zh`——简体——然后就此停下。繁体读者会拿到简体字形，而这恰恰
+是两个字体并存要避免的那件事。
+
+`providers.dart` 的 `_withChineseScript` 因此先把 `TW`/`HK`/`MO` 标成 `Hant`，其余标成
+`Hans`，再交给解析。加别的「同语言、不同文字」的组合时要照做。
