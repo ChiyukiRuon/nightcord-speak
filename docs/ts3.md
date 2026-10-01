@@ -188,8 +188,10 @@ fork 是叠在它之上的。这 14 个 commit 中与我们相关的：
 采用**自建 fork**方案。完整说明、核实过的调用点，
 以及需要在你 fork 里执行的步骤见 **[`docs/tsclientlib-fork.md`](tsclientlib-fork.md)**。
 
-一句话版本：`ChiyukiRuon/tsclientlib` 的 `webspeak3` 分支
-（= 我们现在 pin 的 `2e77949`）上，把 `is_allowed_target` 的默认反过来即可。
+一句话版本：`ChiyukiRuon/tsclientlib` 的 **`nightcord`** 分支上（`webspeak3` 是它分叉
+自的上游分支，保持不动），把 `is_allowed_target` 的默认反过来即可。这两处补丁
+落在提交 `df38c87`（私有地址）与 `c5cc287`（重连策略），`vendor/tsclientlib`
+现在 pin 的就是后者。
 
 在此之前，`vendor/tsclientlib` 的工作区已应用该补丁，本仓库现在就能连局域网。
 
@@ -203,3 +205,95 @@ fork 是叠在它之上的。这 14 个 commit 中与我们相关的：
 | `ClientType` | book 不报告查询客户端类型，一律标为 `Voice`。目前无代码依赖它。 |
 | 语音 | ✅ 已实现（M0.2 实测）。收发链路见 [`audio.md`](audio.md)——抖动、解码、混音由 `tsclientlib` 负责，`ts-audio` 只经 `AudioSink` 接播放。 |
 | 服务器 uptime | 来自 server-variables 查询，Milestone 0.1 不发该查询，故为 `None`。 |
+
+---
+
+## 8. 必须 `channelsubscribeall`，否则「换频道」看起来像「下线」
+
+**症状**：别人只是换了个频道，树里那个人就消失了；等你走进那个频道，他又出现了。
+
+**原因**：TS3 的服务器**只推送你订阅了的频道的事件**。订阅的时机是「你进入某个频道」
+（`ClientMoved` 规则里的 `SubscribeChannelFun`）。所以别人从你所在的频道搬到别处时，
+服务器给你发的是 `notifyclientleftview`——语义是「这个人离开了*你的视野*」，而
+`MessagesToBook.toml` 里那条规则是**无条件 `remove`**：
+
+```toml
+[[rule]]
+from = "ClientLeftView"
+to = "Client"
+operation = "remove"
+```
+
+于是 book 把人删掉，我们的快照 diff 报 `ClientLeft`，前端画成「人没了」。而此后你再也
+收不到他的任何消息，因为他所在的频道你没订阅——直到你走进去，服务器补发一整套
+`notifycliententerview`。
+
+**修法**：握手后、以及**每次权限快照变化后**，发一条 `channelsubscribeall`
+（`Server::set_subscribed(true)`）。权限变化要重发，是因为之前看不见的频道不会主动推
+给你。
+
+这条是从 `D:\CodeProject\Reference\webspeak3` 学来的——它的 connector 里有这么一行：
+
+```rust
+// Subscribe to all channels so we actually receive the full channel/client list.
+con.get_state()?.server.set_subscribed(true).send(&mut con)?;
+```
+
+它还在自己所在的 server group 变化后重发一次（TeaSpeak 只在权限变化时暴露新频道）。
+我们的判据更粗一档：**整个权限快照变了就重发**，覆盖同一类情形而不用盯着 server group。
+
+**为什么这是我们的 bug 而不是库的**：库提供的是「按消息更新 book」的原语，订阅与否是
+调用方的选择。官方客户端订阅全部；我们一开始没订。
+
+---
+
+## 9. 在线人数：先问服务器，再把 query 连接减掉
+
+服务器的 `virtualserver_clientsonline` **把 server-query 连接也算作 client**，所以直接显示
+它会把 `serveradmin` 算进「N 在线」。而直接数我们自己的客户端列表又会**少算**——看不见的
+频道里的人、被权限挡住的人，都是真人却不在列表里。
+
+所以两个数一起用（这套做法照 `webspeak3/connector/src/main.rs` 的 `snapshot()`）：
+
+```text
+在线 = (服务器自报数 − query 数).max(我们看得见的非 query 数)
+```
+
+`max` 不是保险，是必需的：`notifyserverupdated` 只在被问到时才推，可选数据可能已经过时，
+一个比屏幕上还小的数就是明显错的。
+
+**但服务器不会主动给**：book 里那份 `OptionalServerData` 的文档写着「Get by
+`notifyserverupdated` **after requested by `servergetvariables`**」。所以要发一条裸命令：
+
+```rust
+OutCommand::new(Direction::C2S, Flags::empty(), PacketType::Command, "servergetvariables")
+```
+
+库建模了这条消息但没有现成的发送方法。**每一条连接发一次**（从 `Connected` 出去的任何
+状态迁移都会重置这个标志），权限变化后重发一次——和 `channelsubscribeall` 同一个时机。
+顺带把 `uptime` 也修好了：它之前一直是 `None`，原因正是「M0.1 不发该查询」。
+
+---
+
+## 10. 管理动作：poke / kick / ban
+
+三个都走同一条路：trait → actor 的私有命令 → 直接构造 `Out...Part` →
+`send_with_result`。它们的「为什么」值得分开记：
+
+- **poke** 的底层一直是齐的（trait、actor、事件、通知浮层都在），缺的只有
+  session → wire → ffi → gateway 这段管道。也就是说「有人戳你」这个事件在补上管道
+  之前到不了界面，尽管它一路都被正确翻译了。
+- **kick** 用 `OutClientKickPart`，`reasonid` 就是「踢到哪」：`KickChannel` 踢出频道、
+  `KickServer` 踢出服务器。同一个命令承载两者，所以菜单里的两个条目只差这一个字段
+  ——`ts-wire` 有一条测试专门盯着它们不能序列化成一样的东西。
+- **ban** 没有 book 辅助方法可用：`BookToMessages.toml` 里没有通向 `banclient` 的规则，
+  所以 `OutBanClientPart` 是手工构造的。**永久封禁在线路上是「字段缺席」而不是 0**
+  （`time: Option<SignedDuration>`），`ts-model` 的 `BanDuration` 因此把「永久」做成
+  一个独立变体而不是一个很大的秒数。`time` 这个 crate 是 `ts-protocol-tsclient` 的
+  直接依赖，只为构造这一个值——生成的类型用的是它，而它没有被 re-export。
+
+**拒绝的形状**：权限不足时服务器回错误码，`command_error`（`actor.rs`）把它认出来
+并转成 `ClientError::Permission(PermissionError::MissingPermission { permission })`，
+所以前端拿到的是一句能行动的话，而不是「操作失败」。前端的菜单也会按
+`Permissions::can_kick` / `can_ban` 灰掉条目，但**服务器始终是权威**——那份快照可能
+已经过期，所以被灰掉的条目仍然解释了原因，而被允许却失败的操作会带着缺失的权限号回来。

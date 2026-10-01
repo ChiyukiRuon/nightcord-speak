@@ -273,8 +273,8 @@ cd apps/client && flutter gen-l10n
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 357 个
-cd apps/client && flutter analyze && flutter test                  # 208 个
+cargo test  --workspace --all-features                             # 383 个
+cd apps/client && flutter analyze && flutter test                  # 223 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -349,6 +349,10 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 - 记录**为什么**选它，必要时写进 `docs/`。
 - 版本在 workspace 根统一声明，子 crate 用 `workspace = true`。
 
+> `time` 是唯一的例外情况记录在案：它进 `ts-protocol-tsclient` 只为一件事——
+> `OutBanClientPart` 的 `time` 字段类型是 `time::SignedDuration`，而 `tsclientlib`
+> 没有 re-export 它。它本来就在依赖树里（vendored 库用的同一份），所以没有新增编译量。
+
 ---
 
 ## 5. 当前进度
@@ -383,6 +387,7 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 - [x] `ts-wire` —— 命令与事件词汇从 `ts-ffi` 搬出，两个前端共用一份
 - [x] `ts-gateway` + `nightcord-gateway` —— 鉴权、扇出、语音桥、内嵌调试页
 - [x] `ClientTransport` 接口 + `ConnectRequest` 搬进 `models/`
+- [x] 桌面侧的功能补齐（poke / kick / ban / 权限面板 / 编码档位 / 音量）——见 §5.3 末
 - [ ] `VoiceBackend` 抽象 → `flutter build web` → `MobileShell`（`AGENTS.md`「前端架构」的路线）
 
 > **§5.3 / §5.4 尚未补上 Phase 7 的实测记录**——哪些是真跑过的、哪些只有单测，
@@ -392,9 +397,9 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **21,105 行**，16 crates + CLI + gateway |
-| Dart | **15,576 行**，65 文件（含 l10n 生成文件，约 1,400 行） |
-| 测试 | **357 Rust + 208 Dart**，全绿  |
+| Rust | **22,740 行**，16 crates + CLI + gateway |
+| Dart | **17,403 行**，65 文件（含 l10n 生成文件，约 2,500 行） |
+| 测试 | **383 Rust + 223 Dart**，全绿  |
 
 ### 5.3 实测验证过什么
 
@@ -558,9 +563,39 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 | 双击直连 | ✅ 单测两条：单击只填表单（transport 零调用）、双击发出 `connect:192.168.31.128:9987`。单击被押后约 300ms 是双击判定的固有代价，见 §7 |
 | 新标记的各尺寸绘制 | ✅ 单测：16 / 24 / 32 / 256 都能画不报错。**画得像不像**只能人眼看——测试字体没有真实字形度量（底栏那轮因此量错过两次） |
 
+**功能补齐与音质（2026-10-01 第二轮）**
+
+用户实测反馈「音质确实有点差」，并澄清是**声音本身的质量**（不是断音 / 爆音 / 卡顿）。
+据此做了编码档位、音量、以及几个一直缺的功能。**这一轮的实测全部待做**——下表的
+✅ 一律只表示单测与静态检查，不是实机结论。
+
+| 项 | 结果 |
+| --- | --- |
+| 音质差的根因 | ✅ 定位到：编码器把 `VOICE_BITRATE = 24_000`、单声道、`Application::Voip` 全写死，且客户端**没有任何质量设置**。管线本身是 48 kHz / f32 全链路，采样率没问题——「采样率差」的实质是 Opus 在 24 kbps 下的实际带宽被压低 |
+| **编码固定成最高档，没有设置** | ✅ 桌面：立体声 + `Application::Audio` + `CodecType::OpusMusic` + 79,200 bps。网关：单声道 + 45,056 bps（浏览器只送单声道帧）。两个数字都取自 TeamSpeak 公布阶梯的顶端 |
+| 声道数是参数不是设置 | ✅ 它是**输入的性质**：桌面采集恒为立体声，浏览器 worklet 只给单声道。把单声道编成立体声等于为一个声道付两次带宽 |
+| 中途改过两次主意 | ⚠️ 先做了「Voice/Music 两档 + 1–10 质量滑块」（含 `reconfigure`、两条码率阶梯、设置 UI、l10n），用户看过之后否掉：「官方客户端哪里有选择音质这个选项了……不要设置了」。整套已删除——设置字段、`AudioCodec`、`EncoderConfig`、`reconfigure`、滑块的 Dart 代码与文案。**留档是为了记住这个决定**：编码质量不做成旋钮 |
+| 采集恒定立体声 | ✅ 单声道设备复制成双声道、>2 声道取前两路；两个 `Resampler` 实例按声道分开（共享会把左声道的上一个样本灌进右声道，每次回调一次咔哒） |
+| 采集回调去分配 | ✅ 顺带修掉：此前每次回调两次 `collect`，现在只剩成帧本身一次——`docs/audio.md` 里那句「唯一的分配是成帧本身」第一次成立 |
+| 输出总音量 | ✅ `Playback::set_volume`，一个原子写，回调每帧读一次；换设备用 `open_with_volume`，否则音量会被打回 1.0 |
+| 单人音量 | ✅ 后端一张 `HashMap<ClientId, f32>` 覆盖表，在**队列新建时**套用。**不需要改 fork**：`AudioQueue::volume` 是 pub 字段 |
+| 单人音量撑过「停说再开口」 | ✅ 回归测试：收包建队列 → 设音量 → `fill_buffer` 到队列被删 → 再收包 → 断言新队列仍是设定值。**这条测试抓到了一个真缺陷**：采纳逻辑原本挂在 `handle_item` 上，与队列创建可分离，已合并进 `Audio::receive` 使二者不可分 |
+| poke 的管道 | ✅ trait、actor、事件、通知浮层本来全都在，缺的只有 session → wire → ffi → gateway → UI |
+| kick / ban | ✅ `OutClientKickPart` / `OutBanClientPart`；永久封禁在线路上是**字段缺席**而不是 0，`BanDuration` 因此把「永久」做成独立变体 |
+| 成员右键菜单 | ✅ 戳一戳 / 移到频道 / 从频道踢出 / 从服务器踢出 / 封禁 / 音量；自己那一行除音量外全灰 |
+| 权限门控 | ✅ 单测三条（无权限时灰、有权限时踢出带对的 scope、对自己不可用）。位来自 `ServerView.permissions`，**服务器仍是权威** |
+| 「我的权限」面板 | ✅ 服务器切换器里，六个位如实列出——目标 #6 唯一看得见的落点。此前那六个位只有聊天输入框读了其中一个 |
+| `voice_status` 报真实档位 | ✅ 多 `codec` 与 `bitrate_bps`，由 core 算。前端的「正在以 Opus Voice 33 kbps 发送」读它，不另抄一张表 |
+| 双击直连不再押后单击 | ✅ 单测两条：单击当帧填表（**只 `pump()` 一次**，不再等 400ms）、间隔 500ms 的两次点击不算双击。第一版用 `Stopwatch` 量真实时间，**被测试当场抓出不可测**，改用 `Timer`（走调度器时钟，`flutter_test` 推得动） |
+| 未连接时够不到设置 | ✅ `SettingsDialog.session` 改 `int?`，连接页标题行加设置按钮。此前「打开日志文件夹」在连接页无处可点 |
+
 ### 5.4 未验证
 
-- **音质**：只验证了帧数 / 时长 / 电平，**从未用耳朵听过**。
+- **音质**：单测只验证了帧长、码率常量、codec 字节。**立体声档的实际听感**，以及
+  **官方客户端能否解出 Opus Music 档**，全部待实机。后者是真风险：别的客户端若只
+  认单声道，我们发的立体声会被降混。
+- **音量**：总音量与单人音量的即时性、以及总音量跨进程重启后是否还在，待实机。
+- **poke / kick / ban**：命令链与权限门控有单测，**没有对真实服务器发过一次**。
 - TS3 成功换频道（测试服务器只有一个频道）。
 - Android / iOS / Web：完全未动。
 - **重连循环没有跑通过一次真实掉线**。原计划用本机 TCP 中继制造掉线，但在这台机器上
@@ -577,7 +612,8 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 
 前四个都是「**前端对 core 的认知与实际不符**」，都只有真正跑起来才暴露——
 单元测试全绿、CLI 也正常。⑤ 是同一类（UI 落后于后端能力），只是这次是在读代码
-时撞见的。
+时撞见的。⑥⑦ 是补功能那轮里新写的代码被抓出来的，抓它们的是刚写下的测试与
+`flutter analyze`。
 
 | # | 症状                           | 根因                                                    | 修法                                                          |
 |---|--------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
@@ -586,6 +622,16 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 | ③ | 启动语音前按静音弹红错         | 无引擎时报 `NoInputDevice`——既不该报错，解释也是错的    | 记成 **intent**，`start_voice` 时应用                         |
 | ④ | 核心主动报的错误**完全不显示** | `ErrorEvent` 被 `server_view.dart` 归入「不参与渲染」而 `break` 掉，既没提示也没 SnackBar——握手失败、掉线、重连拒绝时频道树就那么僵着。日志里有，用户看不到 | `providers.dart` 里让它也走 `lastErrorProvider`，于是自动获得提示与日志（做 logging 时顺带发现） |
 | ⑤ | TS6 早已可用，连接页却拒绝选择 | 分段按钮的 `enabled: false` 与「TS6 后端尚未实现」停留在 M0.4 之前；M0.4 实测通过后没人回头改 UI | 启用分段、删掉过时提示（做本地化扫荡到该文件时发现）          |
+| ⑥ | 单人音量在对方「停说再开口」后丢失 | 采纳逻辑写在 `handle_item` 里，与队列创建**可分离**——而 `tsclientlib` 会在说话人停下时删掉队列 | 合并进 `Audio::receive`，使队列的创建与音量的施回**不可分**。回归测试当场抓出 |
+| ⑦ | 连接页标题行溢出 22 像素 | 加了设置按钮之后，`Text` + `Spacer` 的组合在窄窗口下放不下三样东西 | 标题改 `Expanded`（可省略号），按钮留在右边 |
+| ⑨ | **关掉软件，服务器那边还挂着** | `NightcordClient::shutdown` 的文档注释**早就写着**「Sessions are disconnected on the way out」——而 worker 收到 `Command::Shutdown` 只是 `break`。更外层：Dart 的退出回调也只调了 `markCleanExit()`，从没叫过 core 停 | worker 收到 Shutdown 先 `disconnect_all()`；Dart 的 `onExitRequested` 改成 `dispose()`（它阻塞到 worker 真的停下，顺带只在干净停止时才标 clean——比原来那个调用更严） |
+| ⑮ | **在线人数有人进出也不动** | 上一行那个 `.max(可见数)` 本来是防「服务器数过时偏低」的，副作用是这个数**只增不减**：服务器那份 `client_count` 停在 N 之后，有人离开时 `max(N, 变小)` 仍是 N。而服务器**不会主动推**这个数 | 成员集合一变就重发 `servergetvariables`（`refresh` 现在返回「成员是否变了」，`greet_the_server` 返回「这次是不是刚打过招呼」以免重复发）。**实测验证**：临时探针客户端加入 → `2 在线` 变 `3`；离开 → 回 `2` |
+| ⑬ | **在线人数把 serveradmin 算进去了** | `convert.rs` 直接 `book.clients.len()`。服务器自报的 `virtualserver_clientsonline` 也把 query 连接算作 client，而只数我们自己的列表又会**少算**看不见的人 | 照 webspeak3：`(服务器自报数 − query 数).max(可见的非 query 数)`。**但前提是先发 `servergetvariables`**——服务器不会主动给。顺带修好了 `uptime`（一直是 `None`，同一个原因） |
+| ⑭ | 重连后不会再订阅频道和取变量 | 我上一轮把「已订阅」的标志挂在 `Context` 上，而 `Context` 跨重连存活 | 标志改为「这条连接打过招呼没有」，在任何离开 `Connected` 的状态迁移里重置（`set_connection` 是唯一入口） |
+| ⑫ | 权限错误只显示「permission」 | `PermissionError` 是**枚举套枚举**，serde 把内层也加了标签——`MissingPermission { permission }` 到 Dart 是 `{"missing_permission":{"permission":203}}`，而 `describe` 按**扁平**读 `detail['permission']`，取不到就掉到最后 `return kind`。单测喂的是扁平形状，**测试和 core 的真实形状不一致**，所以两边都「绿」 | 按真实形状取内层；测试改用真实载荷 |
+| ⑪ | **别人发来的私聊跑到「和自己」的会话里** | TS3 的私聊消息里 `target` 是**收件人**——别人发给我时那就是**我**。而 `ConversationKey.of` 直接拿 `target` 当会话键，于是消息被存进 `client:<我的 id>`：树里**我自己那一行**冒未读点，而那条消息进了一个打不开的会话（自己那行没有打开入口）。症状是「别人回应我的戳，圆点却在我自己这行」——戳本身不标未读，标它的是紧随的那条私聊 | `ConversationKey.of` 增加 `ownClientId`：私聊的会话属于**对方**，收件人是我时改用 sender |
+| ⑩ | 戳一戳的合成 id 会撞 | 第一版用 `-时间戳`，两次戳在同一毫秒就重复，而消息列表按 id 作键 | 视图上一个从 0 单调递减、**先减后取**的计数器（服务器从 1 往上数，两者不会碰面） |
+| ⑧ | **别人换频道，看起来像是下线了** | 我们**从没订阅过频道**。TS3 只推你订阅了的频道的事件，所以别人搬走时发来的是 `notifyclientleftview`（语义是「离开你的视野」），而 book 的规则是**无条件 `remove`** | 握手后发 `channelsubscribeall`，并在权限快照变化后重发。见 `docs/ts3.md` §8——**这条是从 webspeak3 学来的** |
 
 ③ 由用户指出。**教训**：错误只以 SnackBar 出现、不落日志，线索几秒就没了——
 这正是 M0.6 的 logging 要补的。
@@ -654,18 +700,26 @@ cd apps/client && flutter analyze && flutter test                  # 208 个
 ### 其他
 
 - [ ] TS3 成功换频道的验证（需要多频道服务器）
-- [ ] 连接页保存行的单击被押后约 300ms——同一行上还有双击，Flutter 要等它确认
-      没有第二次点击。嫌钝就自己判「同一行、300ms 内的第二次点击」（约十来行手写手势），
-      单击即刻生效。落地在 `_SavedServerRow`。
-- [ ] `Session::poke()` —— trait、事件、权限位都在，只缺这个方法
-- [ ] kick / ban 同上
-- [ ] 音质人耳确认
-- [ ] 未连接时够不到设置：语音栏只存在于服务器页，所以「打开日志文件夹」在连接页
-      无处可点（出错时仍有 SnackBar 按钮兜底）。若要补，落点是 `AppShell`——
-      两个分支唯一共同经过的地方。
-- [ ] 可重试错误的 SnackBar 底色：`backgroundColor` 对 `isRetryable` 传 `null`，
-      于是走 Material 3 的 `inverseSurface`，在深色主题下是**浅色**的，看着像 bug。
-      改动前就有的行为，做 logging 时注意到但没动。
+- [x] ~~别人换频道被当成下线~~ —— 根因是我们从没 `channelsubscribeall`，见 §6 ⑧
+- [x] ~~关掉软件不主动断开~~ —— 见 §6 ⑨
+- [ ] **第九条的实测**：关窗再开，服务器上不应该残留上一次的会话。日志里应有
+      `closed every session on the way out`
+- [ ] 订阅全部频道在大服务器上的代价：频道多时会收到更多推送。官方客户端也这么做，
+      但没量过；真出问题就在 `subscribe_to_every_channel` 那里收窄
+- [x] ~~连接页保存行的单击被押后约 300ms~~ —— 已改为行内自计时（`Timer`，非时间戳，
+      理由见 `docs/client.md`）。第一版用 `Stopwatch` 量真实时间，被测试抓出不可测。
+- [x] ~~`Session::poke()`~~ —— 连同 kick / ban 一起补完，见 §5.3
+- [x] ~~kick / ban~~
+- [ ] 音质人耳确认：本轮加了档位，但**没有任何一档被耳朵听过**，也没有对真实服务器
+      发过一次 poke / kick / ban
+- [x] ~~未连接时够不到设置~~ —— `SettingsDialog.session` 改 `int?`，连接页加按钮
+- [x] ~~可重试错误的 SnackBar 底色~~ —— **早已修好**（`app_shell.dart` 用
+      `tokens.infoBg` / `tokens.errorBg`），待办是过期的，本轮清理
+- [ ] 单人音量不持久化：现在只在会话内有效。要做成官方客户端那样按唯一身份记住
+      （`Client.unique_id` 是有的），需要多一个存储和一次 `ClientId → unique_id` 解析
+- [ ] **立体声只对真立体声源有意义**：单声道麦克风会被复制成两个一样的声道，听感
+      与单声道无异，带宽却翻倍。要不要在界面上说明这件事，或者检测到单声道设备时
+      回落到语音档，待定——这是「固定最高档」这个决定的已知代价
 - [ ] **CI 缺 Flutter job**：`.github/workflows/ci.yml` 只跑 Rust，`flutter analyze`
       与 `flutter test` 没进 CI。注意 Dart 测试会加载真实的 Rust 动态库，
       所以这个 job 必须先 `cargo build` 并把 DLL 放到测试能找到的位置。

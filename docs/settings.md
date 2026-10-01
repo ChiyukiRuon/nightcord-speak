@@ -43,7 +43,8 @@
     "input_device": null,
     "output_device": null,
     "mode": "voice_activation",
-    "activation": { "sensitivity": 0.05, "attack_ms": 60, "release_ms": 400 }
+    "activation": { "sensitivity": 0.05, "attack_ms": 60, "release_ms": 400 },
+    "output_volume": 1.0
   },
   "connection": {
     "nickname": "Nightcord User",
@@ -87,6 +88,18 @@ White 是一对主题而不是一种模式。三套主题见 [`docs/ui.md`](ui.m
 
 `input_device` / `output_device` 是 cpal 的 `"<host>:<device>"`，`null` 表示系统默认。
 想知道该填什么，`cargo run -p ts-audio --example list_devices`。
+
+### `output_volume`
+
+播放增益，`0.0..=1.0`。见 [`docs/audio.md`](audio.md) §3.5。
+
+**这里没有编码设置**，也不该有：编码器固定跑在协议允许的最高档，没有可调的东西。
+早先的版本加过一个 codec + 质量档位，已经删掉；删字段是安全的，因为未知键会被忽略，
+`ts-settings` 里有一条测试就写着这件事。
+
+**`output_volume` 不能用裸 `#[serde(default)]`**：`f32::default()` 是 `0.0`，所有在
+音量存在之前写下的文件都会以**完全静音**载入。这也是 `AudioSettings` 手写 `Default`
+而不是 derive 的原因——两条路径必须给出同一个值，而有测试直接比较它们。
 
 ### `max_reconnect_attempts`
 
