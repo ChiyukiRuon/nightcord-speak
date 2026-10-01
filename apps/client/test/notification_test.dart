@@ -32,6 +32,10 @@ ServerView view() => ServerView(session: session);
 Client client(int id, String name, {int channelId = 1}) =>
     Client(id: id, name: name, channelId: channelId);
 
+/// A server-query connection, which is not a person.
+Client queryClient(int id, String name) =>
+    Client(id: id, name: name, channelId: 1, clientType: ClientType.query);
+
 Message message(int id, String content, {int? from, String fromName = 'Alice'}) => Message(
   id: id,
   sender: from,
@@ -190,6 +194,44 @@ void main() {
 
       expect(notice?.kind, NoticeKind.presence);
       expect(notice?.title, 'Bob');
+    });
+
+    test('a server-query connection joining announces nothing', () {
+      // `serveradmin` is on every server for as long as it runs, and comes and
+      // goes as the server does. The tree does not draw it, so announcing it
+      // would be a notice about somebody the user cannot find or do anything
+      // about.
+      final (:policy, :clock) = policyWith();
+      final target = view();
+      settle(policy, clock, target);
+
+      final notice = policy.observe(
+        session,
+        ClientJoinedEvent(queryClient(9, 'serveradmin')),
+        target,
+        const Attention(),
+      );
+
+      expect(notice, isNull);
+    });
+
+    test('a server-query connection leaving announces nothing either', () {
+      // The other half, and the one that would otherwise fire on every server
+      // restart: the query client disconnects and reconnects, and nobody wants
+      // a notice about it.
+      final (:policy, :clock) = policyWith();
+      final target = view();
+      target.apply(ClientJoinedEvent(queryClient(9, 'serveradmin')));
+      settle(policy, clock, target);
+
+      final notice = policy.observe(
+        session,
+        const ClientLeftEvent(9),
+        target,
+        const Attention(),
+      );
+
+      expect(notice, isNull);
     });
 
     test('the handshake burst announces nobody', () {

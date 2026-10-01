@@ -139,6 +139,7 @@ class AudioSettings {
     this.outputDevice,
     this.mode = VoiceActivationMode.voiceActivation,
     this.activation = const VoiceActivationSettings(),
+    this.outputVolume = 1.0,
   });
 
   /// Capture device id, or null for the system default.
@@ -150,6 +151,12 @@ class AudioSettings {
   final VoiceActivationMode mode;
   final VoiceActivationSettings activation;
 
+  /// Playback gain, `0.0..=1.0`.
+  ///
+  /// The only audio setting there is. The codec has none: it always runs the
+  /// stereo profile at the top of its range, see `ts_audio::encoder`.
+  final double outputVolume;
+
   AudioSettings copyWith({
     String? inputDevice,
     bool clearInputDevice = false,
@@ -157,6 +164,7 @@ class AudioSettings {
     bool clearOutputDevice = false,
     VoiceActivationMode? mode,
     VoiceActivationSettings? activation,
+    double? outputVolume,
   }) => AudioSettings(
     // A nullable field cannot be set back to null by passing null — that is what
     // `copyWith` means everywhere else — so choosing 「系统默认」 says so
@@ -165,6 +173,7 @@ class AudioSettings {
     outputDevice: clearOutputDevice ? null : (outputDevice ?? this.outputDevice),
     mode: mode ?? this.mode,
     activation: activation ?? this.activation,
+    outputVolume: outputVolume ?? this.outputVolume,
   );
 
   factory AudioSettings.fromJson(Map<String, dynamic> json) => AudioSettings(
@@ -172,6 +181,7 @@ class AudioSettings {
     outputDevice: json['output_device'] as String?,
     mode: VoiceActivationMode.fromWire(json['mode'] as String?),
     activation: VoiceActivationSettings.fromJson(_object(json['activation'])),
+    outputVolume: _volume(json['output_volume']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -179,8 +189,16 @@ class AudioSettings {
     'output_device': outputDevice,
     'mode': mode.wire,
     'activation': activation.toJson(),
+    'output_volume': outputVolume,
   };
 }
+
+/// A playback gain read back from a file, pulled into range.
+///
+/// A missing value is unity, not zero — a file written before volume existed
+/// must not load as silence.
+double _volume(Object? value) =>
+    (value as num?)?.toDouble().clamp(0.0, 1.0) ?? 1.0;
 
 /// The voice-activation gate's tuning (§29).
 class VoiceActivationSettings {

@@ -190,6 +190,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Higher is harder to trigger by room noise, and takes a louder voice.';
 
   @override
+  String get settingsVolume => 'Output volume';
+
+  @override
+  String get settingsVolumeHint =>
+      'Applies to everyone. Individual people can be adjusted from their entry in the channel tree.';
+
+  @override
   String get settingsNoLogDirectory =>
       'This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)';
 
@@ -251,11 +258,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectNameLabel => 'Name';
 
   @override
-  String sidebarOffline(int count) {
-    return 'Offline — $count';
-  }
-
-  @override
   String sidebarSessionFallback(int id) {
     return 'Server $id';
   }
@@ -264,7 +266,153 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarSheetSaved => 'Saved';
 
   @override
+  String get sidebarBookmarkAdd => 'Bookmark this server';
+
+  @override
+  String get sidebarBookmarkRemove => 'Remove from saved';
+
+  @override
+  String get sidebarEditSaved => 'Edit';
+
+  @override
+  String get bookmarkEditTitle => 'Edit saved server';
+
+  @override
+  String get bookmarkEditAddressHint =>
+      'Changing this moves the entry; the old one is dropped.';
+
+  @override
   String get sidebarAddServer => 'Add server';
+
+  @override
+  String memberMenu(String name) {
+    return 'Actions for $name';
+  }
+
+  @override
+  String get memberPoke => 'Poke';
+
+  @override
+  String memberPokePrompt(String name) {
+    return 'Poke $name';
+  }
+
+  @override
+  String get memberPokeMessage => 'Message';
+
+  @override
+  String get memberMove => 'Move to channel…';
+
+  @override
+  String memberMoveTitle(String name) {
+    return 'Move $name';
+  }
+
+  @override
+  String get memberMoveChannel => 'Channel';
+
+  @override
+  String get memberKickChannel => 'Kick from channel';
+
+  @override
+  String get memberKickServer => 'Kick from server';
+
+  @override
+  String get memberBan => 'Ban…';
+
+  @override
+  String memberBanTitle(String name) {
+    return 'Ban $name';
+  }
+
+  @override
+  String get memberBanDuration => 'Duration';
+
+  @override
+  String get memberBanPermanent => 'Permanently';
+
+  @override
+  String memberBanMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes',
+      one: 'One minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberBanHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours',
+      one: 'One hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberBanDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: 'One day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get memberReason => 'Reason (optional)';
+
+  @override
+  String get memberVolume => 'Volume…';
+
+  @override
+  String memberVolumeTitle(String name) {
+    return '$name\'s volume';
+  }
+
+  @override
+  String get memberVolumeHint =>
+      'Applies for this session only. The output volume in the settings moves everyone together.';
+
+  @override
+  String get memberNoPermission => 'Your server permissions do not allow this';
+
+  @override
+  String get permissionsTitle => 'Your permissions';
+
+  @override
+  String get permissionsHint =>
+      'Reported by the server for you, in the channel you are in.';
+
+  @override
+  String get permissionsJoinChannel => 'Join channels';
+
+  @override
+  String get permissionsMoveClients => 'Move other people';
+
+  @override
+  String get permissionsSendChannelMessage => 'Send channel messages';
+
+  @override
+  String get permissionsSendPrivateMessage => 'Send private messages';
+
+  @override
+  String get permissionsKick => 'Kick';
+
+  @override
+  String get permissionsBan => 'Ban';
+
+  @override
+  String get permissionsNotReported =>
+      'This server does not tell clients what they may do, so there is nothing to show.';
+
+  @override
+  String get permissionsNone => 'Nothing beyond what every user can do.';
 
   @override
   String get memberAway => 'Away';
@@ -313,6 +461,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatPrivateLabel => 'Private chat';
+
+  @override
+  String chatPoked(String name) {
+    return '$name poked you';
+  }
+
+  @override
+  String chatPokedWith(String name, String message) {
+    return '$name poked you: $message';
+  }
 
   @override
   String get chatBackToChannel => 'Back to channel';
@@ -401,6 +559,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String shellLogPath(String path) {
     return 'Log: $path';
   }
+
+  @override
+  String get shellDismissError => 'Dismiss';
 
   @override
   String get shellOpenLog => 'Open log';

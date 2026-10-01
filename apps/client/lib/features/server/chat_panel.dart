@@ -13,6 +13,13 @@ import '../../providers/providers.dart';
 import '../../state/server_view.dart';
 
 /// The right-hand column of the window.
+/// The square both halves of the header's leading slot occupy.
+///
+/// Sized here rather than left to each widget: an `IconButton` brings a 48-pixel
+/// minimum with it and a bare `Icon` does not, which is how the two headers came
+/// to be different heights.
+const double _headerLeadingSize = 32;
+
 class ChatPanel extends ConsumerStatefulWidget {
   /// Renders `view`.
   const ChatPanel({required this.view, super.key});
@@ -145,9 +152,9 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
 
 /// Who a private conversation is with, when one is open.
 ///
-/// The name comes from the view, and a client who has since disconnected is
-/// still in its offline list — a conversation should not lose its title because
-/// the other person logged off mid-sentence.
+/// Falls back to a generic label when the other person has disconnected, since
+/// nothing keeps their name once they are gone: the header says a private
+/// conversation is open rather than naming someone who is no longer there.
 ({int id, String name})? _privateWith(ServerView view, AppLocalizations l10n) {
   final open = view.openConversation;
   if (open == null || !open.startsWith('client:')) return null;
@@ -155,21 +162,17 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   final id = int.tryParse(open.substring('client:'.length));
   if (id == null) return null;
 
-  final name =
-      view.clients[id]?.name ??
-      view.offline.where((c) => c.id == id).firstOrNull?.name ??
-      l10n.chatPrivateLabel;
-  return (id: id, name: name);
+  return (id: id, name: view.clients[id]?.name ?? l10n.chatPrivateLabel);
 }
 
 /// The channel name and topic.
-class _ChatHeader extends StatelessWidget {
+class _ChatHeader extends ConsumerWidget {
   const _ChatHeader({required this.view});
 
   final ServerView view;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
@@ -185,14 +188,32 @@ class _ChatHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (other != null)
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: l10n.chatBackToChannel,
-              onPressed: view.closeConversation,
-            )
-          else
-            Icon(Icons.chat_bubble_outline, color: tokens.textSecondary),
+          // One fixed box for both, because the two were not the same height:
+          // an `IconButton` is 48 by default and a bare `Icon` is 24, so the
+          // band grew the moment a private conversation opened. The box is a
+          // little tighter than Material's default and still a comfortable
+          // target for a mouse, which is what this front-end is for.
+          SizedBox(
+            width: _headerLeadingSize,
+            height: _headerLeadingSize,
+            child: other != null
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    iconSize: 20,
+                    padding: EdgeInsets.zero,
+                    tooltip: l10n.chatBackToChannel,
+                    // Through the notifier: see
+                    // `SessionsNotifier.openConversation`.
+                    onPressed: () => ref
+                        .read(sessionsProvider.notifier)
+                        .closeConversation(view.session),
+                  )
+                : Icon(
+                    Icons.chat_bubble_outline,
+                    size: 20,
+                    color: tokens.textSecondary,
+                  ),
+          ),
           SizedBox(width: tokens.space2),
           Text(
             other?.name ?? channel?.name ?? l10n.chatNotInChannel,
@@ -281,6 +302,39 @@ class _MessageTile extends StatelessWidget {
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
 
+    // A poke gets its own shape rather than a bubble. It is not something the
+    // other person said, and drawing it in the same column as their words would
+    // put a sentence in their mouth — they only chose to make a client beep.
+    if (message.isPoke) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: tokens.space5,
+          vertical: tokens.space2,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.notifications_active_outlined, size: 16, color: tokens.idle),
+            SizedBox(width: tokens.space2),
+            Flexible(
+              child: Text(
+                message.content.isEmpty
+                    ? l10n.chatPoked(message.senderName)
+                    : l10n.chatPokedWith(message.senderName, message.content),
+                textAlign: TextAlign.center,
+                style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+              ),
+            ),
+            SizedBox(width: tokens.space2),
+            Text(
+              formatTimestamp(l10n, message.sentAt),
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       // §20: 8px above and below gives consecutive messages 16px between them,
       // which is the low end of the 16–20 it asks for. It does not distinguish
@@ -321,10 +375,10 @@ class _MessageTile extends StatelessWidget {
                       // both.
                       style: text.bodySmall?.copyWith(color: tokens.textTertiary),
                     ),
-                    if (message.isPrivate) ...[
-                      SizedBox(width: tokens.space2),
-                      Icon(Icons.lock_outline, size: 16, color: tokens.idle),
-                    ],
+                    // No lock here. It was drawn on every private message to
+                    // say the thread is private — which the header of a private
+                    // thread already says, once, in words. Repeating it on every
+                    // line is a mark the eye has to keep ruling out.
                   ],
                 ),
                 if (message.content.isNotEmpty) ...[

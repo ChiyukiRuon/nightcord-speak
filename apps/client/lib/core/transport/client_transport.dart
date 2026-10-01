@@ -49,6 +49,26 @@ abstract interface class ClientTransport {
   /// Moves another client into a channel.
   void moveClient(int session, int clientId, int channelId);
 
+  /// Pokes another client, which typically makes their client beep.
+  void poke(int session, int clientId, String message);
+
+  /// Removes another client from a channel or from the server.
+  ///
+  /// `message` is an optional explanation; `null` means none was given. The
+  /// server decides whether we may — a refusal arrives as a permission error
+  /// naming what was missing, not as silence.
+  void kick(int session, int clientId, KickScope scope, String? message);
+
+  /// Bans another client.
+  void ban(int session, int clientId, BanDuration duration, String? reason);
+
+  /// Scales one client's audio within the mix.
+  ///
+  /// Local to this client: nothing is sent to the server, and what everyone
+  /// else receives is unchanged. A remote transport applies it on the machine
+  /// running the core, where the mixing happens.
+  void setClientVolume(int session, int clientId, double volume);
+
   /// Asks for the audio devices for `"input"` or `"output"`.
   ///
   /// A remote transport may answer with an empty list: the devices that matter

@@ -54,26 +54,76 @@ void _showError(BuildContext context, ClientError error) {
 
   messenger.showSnackBar(
     SnackBar(
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // The insets are the content's own rather than Material's, because the
+      // close button belongs at the bar's right *edge* and Material's padding
+      // would hold it a finger's width short of it.
+      padding: EdgeInsets.zero,
+      content: Row(
+        // Centred, not top-aligned: the button belongs to the whole bar, and
+        // the column beside it is one line or three depending on whether there
+        // is a log path to show.
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // The sentence is built here, in the language on screen now — the
-          // error itself carries data, not words (see `l10n/errors.dart`).
-          Text(error.describe(l10n)),
-          if (logDirectory != null)
-            Padding(
-              padding: EdgeInsets.only(top: tokens.space1),
-              child: Text(
-                l10n.shellLogPath(logDirectory),
-                style: TextStyle(
-                  // Was 11px, under the floor `docs/UI字体规范.md` §3 sets.
-                  fontSize: AppTypography.captionSize,
-                  fontFamily: AppTypography.monospaceFamily,
-                  color: tokens.textSecondary,
-                ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                tokens.space4,
+                tokens.space3,
+                tokens.space2,
+                tokens.space3,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // The sentence is built here, in the language on screen now —
+                  // the error itself carries data, not words (see
+                  // `l10n/errors.dart`).
+                  Text(error.describe(l10n)),
+                  if (logDirectory != null)
+                    Padding(
+                      padding: EdgeInsets.only(top: tokens.space1),
+                      child: Text(
+                        l10n.shellLogPath(logDirectory),
+                        style: TextStyle(
+                          // Was 11px, under the floor `docs/UI字体规范.md` §3
+                          // sets.
+                          fontSize: AppTypography.captionSize,
+                          fontFamily: AppTypography.monospaceFamily,
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
+          ),
+          // Both buttons live in the content, and the close is last.
+          //
+          // `SnackBar.action` is laid out *after* the content whatever this row
+          // does, so with it the close button could never be the rightmost
+          // thing on the bar — which is where it belongs, because it is the one
+          // that applies to the bar rather than to what the bar is about.
+          if (logDirectory != null)
+            TextButton(
+              onPressed: () => revealDirectory(logDirectory),
+              child: Text(l10n.shellOpenLog),
+            ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            iconSize: 16,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            // The icon takes the bar's own foreground colour, which the theme
+            // sets per variant: `onErrorBg` on the red bar, `onInfoBg` on the
+            // informational one.
+            color: Theme.of(context).snackBarTheme.contentTextStyle?.color,
+            tooltip: l10n.shellDismissError,
+            onPressed: messenger.hideCurrentSnackBar,
+          ),
+          // A hair of margin so the glyph is not touching the bar's rounded
+          // corner.
+          SizedBox(width: tokens.space1),
         ],
       ),
       // §27's error variant for something that cannot be retried, and the
@@ -89,12 +139,6 @@ void _showError(BuildContext context, ClientError error) {
       // Long enough to actually press the button — the default four seconds is
       // not, and the reason to show it at all is that someone acts on it.
       duration: const Duration(seconds: 10),
-      action: logDirectory == null
-          ? null
-          : SnackBarAction(
-              label: l10n.shellOpenLog,
-              onPressed: () => revealDirectory(logDirectory),
-            ),
     ),
   );
 }
@@ -152,10 +196,19 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
     _exitListener = AppLifecycleListener(
       onExitRequested: () {
-        // Synchronous, before the response: after `exit` no Dart callback
-        // runs, and a marker left behind would be a false crash. The call is
-        // cheap by design — it must not hold the close button hostage.
-        ref.read(rustClientProvider).markCleanExit();
+        // Synchronous, before the response: after `exit` no Dart callback runs.
+        //
+        // `dispose` rather than `markCleanExit`: it stops the core, which says
+        // goodbye to every server on the way out. Without that the server holds
+        // the session until it times out, and TS3 refuses a second connection
+        // from the same identity until then — so closing the window and opening
+        // it again reported the user's own nickname as already in use. It marks
+        // the run clean too, and only when the core really did stop cleanly,
+        // which is stricter than the call it replaces.
+        //
+        // Blocking is bounded by the core's own shutdown grace, which is the
+        // price of the disconnect reaching the wire.
+        ref.read(clientTransportProvider).dispose();
         return Future.value(AppExitResponse.exit);
       },
     );
@@ -217,13 +270,16 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     // starts polling. Without it no command result ever arrives — including the
     // one that opens a session — so the app would sit on the connect screen
     // forever.
-    final sessions = ref.watch(sessionsProvider);
-    final requested = ref.watch(activeSessionProvider);
+    ref.watch(sessionsProvider);
+    final active = ref.watch(activeSessionProvider);
 
-    // Falling back to the newest session means a `connect` that succeeds while
-    // the user is still on the connect screen switches over by itself, which is
-    // what makes the auto-connect hook usable.
-    final active = requested ?? (sessions.isEmpty ? null : sessions.keys.last);
+    // No fallback to "whatever session exists". There used to be one, so that a
+    // `connect` succeeding while the user was still on the connect screen would
+    // switch over by itself — but a connect result already selects its own
+    // session explicitly, so the fallback only ever fired for the one case it
+    // broke: "add server", which clears the selection while deliberately
+    // leaving the running connection alone. The sheet closed, the selection was
+    // cleared, and this line put it straight back, so the button looked dead.
 
     // Failures surface once, as a snack bar. Nothing is cleared here: a
     // repeated failure is a *new* error object, so `listen` fires again

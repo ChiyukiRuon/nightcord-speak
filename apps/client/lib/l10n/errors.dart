@@ -45,10 +45,18 @@ extension ClientErrorText on ClientError {
       // Some variants carry no free-text message, only a code or a name.
       final code = detail['server_code'];
       if (code != null) return l10n.errorServerCode('$code');
-      final action = detail['action'];
-      if (action != null) return l10n.errorPermissionAction('$action');
-      final permission = detail['permission'];
-      if (permission != null) return l10n.errorMissingPermission('$permission');
+      // `PermissionError` is an enum *inside* the enum, and serde tags the
+      // inner variant too: a missing permission arrives as
+      // `{"missing_permission": {"permission": 203}}`, not flat. Reading it as
+      // flat is why every refused action said only "permission" — the category,
+      // and nothing a person could act on.
+      final permission = detail['missing_permission'] ?? detail['denied_for'];
+      if (permission is Map) {
+        final action = permission['action'];
+        if (action != null) return l10n.errorPermissionAction('$action');
+        final id = permission['permission'];
+        if (id != null) return l10n.errorMissingPermission('$id');
+      }
       final name = detail['name'];
       if (name != null) return l10n.errorDeviceMissing('$name');
     }

@@ -191,4 +191,93 @@ void main() {
       expect(changed.language, 'en', reason: 'the two settings are independent');
     });
   });
+
+  group('audio and volume', () {
+    test('a file written before any of it existed comes back at the defaults', () {
+      // The upgrade path, and the one that would be a silent bug: a missing
+      // volume read as 0 would load every existing file muted.
+      final audio = AudioSettings.fromJson(const <String, dynamic>{
+        'input_device': 'wasapi:Mic',
+        'mode': 'push_to_talk',
+      });
+
+      expect(audio.inputDevice, 'wasapi:Mic');
+      expect(audio.mode, VoiceActivationMode.pushToTalk);
+      expect(audio.outputVolume, 1.0);
+    });
+
+    test('a file that still carries a codec and a quality still loads', () {
+      // The keys are gone from the model, so the core ignores them and so does
+      // this — which is what makes removing a field safe.
+      final audio = AudioSettings.fromJson(const <String, dynamic>{
+        'codec': 'music',
+        'voice_quality': 9,
+        'music_quality': 10,
+        'output_volume': 0.5,
+      });
+
+      expect(audio.outputVolume, closeTo(0.5, 1e-9));
+    });
+
+    test('an out-of-range volume from a hand-edited file is pulled into range', () {
+      expect(
+        AudioSettings.fromJson(const <String, dynamic>{'output_volume': 7.5}).outputVolume,
+        1.0,
+      );
+      expect(
+        AudioSettings.fromJson(const <String, dynamic>{'output_volume': -3}).outputVolume,
+        0.0,
+      );
+    });
+
+    test('the volume survives a round trip', () {
+      const settings = Settings(audio: AudioSettings(outputVolume: 0.4));
+      final back = Settings.fromJson(settings.toJson()).audio;
+      expect(back.outputVolume, closeTo(0.4, 1e-9));
+    });
+
+    test('copyWith leaves the volume alone when it was not given', () {
+      const audio = AudioSettings(outputVolume: 0.25);
+      final changed = audio.copyWith(mode: VoiceActivationMode.continuous);
+
+      expect(changed.mode, VoiceActivationMode.continuous);
+      expect(changed.outputVolume, closeTo(0.25, 1e-9));
+    });
+
+    test('the settings still carry nothing about the codec', () {
+      // The encoder runs the stereo profile at the top of its range and has no
+      // knobs, so nothing about it belongs in a file the user can edit. This
+      // fails if somebody adds one back.
+      final json = const Settings().toJson()['audio'] as Map<String, dynamic>;
+      expect(json.keys, isNot(contains('codec')));
+      expect(json.keys, isNot(contains('voice_quality')));
+      expect(json.keys, isNot(contains('music_quality')));
+      expect(json.keys, contains('output_volume'));
+    });
+  });
+
+  group('the moderation vocabulary', () {
+    test('a kick scope encodes as the bare string the core parses', () {
+      // Externally tagged unit variants: the quotes are part of the encoding,
+      // and dropping them makes the core reject the whole command.
+      expect(jsonEncode(KickScope.channel.wire), '"channel"');
+      expect(jsonEncode(KickScope.server.wire), '"server"');
+    });
+
+    test('a permanent ban is not a number of seconds', () {
+      // The wire spells permanent as zero, which is the value a mistake would
+      // be least likely to notice — so the type does not offer it.
+      expect(jsonEncode(BanDuration.permanent.encoded), '"permanent"');
+      expect(jsonEncode(BanDuration.seconds(600).encoded), '{"seconds":600}');
+      expect(BanDuration.permanent.isPermanent, isTrue);
+      expect(BanDuration.seconds(0).isPermanent, isFalse);
+    });
+
+    test('the two kick scopes are not interchangeable', () {
+      expect(KickScope.channel, isNot(KickScope.server));
+      expect(BanDuration.seconds(60), BanDuration.seconds(60));
+      expect(BanDuration.seconds(60), isNot(BanDuration.seconds(61)));
+      expect(BanDuration.permanent, isNot(BanDuration.seconds(60)));
+    });
+  });
 }

@@ -233,6 +233,14 @@
   "@settingsSensitivityHint": {
     "description": "Explains what the sensitivity value means"
   },
+  "settingsVolume": "Output volume",
+  "@settingsVolume": {
+    "description": "Label above the master playback volume slider"
+  },
+  "settingsVolumeHint": "Applies to everyone. Individual people can be adjusted from their entry in the channel tree.",
+  "@settingsVolumeHint": {
+    "description": "Points at the per-person volume control"
+  },
   "settingsNoLogDirectory": "This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)",
   "@settingsNoLogDirectory": {
     "description": "Shown in place of the log path where there is none"
@@ -317,15 +325,6 @@
     "description": "Label of the bookmark name field"
   },
 
-  "sidebarOffline": "Offline — {count}",
-  "@sidebarOffline": {
-    "description": "Heading of the offline members section",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "sidebarSessionFallback": "Server {id}",
   "@sidebarSessionFallback": {
     "description": "Name shown for a session whose server has not named itself yet",
@@ -339,10 +338,180 @@
   "@sidebarSheetSaved": {
     "description": "Heading above the saved-server list in the session switcher"
   },
+  "sidebarBookmarkAdd": "Bookmark this server",
+  "@sidebarBookmarkAdd": {
+    "description": "Sheet item that saves the connected server"
+  },
+  "sidebarBookmarkRemove": "Remove from saved",
+  "@sidebarBookmarkRemove": {
+    "description": "Sheet item that unsaves the connected server"
+  },
+  "sidebarEditSaved": "Edit",
+  "@sidebarEditSaved": {
+    "description": "Menu item that opens the saved-server editor"
+  },
+  "bookmarkEditTitle": "Edit saved server",
+  "@bookmarkEditTitle": {
+    "description": "Title of the dialog that edits a bookmark"
+  },
+  "bookmarkEditAddressHint": "Changing this moves the entry; the old one is dropped.",
+  "@bookmarkEditAddressHint": {
+    "description": "Explains what editing the address does"
+  },
+
   "sidebarAddServer": "Add server",
   "@sidebarAddServer": {
     "description": "Entry that returns to the connect screen"
   },
+  "memberMenu": "Actions for {name}",
+  "@memberMenu": {
+    "description": "Accessibility label on a member whose menu opens on right click",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "memberPoke": "Poke",
+  "@memberPoke": {
+    "description": "Menu item that makes the other client beep"
+  },
+  "memberPokePrompt": "Poke {name}",
+  "@memberPokePrompt": {
+    "description": "Title of the poke message prompt",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "memberPokeMessage": "Message",
+  "@memberPokeMessage": {
+    "description": "Label of the optional text sent with a poke"
+  },
+  "memberMove": "Move to channel…",
+  "@memberMove": {
+    "description": "Menu item that moves a member into another channel"
+  },
+  "memberMoveTitle": "Move {name}",
+  "@memberMoveTitle": {
+    "description": "Title of the channel picker",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "memberMoveChannel": "Channel",
+  "@memberMoveChannel": {
+    "description": "Label of the channel dropdown in the move dialog"
+  },
+  "memberKickChannel": "Kick from channel",
+  "@memberKickChannel": {
+    "description": "Menu item: remove from the current channel only"
+  },
+  "memberKickServer": "Kick from server",
+  "@memberKickServer": {
+    "description": "Menu item: remove from the server entirely"
+  },
+  "memberBan": "Ban…",
+  "@memberBan": {
+    "description": "Menu item that opens the ban dialog"
+  },
+  "memberBanTitle": "Ban {name}",
+  "@memberBanTitle": {
+    "description": "Title of the ban dialog",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "memberBanDuration": "Duration",
+  "@memberBanDuration": {
+    "description": "Label of the ban length selector"
+  },
+  "memberBanPermanent": "Permanently",
+  "@memberBanPermanent": {
+    "description": "Ban length: until someone lifts it"
+  },
+  "memberBanMinutes": "{count, plural, =1 {One minute} other {{count} minutes}}",
+  "@memberBanMinutes": {
+    "description": "Ban length in minutes",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "memberBanHours": "{count, plural, =1 {One hour} other {{count} hours}}",
+  "@memberBanHours": {
+    "description": "Ban length in hours",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "memberBanDays": "{count, plural, =1 {One day} other {{count} days}}",
+  "@memberBanDays": {
+    "description": "Ban length in days",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "memberReason": "Reason (optional)",
+  "@memberReason": {
+    "description": "Label of the optional explanation sent with a kick or ban"
+  },
+  "memberVolume": "Volume…",
+  "@memberVolume": {
+    "description": "Menu item that opens the per-person volume slider"
+  },
+  "memberVolumeTitle": "{name}'s volume",
+  "@memberVolumeTitle": {
+    "description": "Title of the per-person volume dialog",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "memberVolumeHint": "Applies for this session only. The output volume in the settings moves everyone together.",
+  "@memberVolumeHint": {
+    "description": "Explains that a per-person volume is not remembered"
+  },
+  "memberNoPermission": "Your server permissions do not allow this",
+  "@memberNoPermission": {
+    "description": "Tooltip on a menu item greyed out by permissions"
+  },
+  "permissionsTitle": "Your permissions",
+  "@permissionsTitle": {
+    "description": "Title of the panel listing what the server lets us do"
+  },
+  "permissionsHint": "Reported by the server for you, in the channel you are in.",
+  "@permissionsHint": {
+    "description": "Explains where the permission list comes from"
+  },
+  "permissionsJoinChannel": "Join channels",
+  "@permissionsJoinChannel": {
+    "description": "Permission name"
+  },
+  "permissionsMoveClients": "Move other people",
+  "@permissionsMoveClients": {
+    "description": "Permission name"
+  },
+  "permissionsSendChannelMessage": "Send channel messages",
+  "@permissionsSendChannelMessage": {
+    "description": "Permission name"
+  },
+  "permissionsSendPrivateMessage": "Send private messages",
+  "@permissionsSendPrivateMessage": {
+    "description": "Permission name"
+  },
+  "permissionsKick": "Kick",
+  "@permissionsKick": {
+    "description": "Permission name"
+  },
+  "permissionsBan": "Ban",
+  "@permissionsBan": {
+    "description": "Permission name"
+  },
+  "permissionsNotReported": "This server does not tell clients what they may do, so there is nothing to show.",
+  "@permissionsNotReported": {
+    "description": "Shown when the server sent no permission hints at all"
+  },
+  "permissionsNone": "Nothing beyond what every user can do.",
+  "@permissionsNone": {
+    "description": "Shown when the server answered but granted nothing special"
+  },
+
   "memberAway": "Away",
   "@memberAway": {
     "description": "Tooltip of the away badge on a member row"
@@ -408,6 +577,22 @@
   "@chatPrivateLabel": {
     "description": "Badge next to a private conversation's title, and the fallback title"
   },
+  "chatPoked": "{name} poked you",
+  "@chatPoked": {
+    "description": "A poke with nothing written with it",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "chatPokedWith": "{name} poked you: {message}",
+  "@chatPokedWith": {
+    "description": "A poke carrying a message",
+    "placeholders": {
+      "name": { "type": "String" },
+      "message": { "type": "String" }
+    }
+  },
+
   "chatBackToChannel": "Back to channel",
   "@chatBackToChannel": {
     "description": "Tooltip of the button that leaves a private conversation"
@@ -559,6 +744,11 @@
       }
     }
   },
+  "shellDismissError": "Dismiss",
+  "@shellDismissError": {
+    "description": "Tooltip of the button that closes the error bar"
+  },
+
   "shellOpenLog": "Open log",
   "@shellOpenLog": {
     "description": "Button on the error snackbar that reveals the log directory"

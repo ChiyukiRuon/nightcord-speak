@@ -102,10 +102,13 @@ class _NoticeTileState extends ConsumerState<NoticeTile> {
     final conversation = notice.conversation;
     if (conversation == null) return;
 
-    // Straight into the view rather than through a provider call: the view is
-    // the thing that knows what is on screen, and `SessionsNotifier` has no
-    // business owning which thread someone is reading.
-    ref.read(sessionsProvider)[notice.session]?.open(conversation);
+    // Through the notifier, which republishes the view: mutating the view
+    // directly leaves the chat panel on the old thread until something else
+    // happens to rebuild it. Clicking a notification is exactly when that
+    // delay is most obvious.
+    ref
+        .read(sessionsProvider.notifier)
+        .openConversation(notice.session, conversation);
   }
 
   @override

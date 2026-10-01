@@ -23,10 +23,19 @@ abstract final class ConversationKey {
   static String client(int id) => 'client:$id';
 
   /// The thread a message belongs to.
-  static String of(Message message) => switch (message.target) {
+  ///
+  /// A private message names its **recipient**, and on a message someone sends
+  /// us that recipient is *us*: keying the thread on it filed everything a
+  /// person said into a conversation with ourselves — a thread nothing can open,
+  /// marked unread on our own row in the tree. The thread belongs to the other
+  /// party, so that is what this resolves to, and `ownClientId` is what tells
+  /// the two directions apart.
+  static String of(Message message, int? ownClientId) => switch (message.target) {
     ServerTarget() => server,
     ChannelTarget(:final channelId) => channel(channelId),
-    ClientTarget(:final clientId) => client(clientId),
+    ClientTarget(:final clientId) => client(
+      clientId == ownClientId ? (message.sender ?? clientId) : clientId,
+    ),
   };
 }
 
@@ -103,6 +112,14 @@ class ServerView {
   /// leaves a name lit for good.
   final Set<int> speaking = {};
 
+  /// The next id for something that never came from the server.
+  ///
+  /// Counts down from zero while the server counts up from one, so the two can
+  /// never meet. A counter rather than a clock because two pokes can arrive in
+  /// the same millisecond, and a list keyed by a duplicated id loses one of
+  /// them.
+  int _nextSyntheticId = 0;
+
   /// Messages by [ConversationKey].
   final Map<String, List<Message>> conversations = {};
 
@@ -118,12 +135,14 @@ class ServerView {
   /// claiming otherwise.
   VoiceState voice = const VoiceState();
 
-  /// Clients that have gone offline, newest first.
+  /// Clients that have gone offline.
   ///
-  /// Kept separately because TeamSpeak only reports clients that are
-  /// *connected*: a user who disconnects vanishes rather than moving to an
-  /// "offline" channel, but the reference design shows them, so the last known
-  /// name is retained.
+  /// Deliberately never populated. TeamSpeak reports only connected clients, so
+  /// a user who disconnects simply vanishes — and an earlier version kept the
+  /// last known name in this list and drew an "offline" section in the tree.
+  /// It read as a roster of who is around with half of it being people who are
+  /// not, which is worse than the name being gone. The field survives so that
+  /// [apply] can keep clearing it without a special case.
   final List<Client> offline = [];
 
   /// Whether the session is usable right now.
@@ -134,6 +153,30 @@ class ServerView {
 
   /// The channel we are in.
   Channel? get ownChannel => ownChannelId == null ? null : channels[ownChannelId];
+
+  /// The channels in tree order, for a picker that has no room for depht.
+  ///
+  /// Flat rather than nested because every consumer so far is a dropdown; a
+  /// tree would be the right shape for a tree control, and there is not one.
+  List<Channel> get channelsInTreeOrder =>
+      tree().map((row) => row.channel).toList(growable: false);
+
+  /// Per-person playback gains the user has set this session.
+  ///
+  /// A memory of what we asked the core for, not a report of what it is doing:
+  /// the core answers `set_client_volume` with nothing but success, and the
+  /// alternative — a round trip to read one number back — would buy accuracy
+  /// only in the case where the core rejected a value in range, which it does
+  /// not. Cleared with the session, because a client id does not outlive it.
+  final Map<int, double> clientVolumes = {};
+
+  /// One client's gain, defaulting to unity.
+  double clientVolume(int clientId) => clientVolumes[clientId] ?? 1.0;
+
+  /// Records a gain the user just set.
+  void setClientVolume(int clientId, double volume) {
+    clientVolumes[clientId] = volume;
+  }
 
   /// The channels we can see, as a flat list in tree order.
   ///
@@ -180,8 +223,15 @@ class ServerView {
   }
 
   /// The clients in one channel, ordered by name.
+  ///
+  /// Server-query connections are left out. `serveradmin` is a query client
+  /// that sits on every server for as long as it is running, so listing it
+  /// beside real users only ever raises the question of what it is. The
+  /// official client hides them for the same reason.
   List<Client> clientsIn(int channelId) {
-    final members = clients.values.where((c) => c.channelId == channelId).toList()
+    final members = clients.values
+        .where((c) => c.clientType == ClientType.voice && c.channelId == channelId)
+        .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return members;
   }
@@ -295,22 +345,15 @@ class ServerView {
 
       case ClientJoinedEvent(:final client) || ClientUpdatedEvent(:final client):
         clients[client.id] = client;
-        // Back online, so they are no longer in the offline list. Matched on
-        // the stable id: TeamSpeak assigns a *new* client id on every
-        // reconnect, so matching on that would leave the old entry behind
-        // forever, and showing one person twice.
-        offline.removeWhere((c) => _sameUser(c, client));
 
       case ClientLeftEvent(:final clientId):
+        // Gone is gone: no last-known copy is kept. See [offline].
         if (ownClientId == clientId) {
           ownClientId = null;
           ownChannelId = null;
         }
-        final gone = clients.remove(clientId);
+        clients.remove(clientId);
         speaking.remove(clientId);
-        if (gone != null) {
-          offline.insert(0, gone);
-        }
 
       case ClientMovedEvent(:final clientId, :final channelId):
         final client = clients[clientId];
@@ -335,7 +378,7 @@ class ServerView {
         }
 
       case MessageReceivedEvent(:final message):
-        conversations.putIfAbsent(ConversationKey.of(message), () => []).add(message);
+        conversations.putIfAbsent(ConversationKey.of(message, ownClientId), () => []).add(message);
 
       case PermissionsChangedEvent(:final permissions):
         this.permissions = permissions;
@@ -353,25 +396,32 @@ class ServerView {
           this.speaking.remove(clientId);
         }
 
+      // A poke is an interaction with a person, so it goes in the
+      // conversation with them — which is where the user looks when their
+      // client beeps. Marked rather than plain, because it is not something
+      // they typed, and the panel draws the two differently.
+      case PokedEvent(:final clientId, :final senderName, :final message):
+        conversations
+            .putIfAbsent(ConversationKey.client(clientId), () => [])
+            .add(
+              Message.poke(
+                // Pre-decremented, so the first one is -1 and zero is never
+                // handed out: the server counts up from one, and a synthetic id
+                // that could be zero is one a real message could be confused
+                // with. A clock-derived id collided when two pokes arrived in
+                // the same millisecond, and the list is keyed by this.
+                id: --_nextSyntheticId,
+                senderId: clientId,
+                senderName: senderName,
+                content: message,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
+
       // Not part of the rendered state.
-      case PokedEvent():
       case ErrorEvent():
       case UnknownEvent():
         break;
     }
-  }
-
-  /// Whether two records describe the same person.
-  ///
-  /// [`Client.uniqueId`] survives reconnects while [`Client.id`] does not, so it
-  /// is the only reliable match. Without one on either side there is nothing
-  /// stable to compare, and the ids are the best available answer.
-  static bool _sameUser(Client a, Client b) {
-    final left = a.uniqueId;
-    final right = b.uniqueId;
-    if (left != null && left.isNotEmpty && right != null && right.isNotEmpty) {
-      return left == right;
-    }
-    return a.id == b.id;
   }
 }

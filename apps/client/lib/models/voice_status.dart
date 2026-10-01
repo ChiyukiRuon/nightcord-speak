@@ -51,6 +51,7 @@ class VoiceStatus {
     this.peak = 0,
     this.transmitting = false,
     this.healthy = false,
+    this.bitrate,
   });
 
   /// The microphone, or null when none is open.
@@ -71,6 +72,14 @@ class VoiceStatus {
   /// Whether both open streams are still running.
   final bool healthy;
 
+  /// What the encoder is sending, in bits per second, or null with no engine.
+  ///
+  /// Computed by the core, which owns the number. A copy of it here would be
+  /// free to drift from the one doing the encoding, and "what am I actually
+  /// sending" is exactly the question nobody can answer from the settings — the
+  /// encoder has no settings.
+  final int? bitrate;
+
   /// Whether voice has been started at all.
   bool get running => input != null || output != null;
 
@@ -81,5 +90,6 @@ class VoiceStatus {
     peak: (json['peak'] as num?)?.toDouble() ?? 0,
     transmitting: json['transmitting'] as bool? ?? false,
     healthy: json['healthy'] as bool? ?? false,
+    bitrate: (json['bitrate_bps'] as num?)?.round(),
   );
 }

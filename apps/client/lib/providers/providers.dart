@@ -233,6 +233,29 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     ref.read(activeSessionProvider.notifier).forget(session);
   }
 
+  /// Opens a conversation, and tells whoever is drawing it.
+  ///
+  /// Through the notifier rather than by mutating the view from the tap
+  /// handler: a `ServerView` is a plain object, and mutating one is invisible
+  /// until something republishes it. `view.open(...)` called straight from
+  /// `onTap` left the chat panel showing the previous thread until the *next*
+  /// unrelated event arrived — which is what made opening a private
+  /// conversation, and going back, feel slow.
+  void openConversation(int session, String conversation) {
+    final view = state[session];
+    if (view == null) return;
+    view.open(conversation);
+    state = {...state, session: view};
+  }
+
+  /// Goes back to following the channel we are in. See [openConversation].
+  void closeConversation(int session) {
+    final view = state[session];
+    if (view == null) return;
+    view.closeConversation();
+    state = {...state, session: view};
+  }
+
   /// Applies a voice-state change optimistically.
   ///
   /// The core is authoritative and will confirm with a `voice_state_changed`

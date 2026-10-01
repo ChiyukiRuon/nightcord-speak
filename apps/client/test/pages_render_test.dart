@@ -15,15 +15,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/design/components/app_logo.dart';
+import 'package:nightcord_client/features/server/channel_sidebar.dart';
+import 'package:nightcord_client/features/settings/settings_dialog.dart';
+import 'package:nightcord_client/widgets/app_shell.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
 import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/features/connect/connect_page.dart';
 import 'package:nightcord_client/features/notifications/notice_stack.dart';
 import 'package:nightcord_client/features/server/server_page.dart';
-import 'package:nightcord_client/features/settings/settings_dialog.dart';
 import 'package:nightcord_client/features/voice/voice_bar.dart';
 import 'package:nightcord_client/l10n/app_localizations.dart';
 import 'package:nightcord_client/models/bookmarks.dart';
@@ -60,6 +63,42 @@ class _SilentTransport implements ClientTransport {
 
   @override
   void connect(ConnectRequest request) => calls.add('connect:${request.address}');
+
+  /// Recorded because the whole point of the member menu is which of these it
+  /// chooses, and with which arguments — a menu that wired "kick from server"
+  /// to the channel scope would be invisible otherwise.
+  @override
+  void poke(int session, int clientId, String message) =>
+      calls.add('poke:$clientId:$message');
+
+  @override
+  void kick(int session, int clientId, KickScope scope, String? message) =>
+      calls.add('kick:${scope.wire}:$clientId:${message ?? ''}');
+
+  @override
+  void ban(int session, int clientId, BanDuration duration, String? reason) =>
+      calls.add('ban:$clientId:${duration.isPermanent ? "forever" : "timed"}');
+
+  @override
+  void setClientVolume(int session, int clientId, double volume) =>
+      calls.add('volume:$clientId:${volume.toStringAsFixed(2)}');
+
+  /// The address book as the core last reported it.
+  ///
+  /// Kept here rather than only recorded: saving the connected server sends a
+  /// `NewBookmark`, and what comes back is a list — testing the toggle means
+  /// holding one.
+  BookmarkList bookmarks = const BookmarkList();
+
+  @override
+  void addBookmark(NewBookmark bookmark) =>
+      calls.add('addBookmark:${bookmark.address}');
+
+  @override
+  void updateBookmarks(BookmarkList value) {
+    bookmarks = value;
+    calls.add('updateBookmarks:${value.bookmarks.length}');
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -235,6 +274,23 @@ Widget _app(
   ),
 );
 
+
+/// Whether the menu item labelled `label` is selectable.
+///
+/// By type predicate rather than by type argument: the menu is built as
+/// `PopupMenuItem<_MemberAction>`, and the action enum is private to the widget
+/// library — which is the right place for it, so the test looks the item up by
+/// the thing the user actually sees.
+bool _menuItemEnabled(WidgetTester tester, String label) {
+  final item = tester.widget(
+    find.ancestor(
+      of: find.text(label),
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
+    ),
+  );
+  return (item as PopupMenuItem<dynamic>).enabled;
+}
+
 void main() {
   setUp(() {
     // A window rather than the test's default 800x600, so a page that only
@@ -379,13 +435,13 @@ void main() {
 
     // One click: the form fills, nothing is dialled.
     //
-    // The extra pump is the double-tap timeout: with both gestures on the row,
-    // Flutter holds the single tap back until it knows a second one is not
-    // coming. `pumpAndSettle` alone does not get there — it stops as soon as
-    // no *frame* is scheduled, and this wait is a bare timer.
+    // **A single `pump`, with no timeout waited out.** This used to need a
+    // 400 ms pump because `GestureDetector.onDoubleTap` made Flutter hold every
+    // single tap back until it knew a second one was not coming. The row now
+    // times the clicks itself, so the form fills on the frame of the click —
+    // and that immediacy is what this asserts.
     await tester.tap(row);
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(transport.calls, isEmpty, reason: 'a single click connected');
     final address = tester.widget<TextField>(
       find.byType(TextField).first,
@@ -402,6 +458,393 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
     expect(transport.calls, contains('connect:192.168.31.128:9987'));
+  });
+
+  testWidgets('two clicks far apart are two single clicks', (tester) async {
+    // The other half of the hand-rolled double click: a click that arrives
+    // after the window must fill the form again rather than dial. Getting this
+    // backwards would connect on any two clicks on the same row, however far
+    // apart — including a click, a minute of typing, and another click.
+    final transport = _SilentTransport();
+    await tester.pumpWidget(
+      _app(_container(bookmarks: true, transport: transport), const ConnectPage()),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.text('局域网测试服');
+    await tester.tap(row);
+    await tester.pump();
+    // Long enough for the row's window to close. Without this the two clicks
+    // below would be a double click, which is the case the other test covers.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(row);
+    await tester.pump();
+
+    expect(
+      transport.calls,
+      isEmpty,
+      reason: 'a click 500 ms after the last one is not a double click',
+    );
+  });
+
+  testWidgets('the error bar centres its buttons on the bar', (tester) async {
+    // Regression: the close button sat high, because Material's `SnackBar` lays
+    // `action` out beside the content rather than in it — so the row's own
+    // alignment never applied to everything the bar draws.
+    final container = _container();
+    await tester.pumpWidget(_app(container, const AppShell()));
+    await tester.pumpAndSettle();
+
+    container.read(lastErrorProvider.notifier).report(const ClientError(kind: 'timeout'));
+    await tester.pumpAndSettle();
+
+    // The `SnackBar` widget itself is stretched over the Scaffold's whole
+    // bottom slot, so its rect is not the bar anyone sees. The content row is:
+    // the bar's padding is zero and the row fills it.
+    final content = tester.getRect(
+      find.descendant(of: find.byType(SnackBar), matching: find.byType(Row)).first,
+    );
+    final button = tester.getRect(find.byType(IconButton));
+    final label = tester.getRect(find.text('打开日志'));
+    final glyph = tester.getRect(find.byIcon(Icons.close));
+    // ignore: avoid_print
+    print('content=$content');
+    // ignore: avoid_print
+    print('icon-button=$button glyph=$glyph label=$label');
+  });
+
+  testWidgets('the permissions panel claims only what the server answered', (
+    tester,
+  ) async {
+    // Regression: every bit reads as allowed when the server sends no permission
+    // hints — which is right for deciding whether to grey out a button and wrong
+    // for telling the user what they may do. On a server that reports nothing,
+    // this panel used to list six rights the user did not have.
+    final view = _view();
+    view.apply(
+      const PermissionsChangedEvent(
+        // The fixture's own permissions: granted, but nobody confirmed them.
+        Permissions(
+          canJoinChannel: true,
+          canSendChannelMessage: true,
+          canSendPrivateMessage: true,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _app(_container(view: view), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('Nightcord 测试服'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我的权限'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('不向客户端报告权限'),
+      findsOneWidget,
+      reason: 'the server said nothing, so the panel says so',
+    );
+    for (final label in [
+      '加入频道',
+      '发频道消息',
+      '发私聊消息',
+      '踢人',
+      '封禁',
+    ]) {
+      expect(find.text(label), findsNothing, reason: '(label) was never confirmed');
+    }
+  });
+
+  testWidgets('the permissions panel lists the granted and known ones', (tester) async {
+    final view = _view();
+    view.apply(
+      const PermissionsChangedEvent(
+        Permissions(
+          canJoinChannel: true,
+          canSendChannelMessage: true,
+          canKick: true,
+          channelKnown: true,
+          clientKnown: true,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _app(_container(view: view), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('Nightcord 测试服'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我的权限'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('加入频道'), findsOneWidget);
+    expect(find.text('踢人'), findsOneWidget);
+    // Granted by silence, not by the server.
+    expect(find.text('封禁'), findsNothing);
+    expect(
+      find.text('移动他人'),
+      findsNothing,
+      reason: 'client answers are known, and this one was not granted',
+    );
+  });
+
+  testWidgets('the connected server can be bookmarked', (tester) async {
+    // The server in front of the user is the one they are most likely to want
+    // back, and the sheet is where server-level actions live. With no address
+    // book at all, the sheet offers to start one.
+    final transport = _SilentTransport();
+    final container = _container(view: _view(), transport: transport);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('Nightcord 测试服'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('收藏这个服务器'));
+    await tester.pumpAndSettle();
+
+    // Through `addBookmark`, not `updateBookmarks`: the core owns the address
+    // parser, so an entry saved here is spelt the same way as one saved on the
+    // connect screen.
+    expect(transport.calls, contains('addBookmark:192.168.31.128:9987'));
+  });
+
+  testWidgets('a server already saved offers to be unsaved instead', (tester) async {
+    // The same row, decided by whether the address is in the book — the entry
+    // is the address, so that is what the match is on.
+    //
+    // The fixture's address book already holds 192.168.31.128:9987, which is
+    // the server the fixture is connected to.
+    final transport = _SilentTransport();
+    final container = _container(
+      view: _view(),
+      bookmarks: true,
+      transport: transport,
+    );
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('Nightcord 测试服'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('收藏这个服务器'), findsNothing);
+    await tester.tap(find.text('取消收藏'));
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('updateBookmarks:0'));
+  });
+
+  testWidgets('add server reaches the connect screen with a session running', (
+    tester,
+  ) async {
+    // Regression, and it was invisible from the outside: "add server" cleared
+    // the selection and left the connection alone, exactly as intended — and
+    // then the shell's own fallback put the session straight back, so the
+    // button did nothing at all.
+    final transport = _SilentTransport();
+    final view = _view();
+    final container = _container(view: view, transport: transport);
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    container.read(activeSessionProvider.notifier).select(view.session);
+
+    await tester.pumpWidget(_app(container, const AppShell()));
+    await tester.pumpAndSettle();
+    expect(find.byType(ServerPage), findsOneWidget);
+
+    // Open the switcher from the server header: its title is the sheet's handle.
+    await tester.tap(find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('Nightcord 测试服'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加服务器'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ConnectPage), findsOneWidget);
+    expect(
+      container.read(sessionsProvider),
+      contains(view.session),
+      reason: 'the connection keeps running in the background',
+    );
+  });
+
+  testWidgets('a private conversation opens on a double click', (tester) async {
+    // One click must not: opening a conversation is visible to the other
+    // person, and it is the same gesture a channel row uses.
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('同事二号'),
+    );
+
+    await tester.tap(row);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(
+      find.byIcon(Icons.arrow_back),
+      findsNothing,
+      reason: 'one click is not an intent to open anything',
+    );
+
+    await tester.tap(row);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+  });
+
+  testWidgets('settings open without a connection', (tester) async {
+    // Regression: the dialog used to require a session, and the only button
+    // that opened it lived in the voice bar — which only exists on the server
+    // page. So a user who could not connect had no way to reach the log folder,
+    // the language, or their audio devices, which is exactly when they are
+    // looking for them.
+    await tester.pumpWidget(_app(_container(), const ConnectPage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsDialog), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the member menu offers only what the server allows', (tester) async {
+    // The fixture's permissions grant joining and messaging and nothing else,
+    // which is what an ordinary user on a server looks like. Moderation items
+    // must be present but dead, not missing: a missing item reads as "this
+    // client cannot do that" rather than "you may not".
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(
+      tester.getCenter(
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('同事二号'),
+        ),
+      ),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('戳一戳'), findsOneWidget);
+    expect(find.text('封禁…'), findsOneWidget);
+
+    for (final label in [
+      '从频道踢出',
+      '从服务器踢出',
+      '移到频道…',
+      '封禁…',
+    ]) {
+      expect(
+        _menuItemEnabled(tester, label),
+        isFalse,
+        reason: '(label) should be greyed out',
+      );
+    }
+  });
+
+  testWidgets('a permitted kick sends the scope that was chosen', (tester) async {
+    // The two kick items differ only by the scope they carry, so a menu that
+    // wired both to the same value would look right and behave wrongly.
+    final transport = _SilentTransport();
+    final view = _view();
+    view.apply(
+      const PermissionsChangedEvent(
+        Permissions(
+          canJoinChannel: true,
+          canSendChannelMessage: true,
+          canSendPrivateMessage: true,
+          canKick: true,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _app(_container(view: view, transport: transport), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(
+      tester.getCenter(
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('同事二号'),
+        ),
+      ),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从服务器踢出'));
+    await tester.pumpAndSettle();
+
+    // The dialog collects a reason; confirming with it empty is still a kick.
+    await tester.tap(find.widgetWithText(FilledButton, '从服务器踢出'));
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('kick:server:2:'));
+  });
+
+  testWidgets('the menu offers nothing to do to yourself', (tester) async {
+    // Kicking yourself is not a moderation action, it is a way to lose a
+    // connection by accident.
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(
+      tester.getCenter(
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('TsukinoAyaka'),
+        ),
+      ),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      '戳一戳',
+      '从频道踢出',
+      '封禁…',
+      // Our own audio is already at whatever the output volume says; a second
+      // control for it would be a way to make the same thing quiet twice.
+      '音量…',
+    ]) {
+      expect(
+        _menuItemEnabled(tester, label),
+        isFalse,
+        reason: '(label) should not apply to ourselves',
+      );
+    }
   });
 
   testWidgets('the brand mark is on the screens that carry it', (tester) async {

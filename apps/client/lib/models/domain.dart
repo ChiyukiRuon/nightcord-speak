@@ -196,6 +196,25 @@ class ClientFlags {
   );
 }
 
+/// What kind of connection a client is.
+///
+/// TeamSpeak distinguishes people from server-query connections, and the
+/// distinction is worth keeping: `serveradmin` is a query client that every
+/// server has, permanently, and drawing it beside real users only ever raises
+/// the question of what it is.
+enum ClientType {
+  voice('voice'),
+  query('query');
+
+  const ClientType(this.wire);
+
+  /// The `serde` name of the Rust `ClientType` variant.
+  final String wire;
+
+  static ClientType fromWire(String? value) =>
+      values.firstWhere((t) => t.wire == value, orElse: () => ClientType.voice);
+}
+
 /// A user connected to the server.
 class Client {
   const Client({
@@ -205,6 +224,7 @@ class Client {
     this.flags = const ClientFlags(),
     this.uniqueId,
     this.isSelf = false,
+    this.clientType = ClientType.voice,
   });
 
   final int id;
@@ -218,6 +238,9 @@ class Client {
   /// Whether this client is us.
   final bool isSelf;
 
+  /// Whether this is a person or a server-query connection.
+  final ClientType clientType;
+
   factory Client.fromJson(Map<String, dynamic> json) => Client(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
@@ -227,6 +250,7 @@ class Client {
     ),
     uniqueId: json['unique_id'] as String?,
     isSelf: json['is_self'] as bool? ?? false,
+    clientType: ClientType.fromWire(json['client_type'] as String?),
   );
 
   /// A copy with a different channel, for a `client_moved` event.
@@ -237,7 +261,76 @@ class Client {
     flags: flags,
     uniqueId: uniqueId,
     isSelf: isSelf,
+    clientType: clientType,
   );
+}
+
+/// How far a kick reaches.
+enum KickScope {
+  /// Out of their channel, remaining on the server.
+  channel('channel'),
+
+  /// Off the server entirely.
+  server('server');
+
+  const KickScope(this.wire);
+
+  /// The `serde` name of the Rust `KickScope` variant.
+  ///
+  /// A bare string rather than a map, because the Rust enum's unit variants are
+  /// externally tagged — the encoded form is `"channel"`, quotes included.
+  final String wire;
+}
+
+/// How long a ban lasts.
+///
+/// A sealed pair rather than a nullable seconds field, mirroring the Rust
+/// `BanDuration`: "permanent" is not a very large number, and the wire spells it
+/// as zero, which is the value a mistake would be least likely to notice.
+sealed class BanDuration {
+  const BanDuration();
+
+  /// Until someone lifts it.
+  static const BanDuration permanent = PermanentBan();
+
+  /// For a fixed number of seconds.
+  static BanDuration seconds(int value) => TemporaryBan(value);
+
+  /// What `jsonEncode` should turn into the core's `BanDuration`.
+  Object get encoded;
+
+  /// Whether this ban ever expires on its own.
+  bool get isPermanent => this is PermanentBan;
+}
+
+/// See [BanDuration.permanent].
+class PermanentBan extends BanDuration {
+  const PermanentBan();
+
+  @override
+  Object get encoded => 'permanent';
+
+  @override
+  bool operator ==(Object other) => other is PermanentBan;
+
+  @override
+  int get hashCode => 'permanent'.hashCode;
+}
+
+/// See [BanDuration.seconds].
+class TemporaryBan extends BanDuration {
+  const TemporaryBan(this.seconds);
+
+  final int seconds;
+
+  @override
+  Object get encoded => {'seconds': seconds};
+
+  @override
+  bool operator ==(Object other) => other is TemporaryBan && other.seconds == seconds;
+
+  @override
+  int get hashCode => seconds.hashCode;
 }
 
 /// Who a chat message is addressed to.
@@ -376,6 +469,7 @@ class Message {
     required this.timestamp,
     this.sender,
     this.attachments = const [],
+    this.isPoke = false,
   });
 
   final int id;
@@ -392,6 +486,34 @@ class Message {
 
   /// Files shared with this message. Always empty until §39 lands.
   final List<Attachment> attachments;
+
+  /// Whether this is a poke rather than something typed.
+  ///
+  /// A poke *is* an interaction with a person and belongs in the conversation
+  /// with them — that is where the user looks for it — but it is not chat, so it
+  /// is marked and drawn apart rather than passing as something they said.
+  final bool isPoke;
+
+  /// A poke from `senderId`, as it appears in that conversation.
+  ///
+  /// [`id`] is supplied by the caller and must be one no real message can have:
+  /// a poke has no server-assigned id, and two of them in the same millisecond
+  /// would collide with each other if this made one up from the clock.
+  factory Message.poke({
+    required int id,
+    required int? senderId,
+    required String senderName,
+    required String content,
+    required int timestamp,
+  }) => Message(
+    id: id,
+    sender: senderId,
+    senderName: senderName,
+    target: ClientTarget(senderId ?? 0),
+    content: content,
+    timestamp: timestamp,
+    isPoke: true,
+  );
 
   DateTime get sentAt => DateTime.fromMillisecondsSinceEpoch(timestamp);
 
@@ -424,6 +546,8 @@ class Permissions {
     this.canSendPrivateMessage = false,
     this.canKick = false,
     this.canBan = false,
+    this.channelKnown = false,
+    this.clientKnown = false,
   });
 
   final bool canJoinChannel;
@@ -433,6 +557,17 @@ class Permissions {
   final bool canKick;
   final bool canBan;
 
+  /// Whether the channel-level answers came from the server.
+  ///
+  /// A server that sends no permission hints is not refusing anything, so the
+  /// bits above read as allowed when nothing arrives — the right answer for
+  /// deciding whether to grey out a button, and the wrong one for telling the
+  /// user what they may do. See `ts_model::Permissions::channel_known`.
+  final bool channelKnown;
+
+  /// Whether the four client-level answers came from the server.
+  final bool clientKnown;
+
   factory Permissions.fromJson(Map<String, dynamic> json) => Permissions(
     canJoinChannel: json['can_join_channel'] as bool? ?? false,
     canMoveClients: json['can_move_clients'] as bool? ?? false,
@@ -440,6 +575,8 @@ class Permissions {
     canSendPrivateMessage: json['can_send_private_message'] as bool? ?? false,
     canKick: json['can_kick'] as bool? ?? false,
     canBan: json['can_ban'] as bool? ?? false,
+    channelKnown: json['channel_known'] as bool? ?? false,
+    clientKnown: json['client_known'] as bool? ?? false,
   );
 }
 

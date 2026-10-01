@@ -161,6 +161,10 @@ class NotificationPolicy {
         );
 
       case ClientJoinedEvent(:final client):
+        // Server-query connections are not people. `serveradmin` is on every
+        // server for as long as it runs, so announcing it is noise the user can
+        // do nothing about — and the tree does not draw it either.
+        if (client.clientType != ClientType.voice) return null;
         // Someone already in the view is the tree being replayed, not a person
         // arriving.
         return _onPresence(
@@ -172,6 +176,12 @@ class NotificationPolicy {
         );
 
       case ClientLeftEvent(:final clientId):
+        // Same rule as joining. Read from the view, which still has them: the
+        // event has already removed them from it.
+        if (view?.clients[clientId]?.clientType != null &&
+            view!.clients[clientId]!.clientType != ClientType.voice) {
+          return null;
+        }
         return _onPresence(
           session,
           view,
@@ -258,7 +268,7 @@ class NotificationPolicy {
     final own = view?.ownClientId;
     if (message.sender != null && message.sender == own) return null;
 
-    final conversation = ConversationKey.of(message);
+    final conversation = ConversationKey.of(message, view?.ownClientId);
     final private = message.isPrivate;
 
     if (private ? !settings.directMessage : !settings.channelMessage) return null;

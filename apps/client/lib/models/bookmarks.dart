@@ -95,14 +95,28 @@ class NewBookmark {
     this.nickname,
     this.protocol = ProtocolKind.ts3,
     this.serverPassword,
+    this.replaces,
   });
 
   /// What the user calls it. Empty falls back to the host.
   final String name;
+
+  /// Whatever was typed. The core parses it, so `host`, `host:port` and
+  /// `ts3://host` all mean the same thing here as they do on the connect
+  /// screen — this front-end never has to agree with the core about syntax.
   final String address;
+
   final String? nickname;
   final ProtocolKind protocol;
   final String? serverPassword;
+
+  /// The address of an entry this one supersedes, when editing rather than
+  /// adding.
+  ///
+  /// An address is an entry's *identity* — saving replaces the row with the
+  /// same host and port — so changing the address is not an update at all
+  /// unless the core is told which row to drop.
+  final String? replaces;
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -110,6 +124,7 @@ class NewBookmark {
     'nickname': nickname,
     'protocol': protocol.wire,
     'server_password': serverPassword,
+    'replaces': replaces,
   };
 }
 

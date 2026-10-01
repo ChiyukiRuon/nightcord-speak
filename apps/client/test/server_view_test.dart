@@ -149,53 +149,137 @@ void main() {
       expect(target.clients[10]!.name, 'Alice B');
     });
 
-    test('a client that leaves moves to the offline list', () {
+    test('a client that leaves is gone, not moved to an offline list', () {
+      // It used to be kept, and drawn in an "offline" section of the tree. That
+      // read as a roster of who is around with half of it being people who are
+      // not, so the name goes with the connection.
       final target = view();
       target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
 
       target.apply(const ClientLeftEvent(10));
 
       expect(target.clients, isEmpty);
-      expect(target.offline.map((c) => c.name), ['Alice']);
-    });
-
-    test('a returning client leaves the offline list despite a new client id', () {
-      // TeamSpeak assigns a fresh client id on every reconnect, so matching on
-      // it would leave the old entry in the offline list forever and show one
-      // person twice.
-      final target = view();
-      applyAll(target, [
-        ClientJoinedEvent(clientWithUid(10, 'Alice', 1, 'uid-alice')),
-        const ClientLeftEvent(10),
-      ]);
-      expect(target.offline, hasLength(1));
-
-      target.apply(ClientJoinedEvent(clientWithUid(11, 'Alice', 1, 'uid-alice')));
-      expect(target.offline, isEmpty, reason: 'the same person came back');
-    });
-
-    test('a different person joining does not clear someone else', () {
-      final target = view();
-      applyAll(target, [
-        ClientJoinedEvent(clientWithUid(10, 'Alice', 1, 'uid-alice')),
-        const ClientLeftEvent(10),
-      ]);
-
-      target.apply(ClientJoinedEvent(clientWithUid(20, 'Bob', 1, 'uid-bob')));
-      expect(target.offline.map((c) => c.name), ['Alice']);
-    });
-
-    test('without a stable id, the client id is the only thing to match on', () {
-      // Server-query clients have no unique id; the fallback must still work.
-      final target = view();
-      applyAll(target, [
-        ClientJoinedEvent(client(10, 'Query', 1)),
-        const ClientLeftEvent(10),
-      ]);
-      expect(target.offline, hasLength(1));
-
-      target.apply(ClientJoinedEvent(client(10, 'Query', 1)));
       expect(target.offline, isEmpty);
+    });
+
+    test('a server-query client is not a member of any channel', () {
+      // `serveradmin` sits on every server for as long as it runs. Drawing it
+      // beside real users only ever raises the question of what it is.
+      final target = view();
+      applyAll(target, [
+        ClientJoinedEvent(client(10, 'Alice', 1)),
+        ClientJoinedEvent(
+          const Client(id: 99, name: 'serveradmin', channelId: 1, clientType: ClientType.query),
+        ),
+      ]);
+
+      expect(target.clientsIn(1).map((c) => c.name), ['Alice']);
+    });
+
+    test('a query client that hides among members is still left out', () {
+      // The filter is on the client's own type, not on anything about the
+      // channel it chose to sit in.
+      final target = view();
+      target.apply(
+        ClientJoinedEvent(
+          const Client(id: 99, name: 'serveradmin', channelId: 7, clientType: ClientType.query),
+        ),
+      );
+
+      expect(target.clientsIn(7), isEmpty);
+    });
+
+
+    test('a message from someone else lands in the thread with them', () {
+      // Regression: TS3's private message names its *recipient*, and on a
+      // message someone sends us that recipient is us. Keying the thread on it
+      // filed everything a person said under a conversation with ourselves —
+      // which marked our own row in the tree as unread and left the message
+      // somewhere nothing could open.
+      final target = view();
+      target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
+      target.apply(const OwnClientIdentifiedEvent(clientId: 1, channelId: 1));
+
+      target.apply(
+        MessageReceivedEvent(
+          Message(
+            id: 1,
+            sender: 10,
+            senderName: 'Alice',
+            // The wire field, verbatim: the message was addressed to us.
+            target: const ClientTarget(1),
+            content: 'hello',
+            timestamp: 0,
+          ),
+        ),
+      );
+
+      expect(target.conversations[ConversationKey.client(10)], hasLength(1));
+      expect(
+        target.conversations[ConversationKey.client(1)],
+        isNull,
+        reason: 'a conversation with ourselves is one nothing can open',
+      );
+    });
+
+    test('a message we sent stays in the thread with the other person', () {
+      // The other direction, which was already right and must stay so: our own
+      // message comes back from the server with the *other* person as the
+      // target.
+      final target = view();
+      target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
+      target.apply(const OwnClientIdentifiedEvent(clientId: 1, channelId: 1));
+
+      target.apply(
+        MessageReceivedEvent(
+          Message(
+            id: 2,
+            sender: 1,
+            senderName: 'Me',
+            target: const ClientTarget(10),
+            content: 'hi Alice',
+            timestamp: 0,
+          ),
+        ),
+      );
+
+      expect(target.conversations[ConversationKey.client(10)], hasLength(1));
+    });
+
+    test('a poke lands in the conversation with whoever sent it', () {
+      // A poke is an interaction with a person, and the conversation with them
+      // is where the user looks when their client beeps. It used to be shown
+      // once as a notice and then lost.
+      final target = view();
+      target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
+
+      target.apply(
+        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'wake up'),
+      );
+
+      final thread = target.conversations[ConversationKey.client(10)];
+      expect(thread, hasLength(1));
+      expect(thread!.single.senderName, 'Alice');
+      expect(thread.single.content, 'wake up');
+      expect(thread.single.isPoke, isTrue, reason: 'not something they typed');
+    });
+
+    test('a poke gets an id of its own', () {
+      // Two pokes in the same second must not collide in a list keyed by id,
+      // and neither may collide with the first real message — whose id the
+      // server assigns from one.
+      final target = view();
+      target.apply(
+        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'one'),
+      );
+      target.apply(
+        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'two'),
+      );
+
+      final thread = target.conversations[ConversationKey.client(10)]!;
+      expect(thread, hasLength(2));
+      expect(thread.map((m) => m.id).toSet(), hasLength(2));
+      expect(thread.every((m) => m.id < 0), isTrue);
     });
 
     test('our own client is identified and tracked', () {

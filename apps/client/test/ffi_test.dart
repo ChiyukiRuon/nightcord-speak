@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/ffi/native.dart';
 import 'package:nightcord_client/ffi/rust_client.dart';
 import 'package:nightcord_client/models/bookmarks.dart';
+import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
 
@@ -98,6 +99,34 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(received, isEmpty);
+    });
+
+    test('the moderation commands reach the core', () async {
+      // A session that does not exist, so every one of them fails — which is
+      // the point: it proves the C symbols exist, the arguments cross the ABI
+      // in the right order, and each call comes back as a named result rather
+      // than as silence or a crash. What they do against a real server is a
+      // server test, not this one.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final calls = <String, void Function()>{
+        'poke': () => client.poke(99, 2, 'hello'),
+        'kick': () => client.kick(99, 2, KickScope.server, null),
+        'ban': () => client.ban(99, 2, BanDuration.seconds(60), 'because'),
+        'voice_set_client_volume': () => client.setClientVolume(99, 2, 0.5),
+      };
+
+      for (final entry in calls.entries) {
+        final pending = awaitCommand(client, entry.key);
+        entry.value();
+        final result = await pending;
+        expect(
+          result.ok,
+          isFalse,
+          reason: '${entry.key} against a missing session should report failure',
+        );
+      }
     });
 
     test('disposing twice is harmless', () {
@@ -283,6 +312,90 @@ void main() {
       expect(saved, hasLength(1));
       expect(saved.single.host, '192.168.31.128');
       expect(saved.single.port, 9987);
+    });
+
+    test('editing a server moves it rather than leaving the old one behind', () async {
+      // An address is an entry's identity, so changing it is not an update at
+      // all unless the core is told which row the edit supersedes. Without
+      // `replaces` the old address stays and a second entry appears beside it.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final original = await readBookmarks(client);
+      addTearDown(() => client.updateBookmarks(original));
+
+      var pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(
+          name: 'Before',
+          address: '192.168.31.128:9999',
+          nickname: 'Someone',
+        ),
+      );
+      await pending;
+
+      pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(
+          name: 'After',
+          address: '192.168.31.129:9999',
+          nickname: 'Someone',
+          replaces: '192.168.31.128:9999',
+        ),
+      );
+      final result = await pending;
+      expect(result.ok, isTrue, reason: result.error?.debugMessage);
+
+      // Matched on the port as well as the host: the developer's real address
+      // book has other servers on that same address, and a filter that caught
+      // them would fail for a reason that has nothing to do with the edit.
+      final saved = (await readBookmarks(client)).bookmarks;
+      expect(
+        saved.where((b) => b.host == '192.168.31.128' && b.port == 9999),
+        isEmpty,
+        reason: 'the entry the edit superseded is gone',
+      );
+
+      final moved = saved.where((b) => b.host == '192.168.31.129' && b.port == 9999);
+      expect(moved, hasLength(1));
+      expect(moved.single.name, 'After');
+      expect(moved.single.nickname, 'Someone', reason: 'the rest of the edit came with it');
+    });
+
+    test('editing without moving the address does not reorder the list', () async {
+      // `replaces` and the new address being equal is an ordinary save. Handled
+      // by the same code path, and getting it wrong would silently push the
+      // entry to the end of the list every time its name was changed.
+      final client = RustClient.start();
+      addTearDown(client.dispose);
+
+      final original = await readBookmarks(client);
+      addTearDown(() => client.updateBookmarks(original));
+
+      var pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(name: 'First', address: '192.168.31.128:9998'),
+      );
+      await pending;
+
+      final before = (await readBookmarks(client)).bookmarks;
+      final at = before.indexWhere((b) => b.port == 9998);
+      expect(at, isNonNegative);
+
+      pending = awaitCommand(client, 'bookmark_add');
+      client.addBookmark(
+        const NewBookmark(
+          name: 'Renamed',
+          address: '192.168.31.128:9998',
+          replaces: '192.168.31.128:9998',
+        ),
+      );
+      await pending;
+
+      final after = (await readBookmarks(client)).bookmarks;
+      expect(after, hasLength(before.length));
+      expect(after.indexWhere((b) => b.port == 9998), at, reason: 'same position');
+      expect(after[at].name, 'Renamed');
     });
 
     test('an address the core cannot parse is refused rather than stored', () async {

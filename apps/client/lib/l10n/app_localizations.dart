@@ -428,6 +428,18 @@ abstract class AppLocalizations {
   /// **'Higher is harder to trigger by room noise, and takes a louder voice.'**
   String get settingsSensitivityHint;
 
+  /// Label above the master playback volume slider
+  ///
+  /// In en, this message translates to:
+  /// **'Output volume'**
+  String get settingsVolume;
+
+  /// Points at the per-person volume control
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to everyone. Individual people can be adjusted from their entry in the channel tree.'**
+  String get settingsVolumeHint;
+
   /// Shown in place of the log path where there is none
   ///
   /// In en, this message translates to:
@@ -542,12 +554,6 @@ abstract class AppLocalizations {
   /// **'Name'**
   String get connectNameLabel;
 
-  /// Heading of the offline members section
-  ///
-  /// In en, this message translates to:
-  /// **'Offline — {count}'**
-  String sidebarOffline(int count);
-
   /// Name shown for a session whose server has not named itself yet
   ///
   /// In en, this message translates to:
@@ -560,11 +566,227 @@ abstract class AppLocalizations {
   /// **'Saved'**
   String get sidebarSheetSaved;
 
+  /// Sheet item that saves the connected server
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark this server'**
+  String get sidebarBookmarkAdd;
+
+  /// Sheet item that unsaves the connected server
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from saved'**
+  String get sidebarBookmarkRemove;
+
+  /// Menu item that opens the saved-server editor
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get sidebarEditSaved;
+
+  /// Title of the dialog that edits a bookmark
+  ///
+  /// In en, this message translates to:
+  /// **'Edit saved server'**
+  String get bookmarkEditTitle;
+
+  /// Explains what editing the address does
+  ///
+  /// In en, this message translates to:
+  /// **'Changing this moves the entry; the old one is dropped.'**
+  String get bookmarkEditAddressHint;
+
   /// Entry that returns to the connect screen
   ///
   /// In en, this message translates to:
   /// **'Add server'**
   String get sidebarAddServer;
+
+  /// Accessibility label on a member whose menu opens on right click
+  ///
+  /// In en, this message translates to:
+  /// **'Actions for {name}'**
+  String memberMenu(String name);
+
+  /// Menu item that makes the other client beep
+  ///
+  /// In en, this message translates to:
+  /// **'Poke'**
+  String get memberPoke;
+
+  /// Title of the poke message prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Poke {name}'**
+  String memberPokePrompt(String name);
+
+  /// Label of the optional text sent with a poke
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get memberPokeMessage;
+
+  /// Menu item that moves a member into another channel
+  ///
+  /// In en, this message translates to:
+  /// **'Move to channel…'**
+  String get memberMove;
+
+  /// Title of the channel picker
+  ///
+  /// In en, this message translates to:
+  /// **'Move {name}'**
+  String memberMoveTitle(String name);
+
+  /// Label of the channel dropdown in the move dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Channel'**
+  String get memberMoveChannel;
+
+  /// Menu item: remove from the current channel only
+  ///
+  /// In en, this message translates to:
+  /// **'Kick from channel'**
+  String get memberKickChannel;
+
+  /// Menu item: remove from the server entirely
+  ///
+  /// In en, this message translates to:
+  /// **'Kick from server'**
+  String get memberKickServer;
+
+  /// Menu item that opens the ban dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Ban…'**
+  String get memberBan;
+
+  /// Title of the ban dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Ban {name}'**
+  String memberBanTitle(String name);
+
+  /// Label of the ban length selector
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get memberBanDuration;
+
+  /// Ban length: until someone lifts it
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently'**
+  String get memberBanPermanent;
+
+  /// Ban length in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1 {One minute} other {{count} minutes}}'**
+  String memberBanMinutes(int count);
+
+  /// Ban length in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1 {One hour} other {{count} hours}}'**
+  String memberBanHours(int count);
+
+  /// Ban length in days
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1 {One day} other {{count} days}}'**
+  String memberBanDays(int count);
+
+  /// Label of the optional explanation sent with a kick or ban
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get memberReason;
+
+  /// Menu item that opens the per-person volume slider
+  ///
+  /// In en, this message translates to:
+  /// **'Volume…'**
+  String get memberVolume;
+
+  /// Title of the per-person volume dialog
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s volume'**
+  String memberVolumeTitle(String name);
+
+  /// Explains that a per-person volume is not remembered
+  ///
+  /// In en, this message translates to:
+  /// **'Applies for this session only. The output volume in the settings moves everyone together.'**
+  String get memberVolumeHint;
+
+  /// Tooltip on a menu item greyed out by permissions
+  ///
+  /// In en, this message translates to:
+  /// **'Your server permissions do not allow this'**
+  String get memberNoPermission;
+
+  /// Title of the panel listing what the server lets us do
+  ///
+  /// In en, this message translates to:
+  /// **'Your permissions'**
+  String get permissionsTitle;
+
+  /// Explains where the permission list comes from
+  ///
+  /// In en, this message translates to:
+  /// **'Reported by the server for you, in the channel you are in.'**
+  String get permissionsHint;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Join channels'**
+  String get permissionsJoinChannel;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Move other people'**
+  String get permissionsMoveClients;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Send channel messages'**
+  String get permissionsSendChannelMessage;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Send private messages'**
+  String get permissionsSendPrivateMessage;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Kick'**
+  String get permissionsKick;
+
+  /// Permission name
+  ///
+  /// In en, this message translates to:
+  /// **'Ban'**
+  String get permissionsBan;
+
+  /// Shown when the server sent no permission hints at all
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not tell clients what they may do, so there is nothing to show.'**
+  String get permissionsNotReported;
+
+  /// Shown when the server answered but granted nothing special
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing beyond what every user can do.'**
+  String get permissionsNone;
 
   /// Tooltip of the away badge on a member row
   ///
@@ -661,6 +883,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Private chat'**
   String get chatPrivateLabel;
+
+  /// A poke with nothing written with it
+  ///
+  /// In en, this message translates to:
+  /// **'{name} poked you'**
+  String chatPoked(String name);
+
+  /// A poke carrying a message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} poked you: {message}'**
+  String chatPokedWith(String name, String message);
 
   /// Tooltip of the button that leaves a private conversation
   ///
@@ -805,6 +1039,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log: {path}'**
   String shellLogPath(String path);
+
+  /// Tooltip of the button that closes the error bar
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get shellDismissError;
 
   /// Button on the error snackbar that reveals the log directory
   ///

@@ -165,6 +165,37 @@ class RustClient implements ClientTransport {
   void moveClient(int session, int clientId, int channelId) =>
       _bindings.moveClient(_handle, session, clientId, channelId);
 
+  /// Pokes another client.
+  @override
+  void poke(int session, int clientId, String message) => _withText(
+    message,
+    (text) => _bindings.poke(_handle, session, clientId, text),
+  );
+
+  /// Removes another client from a channel or from the server.
+  ///
+  /// `message` is the optional explanation the server passes on. An empty one
+  /// means "none": the core reads a zero-length string as absent, which is the
+  /// same thing the ABI cannot say with a null pointer without another helper.
+  @override
+  void kick(int session, int clientId, KickScope scope, String? message) => _withText(
+    jsonEncode(scope.wire),
+    (json) => _withText(
+      message ?? '',
+      (text) => _bindings.kick(_handle, session, clientId, json, text),
+    ),
+  );
+
+  /// Bans another client. See [kick] for the empty-string convention.
+  @override
+  void ban(int session, int clientId, BanDuration duration, String? reason) => _withText(
+    jsonEncode(duration.encoded),
+    (json) => _withText(
+      reason ?? '',
+      (text) => _bindings.ban(_handle, session, clientId, json, text),
+    ),
+  );
+
   /// Asks for the audio devices for `"input"` or `"output"`.
   ///
   /// The answer arrives as a `audio_devices` [CommandResult] whose `data` holds
@@ -256,6 +287,14 @@ class RustClient implements ClientTransport {
     bookmark.toJson(),
     (json) => _bindings.bookmarkAdd(_handle, json),
   );
+
+  /// Scales one client's audio within the mix.
+  ///
+  /// Purely local, so it works whether or not voice is running — and the core
+  /// remembers it, so it survives that person going quiet and speaking again.
+  @override
+  void setClientVolume(int session, int clientId, double volume) =>
+      _bindings.setClientVolume(_handle, session, clientId, volume);
 
   /// What the previous runs left behind.
   ///

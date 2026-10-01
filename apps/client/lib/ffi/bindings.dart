@@ -85,6 +85,62 @@ typedef _MoveClientDart = void Function(
   int channelId,
 );
 
+typedef _PokeC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Uint16 clientId,
+  Pointer<Utf8> message,
+);
+typedef _PokeDart = void Function(
+  Handle handle,
+  int session,
+  int clientId,
+  Pointer<Utf8> message,
+);
+
+typedef _KickC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Uint16 clientId,
+  Pointer<Utf8> scope,
+  Pointer<Utf8> message,
+);
+typedef _KickDart = void Function(
+  Handle handle,
+  int session,
+  int clientId,
+  Pointer<Utf8> scope,
+  Pointer<Utf8> message,
+);
+
+typedef _BanC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Uint16 clientId,
+  Pointer<Utf8> duration,
+  Pointer<Utf8> reason,
+);
+typedef _BanDart = void Function(
+  Handle handle,
+  int session,
+  int clientId,
+  Pointer<Utf8> duration,
+  Pointer<Utf8> reason,
+);
+
+typedef _SetClientVolumeC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Uint16 clientId,
+  Float volume,
+);
+typedef _SetClientVolumeDart = void Function(
+  Handle handle,
+  int session,
+  int clientId,
+  double volume,
+);
+
 // --- audio -----------------------------------------------------------------
 
 typedef _AudioDevicesC = Void Function(Handle handle, Pointer<Utf8> direction);
@@ -172,6 +228,12 @@ class NightcordBindings {
         'nightcord_send_message',
       ),
       moveClient = library.lookupFunction<_MoveClientC, _MoveClientDart>('nightcord_move_client'),
+      poke = library.lookupFunction<_PokeC, _PokeDart>('nightcord_poke'),
+      kick = library.lookupFunction<_KickC, _KickDart>('nightcord_kick'),
+      ban = library.lookupFunction<_BanC, _BanDart>('nightcord_ban'),
+      setClientVolume = library.lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
+        'nightcord_voice_set_client_volume',
+      ),
       audioDevices = library.lookupFunction<_AudioDevicesC, _AudioDevicesDart>(
         'nightcord_audio_devices',
       ),
@@ -267,6 +329,18 @@ class NightcordBindings {
 
   /// Moves another client.
   final void Function(Handle, int, int, int) moveClient;
+
+  /// Pokes another client.
+  final void Function(Handle, int, int, Pointer<Utf8>) poke;
+
+  /// Removes another client; `scope` is serialised `KickScope` JSON.
+  final void Function(Handle, int, int, Pointer<Utf8>, Pointer<Utf8>) kick;
+
+  /// Bans another client; `duration` is serialised `BanDuration` JSON.
+  final void Function(Handle, int, int, Pointer<Utf8>, Pointer<Utf8>) ban;
+
+  /// Scales one client's audio within the mix.
+  final void Function(Handle, int, int, double) setClientVolume;
 
   /// Requests the device list for `"input"` or `"output"`.
   final void Function(Handle, Pointer<Utf8>) audioDevices;

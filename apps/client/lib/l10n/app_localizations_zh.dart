@@ -180,6 +180,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSensitivityHint => '越高越不容易被环境噪音触发，也越需要说得响一点。';
 
   @override
+  String get settingsVolume => '输出音量';
+
+  @override
+  String get settingsVolumeHint => '对所有人生效。单个成员的音量可以在频道树里对他单独调。';
+
+  @override
   String get settingsNoLogDirectory =>
       '这个平台没有可写的日志目录，记录只写入标准错误输出。\n（Android 与 iOS 需要由宿主应用提供沙箱路径。）';
 
@@ -240,11 +246,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectNameLabel => '名称';
 
   @override
-  String sidebarOffline(int count) {
-    return '离线 — $count';
-  }
-
-  @override
   String sidebarSessionFallback(int id) {
     return '服务器 $id';
   }
@@ -253,7 +254,131 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidebarSheetSaved => '已保存';
 
   @override
+  String get sidebarBookmarkAdd => '收藏这个服务器';
+
+  @override
+  String get sidebarBookmarkRemove => '取消收藏';
+
+  @override
+  String get sidebarEditSaved => '编辑';
+
+  @override
+  String get bookmarkEditTitle => '编辑收藏的服务器';
+
+  @override
+  String get bookmarkEditAddressHint => '改地址是把这条目搬过去，旧的会被删掉。';
+
+  @override
   String get sidebarAddServer => '添加服务器';
+
+  @override
+  String memberMenu(String name) {
+    return '$name 的操作';
+  }
+
+  @override
+  String get memberPoke => '戳一戳';
+
+  @override
+  String memberPokePrompt(String name) {
+    return '戳 $name';
+  }
+
+  @override
+  String get memberPokeMessage => '留言';
+
+  @override
+  String get memberMove => '移到频道…';
+
+  @override
+  String memberMoveTitle(String name) {
+    return '移动 $name';
+  }
+
+  @override
+  String get memberMoveChannel => '频道';
+
+  @override
+  String get memberKickChannel => '从频道踢出';
+
+  @override
+  String get memberKickServer => '从服务器踢出';
+
+  @override
+  String get memberBan => '封禁…';
+
+  @override
+  String memberBanTitle(String name) {
+    return '封禁 $name';
+  }
+
+  @override
+  String get memberBanDuration => '时长';
+
+  @override
+  String get memberBanPermanent => '永久';
+
+  @override
+  String memberBanMinutes(int count) {
+    return '$count 分钟';
+  }
+
+  @override
+  String memberBanHours(int count) {
+    return '$count 小时';
+  }
+
+  @override
+  String memberBanDays(int count) {
+    return '$count 天';
+  }
+
+  @override
+  String get memberReason => '理由（可不填）';
+
+  @override
+  String get memberVolume => '音量…';
+
+  @override
+  String memberVolumeTitle(String name) {
+    return '$name 的音量';
+  }
+
+  @override
+  String get memberVolumeHint => '只在本次会话有效。设置里的「输出音量」是所有人一起调。';
+
+  @override
+  String get memberNoPermission => '你的服务器权限不允许这样做';
+
+  @override
+  String get permissionsTitle => '我的权限';
+
+  @override
+  String get permissionsHint => '由服务器针对你、在你当前所在频道下给出。';
+
+  @override
+  String get permissionsJoinChannel => '加入频道';
+
+  @override
+  String get permissionsMoveClients => '移动他人';
+
+  @override
+  String get permissionsSendChannelMessage => '发频道消息';
+
+  @override
+  String get permissionsSendPrivateMessage => '发私聊消息';
+
+  @override
+  String get permissionsKick => '踢人';
+
+  @override
+  String get permissionsBan => '封禁';
+
+  @override
+  String get permissionsNotReported => '这个服务器不向客户端报告权限，所以没有可显示的内容。';
+
+  @override
+  String get permissionsNone => '除了每个用户都能做的事，没有额外的权限。';
 
   @override
   String get memberAway => '离开';
@@ -302,6 +427,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatPrivateLabel => '私聊';
+
+  @override
+  String chatPoked(String name) {
+    return '$name 戳了你一下';
+  }
+
+  @override
+  String chatPokedWith(String name, String message) {
+    return '$name 戳了你一下：$message';
+  }
 
   @override
   String get chatBackToChannel => '返回频道';
@@ -388,6 +523,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String shellLogPath(String path) {
     return '日志：$path';
   }
+
+  @override
+  String get shellDismissError => '关闭';
 
   @override
   String get shellOpenLog => '打开日志';

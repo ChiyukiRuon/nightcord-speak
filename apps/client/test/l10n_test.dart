@@ -35,9 +35,25 @@ void main() {
       expect(code.describe(zh), '服务器返回错误码 256');
       expect(code.describe(en), 'The server returned error code 256');
 
-      const denied = ClientError(kind: 'permission', detail: {'action': 'join channel'});
+      // Nested exactly as the core sends it: an inner enum variant is tagged
+      // as well as the outer one, and reading these flat is what left every
+      // refusal saying nothing but "permission".
+      const denied = ClientError(
+        kind: 'permission',
+        detail: {
+          'denied_for': {'action': 'join channel'},
+        },
+      );
+      const missing = ClientError(
+        kind: 'permission',
+        detail: {
+          'missing_permission': {'permission': 203},
+        },
+      );
       expect(denied.describe(zh), contains('权限不足'));
       expect(denied.describe(en), contains('Permission denied'));
+      // The id is the only actionable part of a refusal, so it has to survive.
+      expect(missing.describe(en), contains('203'));
 
       const device = ClientError(kind: 'devices', detail: {'name': 'Headset'});
       expect(device.describe(zh), '找不到设备 Headset');

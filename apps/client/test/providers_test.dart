@@ -17,6 +17,7 @@ import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/settings.dart';
 import 'package:nightcord_client/providers/providers.dart';
+import 'package:nightcord_client/state/server_view.dart';
 
 /// A transport that only records, so a test can prove the app talks to the
 /// interface and not to a particular implementation.
@@ -101,6 +102,55 @@ void main() {
     await pumpEventQueue();
 
     expect(container.read(lastErrorProvider), same(error));
+  });
+
+  test('opening a conversation republishes the view', () async {
+    // Regression: `view.open(...)` called straight from a tap handler mutated
+    // the view without telling anyone, so the chat panel kept showing the
+    // previous thread until some *unrelated* event happened to rebuild it. That
+    // is what made opening a private conversation, and going back out of one,
+    // feel slow rather than instant.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [clientTransportProvider.overrideWithValue(transport)],
+    );
+
+    // Listened to *before* the event is sent: the provider subscribes to the
+    // transport on first read, so an event sent earlier goes nowhere.
+    var notifications = 0;
+    final subscription = container.listen(sessionsProvider, (_, _) {
+      notifications++;
+    });
+    addTearDown(subscription.close);
+
+    // A session has to exist before there is a view to open anything in.
+    transport._events.add(const DomainEvent(
+      session: 7,
+      event: ConnectionStateChangedEvent(ConnectionState.connected),
+    ));
+    await pumpEventQueue();
+    notifications = 0;
+
+    final view = container.read(sessionsProvider.notifier);
+    view.openConversation(7, ConversationKey.client(2));
+    view.openConversation(7, ConversationKey.client(2));
+    view.closeConversation(7);
+
+    final published = container.read(sessionsProvider);
+    expect(published[7]?.openConversation, isNull, reason: 'closed again');
+    expect(
+      notifications,
+      3,
+      reason: 'each change has to reach whoever is drawing it',
+    );
+  });
+
+  test('a conversation for a session that does not exist is ignored', () {
+    // Nothing to publish, and nothing to crash on either.
+    final container = ProviderContainer.test();
+    container.read(sessionsProvider.notifier).openConversation(99, 'client:1');
+    container.read(sessionsProvider.notifier).closeConversation(99);
+    expect(container.read(sessionsProvider), isEmpty);
   });
 
   test('the stores speak to the transport interface, not to the FFI', () async {

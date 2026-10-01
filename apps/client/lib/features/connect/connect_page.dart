@@ -1,5 +1,7 @@
 // The screen shown before anything is connected.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +14,7 @@ import '../../models/connect_request.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
+import '../settings/settings_dialog.dart';
 
 /// Collects a server address and nickname and opens a connection.
 class ConnectPage extends ConsumerStatefulWidget {
@@ -208,13 +211,35 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                     // from the theme, so it follows all three of them.
                     const AppLogo(size: 32),
                     SizedBox(width: tokens.space3),
-                    Text(
-                      'Nightcord Speak',
-                      // §12.2's `headline`: this is a page title. Not `display`
-                      // (28) — that is for the rare special screen, and 28 next
-                      // to a 32px mark would make the mark look like an
-                      // accident.
-                      style: Theme.of(context).textTheme.headlineMedium,
+                    // `Expanded`, not a fixed `Text` plus a `Spacer`: the
+                    // settings button shares this row now, and at a narrow
+                    // window the three of them overflowed by a couple of
+                    // dozen pixels. Taking the space that is left both pushes
+                    // the button to the edge and gives the brand something to
+                    // do other than run off it.
+                    Expanded(
+                      child: Text(
+                        'Nightcord Speak',
+                        overflow: TextOverflow.ellipsis,
+                        // §12.2's `headline`: this is a page title. Not
+                        // `display` (28) — that is for the rare special screen,
+                        // and 28 next to a 32px mark would make the mark look
+                        // like an accident.
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                    ),
+                    // The way in before there is a server, which is when a
+                    // user is most likely to be looking for the log folder or
+                    // the language — the settings dialog's own comment says as
+                    // much. No session: everything in there except the
+                    // microphone test is a preference.
+                    IconButton(
+                      tooltip: l10n.settingsTitle,
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => const SettingsDialog(),
+                      ),
                     ),
                   ],
                 ),
@@ -364,7 +389,12 @@ class _SavedServers extends ConsumerWidget {
 }
 
 /// One saved server.
-class _SavedServerRow extends StatelessWidget {
+/// One saved server: click to fill the form, click twice to connect.
+///
+/// Stateful because the double click is detected here rather than by
+/// `GestureDetector.onDoubleTap`, and that needs to remember when the last
+/// click was.
+class _SavedServerRow extends StatefulWidget {
   const _SavedServerRow({
     required this.bookmark,
     required this.onPick,
@@ -380,20 +410,59 @@ class _SavedServerRow extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
+  State<_SavedServerRow> createState() => _SavedServerRowState();
+}
+
+class _SavedServerRowState extends State<_SavedServerRow> {
+  /// How long after a click a second one still counts as a double click.
+  ///
+  /// Flutter's own `kDoubleTapTimeout`, spelled out rather than imported so
+  /// that changing it here is a decision rather than a consequence of a
+  /// framework bump.
+  static const Duration _doubleClickWindow = Duration(milliseconds: 300);
+
+  /// Armed while a second click would still make the last one a double click.
+  ///
+  /// A `Timer` rather than a recorded timestamp: a timestamp would have to be
+  /// read against a clock, and the only clocks available here are the wall
+  /// clock — which a widget test does not control — or the monotonic one. A
+  /// timer runs on the scheduler's clock, which is the one the rest of the
+  /// frame schedule uses and the one `flutter_test` can advance.
+  Timer? _doubleClickWindowOpen;
+
+  @override
+  void dispose() {
+    _doubleClickWindowOpen?.cancel();
+    super.dispose();
+  }
+
+  void _onTap() {
+    if (_doubleClickWindowOpen?.isActive ?? false) {
+      // The second click of a pair. Cancel first, so a third click starts a
+      // fresh pair rather than chaining into another connect.
+      _doubleClickWindowOpen!.cancel();
+      _doubleClickWindowOpen = null;
+      widget.onConnect();
+      return;
+    }
+
+    // The form fills on the click itself, which is the whole point of doing
+    // this by hand: a second click connects *in addition*, rather than the
+    // first having been held back to find out.
+    widget.onPick();
+
+    _doubleClickWindowOpen = Timer(_doubleClickWindow, () {
+      _doubleClickWindowOpen = null;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tokens = DesignTokens.of(context);
+    final bookmark = widget.bookmark;
 
-    return GestureDetector(
-      // Only the double tap. The tile keeps its own `onTap`, so a single click
-      // still fills the form and the row still shows the tile's ink.
-      //
-      // The cost is that Flutter holds a single tap back for the double-tap
-      // timeout (~300 ms) while it waits to see whether a second one is
-      // coming, so the form fills a beat after the click. That is the price of
-      // having both gestures on one row.
-      onDoubleTap: onConnect,
-      child: ListTile(
+    return ListTile(
         contentPadding: EdgeInsets.zero,
         dense: true,
         // Icon colour and size come from the theme's `listTileTheme` and
@@ -413,20 +482,22 @@ class _SavedServerRow extends StatelessWidget {
             context,
           ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
-        // Fills the form rather than connecting: this screen exists so the
-        // details can still be changed before the connection is made. Double
-        // click is the shortcut past that.
-        onTap: onPick,
+        // Fills the form, or connects if this is the second click of a pair:
+        // see [_SavedServerRowState._onTap]. Left to Flutter, a `ListTile` that
+        // also had an `onDoubleTap` would hold every single click back for the
+        // double-tap timeout, so the form filled a beat after the click — which
+        // is the whole reason this is hand-rolled.
+        onTap: _onTap,
         trailing: PopupMenuButton<String>(
           tooltip: l10n.connectMoreTooltip,
           icon: const Icon(Icons.more_vert),
-          onSelected: (choice) => choice == 'rename' ? onRename() : onDelete(),
+          onSelected: (choice) =>
+              choice == 'rename' ? widget.onRename() : widget.onDelete(),
           itemBuilder: (_) => [
             PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
             PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
           ],
         ),
-      ),
     );
   }
 }

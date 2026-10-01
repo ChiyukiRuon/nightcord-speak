@@ -35,11 +35,18 @@ const double _dialogWidth = 480;
 
 /// Settings, opened from the voice bar.
 class SettingsDialog extends ConsumerStatefulWidget {
-  /// Settings that apply to `session`.
-  const SettingsDialog({required this.session, super.key});
+  /// Settings that apply to `session`, when there is one.
+  const SettingsDialog({this.session, super.key});
 
-  /// The session the audio section configures.
-  final int session;
+  /// The session the audio controls refer to, or null when the dialog was
+  /// opened from somewhere that has no connection — the connect screen.
+  ///
+  /// Everything here except the microphone test and the device swap is a
+  /// preference, and preferences do not need a server. Making the dialog
+  /// unreachable until a connection existed put "where did the log go" and
+  /// "which language" behind a server, which is exactly when a user is most
+  /// likely to be looking for them.
+  final int? session;
 
   @override
   ConsumerState<SettingsDialog> createState() => _SettingsDialogState();
@@ -69,6 +76,9 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   /// Kept apart from the stored settings so a drag does not write the file once
   /// per pixel; the change is committed when the user lets go.
   double? _dragging;
+
+  /// The volume slider's position while a drag is in progress.
+  double? _draggingVolume;
 
   @override
   void initState() {
@@ -142,8 +152,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     }
 
     final devices = ref.watch(audioDevicesProvider);
-    final view = ref.watch(sessionsProvider)[widget.session];
-    final connected = view?.isConnected ?? false;
+    final connected = _connectedSession != null;
 
     // Background, border, radius, shadow and the overlay colour all come from
     // the theme's `dialogTheme` (§25). This used to name the sidebar colour,
@@ -191,7 +200,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                   _audio(settings, settings.audio.copyWith(mode: mode));
                 },
               ),
-              SizedBox(height: tokens.space3),
+              SizedBox(height: tokens.space4),
               _DeviceInUse(status: ref.watch(voiceStatusProvider)),
               SizedBox(height: tokens.space4),
               _SensitivitySlider(
@@ -214,9 +223,20 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 threshold: settings.audio.activation.sensitivity,
               ),
               SizedBox(height: tokens.space3),
+              _VolumeSlider(
+                value: _draggingVolume ?? settings.audio.outputVolume,
+                onChanged: (value) => setState(() => _draggingVolume = value),
+                onChangeEnd: (value) {
+                  setState(() => _draggingVolume = null);
+                  _audio(settings, settings.audio.copyWith(outputVolume: value));
+                },
+              ),
+              SizedBox(height: tokens.space3),
               // Said out loud because a device cannot be swapped under a running
               // stream: the core would have to tear it down and reopen it, which
               // is worse than waiting when someone is mid-sentence.
+              // The codec profile is not in this boat — it is retuned in place —
+              // so the note names only the devices.
               Text(
                 connected ? l10n.settingsDeviceChangeNote : l10n.settingsConnectFirst,
                 style: Theme.of(
@@ -395,16 +415,28 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     final devicesChanged =
         audio.inputDevice != settings.audio.inputDevice ||
         audio.outputDevice != settings.audio.outputDevice;
-    final connected = ref.read(sessionsProvider)[widget.session]?.isConnected ?? false;
-    if (!devicesChanged || !connected) return;
+    final session = _connectedSession;
+    if (!devicesChanged || session == null) return;
 
     // Passed explicitly: the settings write above is asynchronous, and a
     // `voice_start` that raced it would open the device that was stored last.
     ref.read(clientTransportProvider).voiceStart(
-      widget.session,
+      session,
       inputDevice: audio.inputDevice,
       outputDevice: audio.outputDevice,
     );
+  }
+
+  /// The session the audio controls act on, or null when there is nothing to
+  /// act on: no session at all, or one that is not connected.
+  ///
+  /// One place decides this, so the four call sites cannot disagree about
+  /// whether voice can be started.
+  int? get _connectedSession {
+    final session = widget.session;
+    if (session == null) return null;
+    final view = ref.read(sessionsProvider)[session];
+    return (view?.isConnected ?? false) ? session : null;
   }
 
   /// Stores a connection change.
@@ -446,9 +478,11 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     if (_testing) {
       transport.voiceStop();
     } else {
+      final session = _connectedSession;
+      if (session == null) return;
       final audio = ref.read(settingsProvider)?.audio;
       transport.voiceStart(
-        widget.session,
+        session,
         inputDevice: audio?.inputDevice,
         outputDevice: audio?.outputDevice,
       );
@@ -739,6 +773,54 @@ class _SensitivitySlider extends StatelessWidget {
   }
 }
 
+/// The master playback gain.
+class _VolumeSlider extends StatelessWidget {
+  const _VolumeSlider({
+    required this.value,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              l10n.settingsVolume,
+              style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+            ),
+            const Spacer(),
+            Text(
+              '${(value * 100).round()}%',
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+            ),
+          ],
+        ),
+        Slider(
+          value: value.clamp(0.0, 1.0),
+          onChanged: onChanged,
+          onChangeEnd: onChangeEnd,
+        ),
+        Text(
+          l10n.settingsVolumeHint,
+          style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+        ),
+      ],
+    );
+  }
+}
+
 /// The "where did the log go" half of the dialog.
 class _LogSection extends StatelessWidget {
   const _LogSection({required this.directory});
@@ -804,9 +886,17 @@ class _DeviceDropdown extends StatelessWidget {
     // `initialValue` is read once and `FormFieldState` never reacts to it
     // changing, so a dropdown built while the list was still empty would show
     // 「系统默认」 for the rest of the dialog's life — the items arriving would
-    // not correct the selection. Keying on the list rebuilds it when one does.
+    // not correct the selection. A key rebuilds it when one does.
+    //
+    // The key is the *contents*, not the list object. `ObjectKey(devices)`
+    // compared by identity, and the dialog re-enumerates the devices every five
+    // seconds to notice a headset being plugged in — so a fresh, identical list
+    // arrived on a timer and swapped the dropdown out from under whoever had it
+    // open. Keying on what is actually in the list means an unchanged
+    // enumeration changes nothing.
+    final signature = devices.map((d) => d.id).join('\u0000');
     return DropdownButtonFormField<String>(
-      key: ObjectKey(devices),
+      key: ValueKey('$signature|$known'),
       initialValue: known,
       isExpanded: true,
       decoration: InputDecoration(
