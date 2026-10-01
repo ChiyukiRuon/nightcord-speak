@@ -41,3 +41,6 @@ desktop.ini
 .playwright-mcp/
 # Screenshots taken at the repository root during a smoke test.
 /*.png
+
+# Flutter DevTools writes this into the project; it is tool state, not ours.
+devtools_options.yaml
