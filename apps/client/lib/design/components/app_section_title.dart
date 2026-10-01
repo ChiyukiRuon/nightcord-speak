@@ -1,8 +1,8 @@
 // A heading above a group of rows.
 //
-// Two private copies of this existed — `_SectionTitle` in the settings dialog
-// and `_SheetHeading` in the channel sidebar — identical in type and different
-// only in padding, which is the caller's business anyway.
+// Two private copies of this existed — one in the settings surface, one in the
+// channel sidebar — identical in type and different only in padding, which is
+// the caller's business anyway.
 
 import 'package:flutter/material.dart';
 

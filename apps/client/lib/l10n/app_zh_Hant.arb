@@ -1,7 +1,7 @@
 {
   "@@locale": "zh_Hant",
 
-  "closeButton": "關閉",
+  "backButton": "返回",
   "logLabel": "日誌",
   "openLogFolder": "開啟日誌資料夾",
 

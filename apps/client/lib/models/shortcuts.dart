@@ -24,7 +24,7 @@ enum ShortcutAction {
 ///
 /// The cost is [key], which is a USB HID usage code. Flutter can look a key up
 /// by code but not by name, so storing the name would not round-trip; the
-/// settings dialog is the editor and the file is written for a machine.
+/// settings page is the editor and the file is written for a machine.
 class Chord {
   const Chord({
     required this.key,
@@ -88,7 +88,7 @@ class Chord {
   /// Null covers both "the file says null, meaning unbound" and "the file says
   /// a key this build has never heard of" — an unrecognised code cannot be
   /// matched against anything, so treating it as bound would be a lie the
-  /// settings screen could not show.
+  /// settings page could not show.
   static Chord? maybeFromJson(Object? value) {
     if (value is! Map) return null;
     final json = value.cast<String, dynamic>();
@@ -111,7 +111,7 @@ class Chord {
   /// See [format].
   ///
   /// Flutter spells physical keys out in full — `Key M`, `Digit 1` — which is
-  /// right for a debugger and wrong for a settings screen, where the point is
+  /// right for a debugger and wrong for a settings page, where the point is
   /// to recognise your own shortcut at a glance.
   static String _keyName(PhysicalKeyboardKey key) {
     final name = key.debugName;

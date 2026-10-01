@@ -130,7 +130,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         //
         // There is no "start voice" in TeamSpeak: joining a channel *is*
         // joining the conversation, and a client that stays silent until a
-        // control inside the settings dialog is found reads as a broken
+        // control inside the settings page is found reads as a broken
         // microphone and a broken speaker at once — with nothing on screen
         // saying which. The web front-end opens its engine on connect for the
         // same reason; this is the desktop half of that.
@@ -242,7 +242,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   ///
   /// One method for the two halves because they belong together: a message the
   /// user typed and we did not keep would have to be typed again this evening.
-  /// The write goes down the same path the settings dialog uses.
+  /// The write goes down the same path the settings page uses.
   void goAwayWith(int session, String message) {
     final settings = ref.read(settingsProvider);
     if (settings != null) {
@@ -471,7 +471,7 @@ class AudioDevicesNotifier extends Notifier<Map<String, List<AudioDevice>>> {
 ///
 /// Null until the core has answered once. The UI renders its defaults until
 /// then rather than blocking: the settings live on disk and take a round trip to
-/// fetch, and a settings screen that refuses to draw for a frame is worse than
+/// fetch, and a settings page that refuses to draw for a frame is worse than
 /// one that fills in.
 ///
 /// The core is the owner. Nothing is cached here that the core has not said —

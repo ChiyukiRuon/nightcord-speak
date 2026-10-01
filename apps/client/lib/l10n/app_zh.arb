@@ -1,7 +1,7 @@
 {
   "@@locale": "zh",
 
-  "closeButton": "关闭",
+  "backButton": "返回",
   "logLabel": "日志",
   "openLogFolder": "打开日志文件夹",
 

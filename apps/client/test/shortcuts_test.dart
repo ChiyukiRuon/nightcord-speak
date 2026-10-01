@@ -105,7 +105,7 @@ void main() {
     });
 
     test('every action is addressable by name', () {
-      // The settings screen iterates the enum, so a new action that the lookup
+      // The settings page iterates the enum, so a new action that the lookup
       // does not know about would silently show the wrong binding.
       // The unmentioned ones take their defaults — that is what a `const`
       // constructor with defaults means, and why a *cleared* one has to be

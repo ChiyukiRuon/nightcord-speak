@@ -1,6 +1,6 @@
 // The microphone gain slider's curve.
 //
-// Two widgets draw this slider — the settings dialog and the voice bar's
+// Two widgets draw this slider — the settings page and the voice bar's
 // flyout — and they must agree about where a stored decibel value sits and
 // what a position means. These are the functions they share, so this is where
 // that agreement is pinned.

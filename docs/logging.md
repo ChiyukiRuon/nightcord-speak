@@ -161,9 +161,9 @@ Dart 侧有自己的失败：widget 构建时抛异常、事件批次解析不�
 | 核心起不来 | 启动失败页显示路径 + 按钮 |
 | 手机 | 无路径：Android / iOS 的沙箱路径只有宿主应用知道，此时只写 stderr |
 
-设置对话框原本是音频专用的 `_AudioSettingsDialog`，现在是应用设置
-（`lib/features/settings/settings_dialog.dart`），音频与日志是并列的两节。
-以后加设备管理、快捷键，都往这里加。
+设置界面原本是音频专用的 `_AudioSettingsDialog`，现在是应用设置页
+（`lib/features/settings/settings_page.dart`，左栏导航、右侧一节），音频与日志是并列的
+两节。以后加设备管理、快捷键，都往这里加。
 
 打开文件夹用 `dart:io` 的 `Process.run`，不加依赖。**注意 Windows 上
 `explorer.exe` 成功时也返回退出码 1**，所以不能拿退出码判成败——`revealDirectory`

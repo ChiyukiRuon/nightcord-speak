@@ -10,7 +10,7 @@ class AppLocalizationsKo extends AppLocalizations {
   AppLocalizationsKo([String locale = 'ko']) : super(locale);
 
   @override
-  String get closeButton => '닫기';
+  String get backButton => '뒤로';
 
   @override
   String get logLabel => '로그';

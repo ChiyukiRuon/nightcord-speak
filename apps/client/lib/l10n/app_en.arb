@@ -1,9 +1,9 @@
 {
   "@@locale": "en",
 
-  "closeButton": "Close",
-  "@closeButton": {
-    "description": "Generic dismiss button"
+  "backButton": "Back",
+  "@backButton": {
+    "description": "Tooltip of the button that leaves a page, such as the settings page"
   },
   "logLabel": "Log",
   "@logLabel": {
@@ -29,7 +29,7 @@
 
   "settingsTitle": "Settings",
   "@settingsTitle": {
-    "description": "Title of the settings dialog"
+    "description": "Title of the settings page, and the tooltip of the buttons that open it"
   },
   "settingsLoading": "Loading settings…",
   "@settingsLoading": {

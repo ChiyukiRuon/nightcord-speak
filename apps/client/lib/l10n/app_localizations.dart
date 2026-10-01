@@ -103,11 +103,11 @@ abstract class AppLocalizations {
     Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
   ];
 
-  /// Generic dismiss button
+  /// Tooltip of the button that leaves a page, such as the settings page
   ///
   /// In en, this message translates to:
-  /// **'Close'**
-  String get closeButton;
+  /// **'Back'**
+  String get backButton;
 
   /// Short label for the log section or file, on the start-up failure screen and in settings
   ///
@@ -139,7 +139,7 @@ abstract class AppLocalizations {
   /// **'This start-up\'s log, if there is one, is in this file:'**
   String get startupFailureLogHint;
 
-  /// Title of the settings dialog
+  /// Title of the settings page, and the tooltip of the buttons that open it
   ///
   /// In en, this message translates to:
   /// **'Settings'**

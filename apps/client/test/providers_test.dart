@@ -260,7 +260,7 @@ void main() {
 
   test('setting an away message writes it down before going away', () async {
     // The message is worth remembering only if it is stored, and the store is
-    // the settings file — the same one the settings dialog writes.
+    // the settings file — the same one the settings page writes.
     final transport = _RecordingTransport();
     final container = ProviderContainer.test(
       overrides: [

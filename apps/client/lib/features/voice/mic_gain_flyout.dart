@@ -3,7 +3,7 @@
 //
 // A flyout rather than a second dialog: adjusting how loud you are is something
 // people do mid-sentence, and a modal would put a scrim over the conversation.
-// It is deliberately the *same* value the settings dialog edits, down to the
+// It is deliberately the *same* value the settings page edits, down to the
 // stored field — two controls, one truth, and the curve they draw comes from
 // `util/gain.dart` so they cannot disagree about where a value sits.
 
@@ -74,7 +74,7 @@ class _MicGainFlyoutState extends ConsumerState<MicGainFlyout> {
   /// The value the slider is showing mid-drag, in decibels.
   ///
   /// Kept here rather than written straight to the settings so a drag does not
-  /// write the file on every pixel — the same reason the settings dialog keeps
+  /// write the file on every pixel — the same reason the settings page keeps
   /// one.
   double? _dragDb;
 
@@ -113,7 +113,7 @@ class _MicGainFlyoutState extends ConsumerState<MicGainFlyout> {
 
   @override
   Widget build(BuildContext context) {
-    // Watched, not read: a change made in the settings dialog has to move this
+    // Watched, not read: a change made on the settings page has to move this
     // slider, and the reverse travels through the same notifier.
     final stored = ref.watch(settingsProvider)?.audio.inputGainDb ?? 0.0;
     final value = _dragDb ?? stored;

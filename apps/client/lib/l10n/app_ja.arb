@@ -1,7 +1,7 @@
 {
   "@@locale": "ja",
 
-  "closeButton": "閉じる",
+  "backButton": "戻る",
   "logLabel": "ログ",
   "openLogFolder": "ログフォルダを開く",
 

@@ -20,7 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/design/components/app_logo.dart';
 import 'package:nightcord_client/features/server/channel_sidebar.dart';
-import 'package:nightcord_client/features/settings/settings_dialog.dart';
+import 'package:nightcord_client/features/settings/settings_page.dart';
 import 'package:nightcord_client/widgets/app_shell.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
 import 'package:nightcord_client/design/tokens/app_palette.dart';
@@ -332,15 +332,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the settings dialog', (tester) async {
+  testWidgets('the settings page', (tester) async {
+    // Built as the home route rather than pushed: the page is whole without a
+    // Navigator behind it, which is also what the other pages' tests do.
     await tester.pumpWidget(
-      _app(
-        _container(view: _view()),
-        const Scaffold(body: Center(child: SettingsDialog(session: 1))),
-      ),
+      _app(_container(view: _view()), const SettingsPage(session: 1)),
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the navigation column switches sections', (tester) async {
+    // The point of the left-right layout: six sections that used to be one
+    // scroller are now one at a time, and the navigation is what chooses.
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const SettingsPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('麦克风增益'), findsOneWidget, reason: 'audio is the section it opens on');
+
+    // The label, not the widget: the user picks a section by the word on it.
+    await tester.tap(find.text('通知'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('成员加入或离开'), findsOneWidget);
+    expect(find.text('麦克风增益'), findsNothing, reason: 'the audio section is gone, not scrolled away');
+
+    await tester.tap(find.text('日志'));
+    await tester.pumpAndSettle();
+    expect(find.text('打开日志文件夹'), findsOneWidget);
   });
 
   testWidgets('notices over the server', (tester) async {
@@ -598,7 +619,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The panel's slider, not the page's: there is only one on screen here,
-    // because the settings dialog is closed.
+    // because the settings page is closed.
     //
     // Downwards, because it is drawn vertically — and a `Slider` follows the
     // pointer rather than accumulating the drag, so what matters is where the
@@ -622,10 +643,10 @@ void main() {
     expect(transport.calls.where((call) => call.startsWith('updateSettings')), isNotEmpty);
   });
 
-  testWidgets('the settings dialog carries the same slider', (tester) async {
-    // Two controls, one value: the dialog's slider has to be the microphone
-    // gain's, and it has to write decibels — a copy that wrote a fraction would
-    // look right and set the gain to nothing.
+  testWidgets('the settings page carries the same slider', (tester) async {
+    // Two controls, one value: the settings page's slider has to be the
+    // microphone gain's, and it has to write decibels — a copy that wrote a
+    // fraction would look right and set the gain to nothing.
     final container = _container(
       view: _view(),
       settings: const Settings(audio: AudioSettings(inputGainDb: 6.0)),
@@ -1014,18 +1035,36 @@ void main() {
   });
 
   testWidgets('settings open without a connection', (tester) async {
-    // Regression: the dialog used to require a session, and the only button
-    // that opened it lived in the voice bar — which only exists on the server
-    // page. So a user who could not connect had no way to reach the log folder,
-    // the language, or their audio devices, which is exactly when they are
-    // looking for them.
+    // Regression: this used to require a session, and the only button that
+    // opened it lived in the voice bar — which only exists on the server page.
+    // So a user who could not connect had no way to reach the log folder, the
+    // language, or their audio devices, which is exactly when they are looking
+    // for them.
     await tester.pumpWidget(_app(_container(), const ConnectPage()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.byType(SettingsDialog), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the settings page closes with its back button', (tester) async {
+    // It is a pushed route now, so the way back is the page's own business —
+    // and the connect page has no other route out of it.
+    await tester.pumpWidget(_app(_container(), const ConnectPage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsNothing);
+    expect(find.byType(ConnectPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1187,7 +1226,7 @@ void main() {
       for (final home in <Widget>[
         const ConnectPage(),
         const ServerPage(session: 1),
-        const Scaffold(body: Center(child: SettingsDialog(session: 1))),
+        const SettingsPage(session: 1),
       ]) {
         await tester.pumpWidget(
           _app(_container(view: _view(), notices: true), home, palette: palette),

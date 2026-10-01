@@ -4,8 +4,8 @@
 //!
 //! Until this crate existed the application stored exactly one thing — the
 //! client identity — and everything a user could choose lived in a front-end's
-//! memory: pick a microphone in the settings dialog and it was forgotten the
-//! moment the dialog closed. The audio pipeline had been *built* for a saved
+//! memory: pick a microphone in the settings screen and it was forgotten the
+//! moment the screen closed. The audio pipeline had been *built* for a saved
 //! device ([`ts_audio`]'s device ids are designed to survive a restart, and
 //! resolving a stale one already falls back to the default), and the voice
 //! activation gate already had a setter for a sensitivity slider. What was
@@ -136,7 +136,7 @@ impl Default for ShortcutSettings {
 /// talk above all — is about where the hand goes, not what letter comes out.
 ///
 /// The cost is that this section of `settings.json` is written for a machine
-/// rather than for a person. The settings dialog is the editor.
+/// rather than for a person. The settings screen is the editor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Chord {
     /// `PhysicalKeyboardKey.usbHidUsage`.

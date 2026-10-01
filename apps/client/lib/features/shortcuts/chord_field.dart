@@ -2,7 +2,7 @@
 //
 // Its own widget rather than the plugin's `HotKeyRecorder`, for two reasons: it
 // reports a `Chord` (so the plugin stays inside `shortcut_host.dart` rather than
-// leaking into the settings dialog), and it can *clear* a binding — a shortcut
+// leaking into the settings page), and it can *clear* a binding — a shortcut
 // someone wants gone should not require choosing some other key to get rid of
 // it.
 

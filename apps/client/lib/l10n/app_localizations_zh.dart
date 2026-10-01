@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get closeButton => '关闭';
+  String get backButton => '返回';
 
   @override
   String get logLabel => '日志';
@@ -668,7 +668,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   AppLocalizationsZhHant() : super('zh_Hant');
 
   @override
-  String get closeButton => '關閉';
+  String get backButton => '返回';
 
   @override
   String get logLabel => '日誌';

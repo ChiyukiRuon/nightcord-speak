@@ -7,7 +7,7 @@
 // and the bottom position alone means silence.
 //
 // The two functions here are inverses of each other, which is what the tests
-// pin: the settings dialog and the voice bar's flyout must not disagree about
+// pin: the settings page and the voice bar's flyout must not disagree about
 // where a value sits on the slider.
 
 import '../models/settings.dart';
@@ -27,7 +27,7 @@ double gainDbToSlider(double db) {
 /// The gain a slider position means, in decibels.
 ///
 /// The very bottom is silence rather than -60 dB: a slider that cannot reach
-/// "off" is a slider someone has to open the settings dialog to mute with.
+/// "off" is a slider someone has to open the settings page to mute with.
 double gainSliderToDb(double position) {
   if (position <= 0.0) return gainSilenceDb;
   final db = gainMinAudibleDb + position * (gainMaxDb - gainMinAudibleDb);

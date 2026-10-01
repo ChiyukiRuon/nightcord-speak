@@ -185,6 +185,25 @@ token 全部删掉了。
 `monospace` 保留为一个**角色**而不是一个家族选择——日志路径、调用栈、按键组合
 都需要等宽，Noto Sans 是比例字体，换掉只会更难读。
 
+## 设置页：第一个左右布局的页面
+
+设置原本是一个 480px 的 `AlertDialog`，六节内容摞在一条滚动里。现在是页面
+（`lib/features/settings/settings_page.dart`）：左栏 240px 的分节导航，右侧当前一节，
+六节各在 `sections/` 里一个文件。
+
+- **左栏**：`bgSidebar`（§2.2 的导航面），行样式照抄频道行——选中 `surface1` + 文字
+  `textPrimary` + `titleMedium`，hover `channelHoverBg` + `textPrimary`，其余
+  `textSecondary` + `bodyMedium`。选中的判断与 hover 都是手写的（`MouseRegion`），
+  因为 §19 连**文字颜色**都随状态变，而 `InkWell` 不管文字。
+- **宽度 240**：§19 给 240–280，这里取下限——标签是一两个词，不是带话题和在线数的频道名，
+  所以没有跟频道栏的 288 对齐。
+- **右侧**：`Material(bgMain)`，内容最宽 640，节标题用 `titleLarge`（与聊天头部同级）。
+  **必须是 `Material`，不能是刷了底色的 `Container`**：通知一节是 `SwitchListTile`，
+  而 `ListTile` 把水波纹画在最近的 `Material` 上——中间垫一层纯色会让 Flutter 直接断言
+  「ink 会被盖住」（第一次跑测试就撞上了）。
+- **入口**：语音栏 ⚙ 与连接页标题行的 ⚙，都走 `SettingsPage.open`；这是仓库里第一个
+  `Navigator.push` 的路由（此前只有 dialog 与 sheet）。
+
 ## 这轮没做
 
 - **布局**：Server Rail、独立成员栏、移动端 Shell、窗口自绘标题栏——

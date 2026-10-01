@@ -52,7 +52,7 @@ void main() {
 
     test('a section replaced by something else falls back to defaults', () {
       // What "settings.json: audio: 42" looks like. Refusing to open the
-      // settings screen over it would be worse than ignoring it.
+      // settings page over it would be worse than ignoring it.
       final settings = Settings.fromJson(const {'audio': 42, 'connection': 'nope'});
 
       expect(settings.audio, isA<AudioSettings>());

@@ -8,7 +8,7 @@ import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
-import '../settings/settings_dialog.dart';
+import '../settings/settings_page.dart';
 import 'mic_gain_flyout.dart';
 
 /// How far the glyphs sit below the middle of their own line box, in logical
@@ -167,11 +167,9 @@ class VoiceBar extends ConsumerWidget {
             tooltip: l10n.settingsTitle,
             // Unlike the two buttons above, settings do not need a live
             // connection — and the log folder it offers is most wanted exactly
-            // when the connection is not working.
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => SettingsDialog(session: session),
-            ),
+            // when the connection is not working. The session is still passed:
+            // the audio section's microphone test and device swap act on it.
+            onPressed: () => SettingsPage.open(context, session: session),
           ),
         ],
       ),

@@ -14,7 +14,7 @@ import '../../models/connect_request.dart';
 import '../../models/domain.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
-import '../settings/settings_dialog.dart';
+import '../settings/settings_page.dart';
 
 /// Collects a server address and nickname and opens a connection.
 class ConnectPage extends ConsumerStatefulWidget {
@@ -230,16 +230,13 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                     ),
                     // The way in before there is a server, which is when a
                     // user is most likely to be looking for the log folder or
-                    // the language — the settings dialog's own comment says as
+                    // the language — the settings page's own comment says as
                     // much. No session: everything in there except the
                     // microphone test is a preference.
                     IconButton(
                       tooltip: l10n.settingsTitle,
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (_) => const SettingsDialog(),
-                      ),
+                      onPressed: () => SettingsPage.open(context),
                     ),
                   ],
                 ),

@@ -8,7 +8,7 @@ import '../models/domain.dart';
 import '../models/shortcuts.dart';
 import 'app_localizations.dart';
 
-/// How the transmission modes are named in the settings screen.
+/// How the transmission modes are named in the settings page.
 extension VoiceActivationModeLabels on VoiceActivationMode {
   /// The user-facing name of this mode.
   String label(AppLocalizations l10n) => switch (this) {
@@ -19,7 +19,7 @@ extension VoiceActivationModeLabels on VoiceActivationMode {
   };
 }
 
-/// How the shortcut actions are named in the settings screen.
+/// How the shortcut actions are named in the settings page.
 extension ShortcutActionLabels on ShortcutAction {
   /// The user-facing name of this action.
   String label(AppLocalizations l10n) => switch (this) {

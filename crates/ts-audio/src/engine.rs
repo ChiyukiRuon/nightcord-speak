@@ -838,7 +838,7 @@ impl VoiceEngine {
     /// Plays a short tone through the speakers.
     ///
     /// For "can I hear anything at all" — the question a device list cannot
-    /// answer, and the reason a user opens the settings dialog in the first
+    /// answer, and the reason a user opens the settings screen in the first
     /// place. Straight to playback, so it is heard and never transmitted.
     ///
     /// Quiet on purpose: the tone is generated at a low amplitude, and a test

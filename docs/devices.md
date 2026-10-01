@@ -2,7 +2,7 @@
 
 ## 为什么有它
 
-`AGENTS.md` 给这一项的备注是「界面已有雏形」——设置对话框确实早就有设备下拉了。
+`AGENTS.md` 给这一项的备注是「界面已有雏形」——设置界面确实早就有设备下拉了。
 所以真正的问题是：**除了「从列表里挑一个」，还缺什么？**
 
 答案是：**`open_devices` 之后，没有任何东西往回报告过。** 选了麦克风之后你无法知道
@@ -41,7 +41,7 @@ void nightcord_voice_status(handle);   // → command_result "voice_status"
   Opus 留在 JSON 边界之外」；
 - 给每个前端的**通知规则**一个 50 Hz 的心跳要跟上。
 
-所以调用方自己决定多久问一次。设置对话框开着时 200 毫秒问一次。
+所以调用方自己决定多久问一次。设置页的音频一节显示时 200 毫秒问一次。
 
 ### `fell_back` 才是关键字段
 
@@ -80,11 +80,12 @@ PTT、持续、静音三种模式都会让闸门短路，写在后面的话电�
 
 ## 热插拔：轮询，不是回调
 
-cpal 的设备增删回调在各宿主上行为不一，而这一轮需要的只是「对话框开着时列表会更新」。
-所以**设置对话框打开期间每 5 秒重新枚举一次**，关掉就停。
+cpal 的设备增删回调在各宿主上行为不一，而这一轮需要的只是「音频这一节显示着的时候
+列表会更新」。所以**设置页的音频一节显示期间每 5 秒重新枚举一次**，切走就停——
+轮询是这一节的 `State` 自己的，它不在屏幕上就没有定时器。
 
 频率这么低是因为枚举很贵：它是同步的、每个设备几次 COM 往返，而且**跑在 worker 循环上**
-——枚举期间别的命令都要等。这也是为什么它只在一个模态对话框开着时跑。
+——枚举期间别的命令都要等。这也是为什么它只在一节显示着的时候跑。
 （状态查询是另一回事：读的是引擎早就有的数字，200 毫秒一次无所谓。）
 
 ---
@@ -129,5 +130,5 @@ cpal 的设备增删回调在各宿主上行为不一，而这一轮需要的只
 - `crates/ts-audio/src/engine.rs` —— `measure()`、`input_level()`、`OpenDevice`
 - `crates/ts-audio/src/device.rs` —— `resolve()` 现在返回*解析出来的*设备
 - `crates/ts-ffi/src/client.rs` —— `device_json()`、`report_voice_state()`
-- `lib/models/voice_status.dart`、`lib/features/settings/settings_dialog.dart`
+- `lib/models/voice_status.dart`、`lib/features/settings/sections/audio_section.dart`
 - [`docs/audio.md`](audio.md) §5 —— 设备错误瞬态与致命的分类

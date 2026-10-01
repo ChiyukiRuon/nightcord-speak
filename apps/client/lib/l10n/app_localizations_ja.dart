@@ -10,7 +10,7 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get closeButton => '閉じる';
+  String get backButton => '戻る';
 
   @override
   String get logLabel => 'ログ';

@@ -47,7 +47,7 @@ void main() {
   group('voice status', () {
     test('an engine that is not running is not a failure', () {
       // What the core answers before 开始语音. Rendering it as an error would
-      // put a banner on screen every time the settings dialog opened.
+      // put a banner on screen every time the settings page opened.
       final status = VoiceStatus.fromJson(const {
         'input': null,
         'output': null,
