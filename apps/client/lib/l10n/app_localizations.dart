@@ -6,6 +6,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_ja.dart';
+import 'app_localizations_ko.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -96,6 +98,9 @@ abstract class AppLocalizations {
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
     Locale('zh'),
+    Locale('ja'),
+    Locale('ko'),
+    Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
   ];
 
   /// Generic dismiss button
@@ -131,7 +136,7 @@ abstract class AppLocalizations {
   /// Explains that the log file may hold the reason the core failed to start
   ///
   /// In en, this message translates to:
-  /// **'The record of this start-up (if any) is in this file:'**
+  /// **'This start-up\'s log, if there is one, is in this file:'**
   String get startupFailureLogHint;
 
   /// Title of the settings dialog
@@ -143,7 +148,7 @@ abstract class AppLocalizations {
   /// Shown while the core has not answered the settings request yet
   ///
   /// In en, this message translates to:
-  /// **'Reading settings…'**
+  /// **'Loading settings…'**
   String get settingsLoading;
 
   /// Heading of the audio section
@@ -167,19 +172,19 @@ abstract class AppLocalizations {
   /// Label of the transmission mode dropdown
   ///
   /// In en, this message translates to:
-  /// **'Transmission'**
+  /// **'Transmission mode'**
   String get settingsTransmissionMode;
 
   /// Explains that a device change is applied immediately
   ///
   /// In en, this message translates to:
-  /// **'Changing a device reopens the audio at once.'**
+  /// **'Changing a device re-initialises the audio immediately.'**
   String get settingsDeviceChangeNote;
 
   /// Shown instead of the above when no session is connected
   ///
   /// In en, this message translates to:
-  /// **'Connect to test the microphone.'**
+  /// **'Connect to a server to test the microphone.'**
   String get settingsConnectFirst;
 
   /// Button that opens the selected microphone so its level can be watched
@@ -191,7 +196,7 @@ abstract class AppLocalizations {
   /// The same button while the microphone test is running
   ///
   /// In en, this message translates to:
-  /// **'Stop the test'**
+  /// **'Stop test'**
   String get settingsStopTest;
 
   /// Button that plays a test tone through the output device
@@ -221,7 +226,7 @@ abstract class AppLocalizations {
   /// Helper text under the identity profile field
   ///
   /// In en, this message translates to:
-  /// **'One profile name is one client identity on every server'**
+  /// **'The same profile name is the same client identity on every server.'**
   String get settingsIdentityProfileHelper;
 
   /// Label of the reconnect dropdown
@@ -263,7 +268,7 @@ abstract class AppLocalizations {
   /// Explains how the shortcut recorder works
   ///
   /// In en, this message translates to:
-  /// **'Click the box and press the combination you want. Esc cancels, Delete clears (a cleared shortcut stops firing).'**
+  /// **'Click the box on the right, then press the combination you want. Esc cancels, Delete clears.'**
   String get settingsShortcutsHelp;
 
   /// Heading of the interface section (language now, theme later)
@@ -296,6 +301,24 @@ abstract class AppLocalizations {
   /// **'English'**
   String get settingsLanguageEn;
 
+  /// The language's own name, shown in a picker
+  ///
+  /// In en, this message translates to:
+  /// **'繁體中文'**
+  String get settingsLanguageZhHant;
+
+  /// The language's own name, shown in a picker
+  ///
+  /// In en, this message translates to:
+  /// **'日本語'**
+  String get settingsLanguageJa;
+
+  /// The language's own name, shown in a picker
+  ///
+  /// In en, this message translates to:
+  /// **'한국어'**
+  String get settingsLanguageKo;
+
   /// Label of the theme dropdown
   ///
   /// In en, this message translates to:
@@ -317,43 +340,43 @@ abstract class AppLocalizations {
   /// Theme option: the neutral dark theme
   ///
   /// In en, this message translates to:
-  /// **'Black'**
+  /// **'Pure black'**
   String get settingsThemeBlack;
 
   /// Theme option: the neutral light theme
   ///
   /// In en, this message translates to:
-  /// **'White'**
+  /// **'Pure white'**
   String get settingsThemeWhite;
 
   /// Shown in place of the device-in-use line before the engine runs
   ///
   /// In en, this message translates to:
-  /// **'Voice has not started. Once it does, this shows the device actually in use and the microphone level.'**
+  /// **'Voice has not started. Once it does, this shows the devices in use and the microphone level.'**
   String get settingsVoiceNotStarted;
 
   /// The device the engine actually opened
   ///
   /// In en, this message translates to:
-  /// **'In use: {name}'**
+  /// **'Current device: {name}'**
   String settingsDeviceInUse(String name);
 
   /// Stand-in name when the engine reports no input device
   ///
   /// In en, this message translates to:
-  /// **'No microphone'**
+  /// **'No microphone detected'**
   String get settingsNoMicrophone;
 
   /// Warns that a saved input device no longer resolves
   ///
   /// In en, this message translates to:
-  /// **'Your chosen microphone is gone; the system default is in use.'**
+  /// **'The chosen microphone is unavailable; the system default is in use.'**
   String get settingsMicFellBack;
 
   /// Warns that the running stream lost its device
   ///
   /// In en, this message translates to:
-  /// **'The device was unplugged while in use. Starting voice again will restore it.'**
+  /// **'The device in use was disconnected. Start voice again to recover.'**
   String get settingsDeviceLost;
 
   /// Level meter state while audio is being sent
@@ -377,7 +400,7 @@ abstract class AppLocalizations {
   /// Notification switch: join/leave events
   ///
   /// In en, this message translates to:
-  /// **'Someone joins or leaves'**
+  /// **'Members joining or leaving'**
   String get settingsNotifyPresence;
 
   /// Notification switch: pokes
@@ -410,12 +433,6 @@ abstract class AppLocalizations {
   /// **'Use system notifications when the window is not in front'**
   String get settingsNotifySystem;
 
-  /// Explains why the focused conversation never raises a notice
-  ///
-  /// In en, this message translates to:
-  /// **'Never for the conversation you are looking at — you can already see it.'**
-  String get settingsNotifyNote;
-
   /// Label of the voice activation slider
   ///
   /// In en, this message translates to:
@@ -425,7 +442,7 @@ abstract class AppLocalizations {
   /// Explains what the sensitivity value means
   ///
   /// In en, this message translates to:
-  /// **'Higher is harder to trigger by room noise, and takes a louder voice.'**
+  /// **'The higher the sensitivity, the less room noise triggers it — and the louder you have to speak.'**
   String get settingsSensitivityHint;
 
   /// Label above the master playback volume slider
@@ -437,13 +454,13 @@ abstract class AppLocalizations {
   /// Points at the per-person volume control
   ///
   /// In en, this message translates to:
-  /// **'Applies to everyone. Individual people can be adjusted from their entry in the channel tree.'**
+  /// **'Sets the default volume for everyone. You can still adjust one member on their own from the channel list.'**
   String get settingsVolumeHint;
 
   /// Shown in place of the log path where there is none
   ///
   /// In en, this message translates to:
-  /// **'This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)'**
+  /// **'This platform has no writable log directory.'**
   String get settingsNoLogDirectory;
 
   /// Helper text on a device dropdown whose saved choice no longer resolves
@@ -482,12 +499,6 @@ abstract class AppLocalizations {
   /// **'Server address'**
   String get connectAddressLabel;
 
-  /// Example address shown in the connect screen's address field
-  ///
-  /// In en, this message translates to:
-  /// **'example.com or 192.168.1.10:9987'**
-  String get connectAddressHint;
-
   /// Label of the nickname field on the connect screen
   ///
   /// In en, this message translates to:
@@ -503,13 +514,13 @@ abstract class AppLocalizations {
   /// Hint under the server password field
   ///
   /// In en, this message translates to:
-  /// **'Leave empty if none'**
+  /// **'Optional'**
   String get connectServerPasswordHint;
 
   /// Button that stores the typed address as a bookmark
   ///
   /// In en, this message translates to:
-  /// **'Save this server'**
+  /// **'Save server'**
   String get connectSaveServer;
 
   /// The button that starts the connection
@@ -569,13 +580,13 @@ abstract class AppLocalizations {
   /// Sheet item that saves the connected server
   ///
   /// In en, this message translates to:
-  /// **'Bookmark this server'**
+  /// **'Bookmark server'**
   String get sidebarBookmarkAdd;
 
   /// Sheet item that unsaves the connected server
   ///
   /// In en, this message translates to:
-  /// **'Remove from saved'**
+  /// **'Remove bookmark'**
   String get sidebarBookmarkRemove;
 
   /// Menu item that opens the saved-server editor
@@ -589,12 +600,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit saved server'**
   String get bookmarkEditTitle;
-
-  /// Explains what editing the address does
-  ///
-  /// In en, this message translates to:
-  /// **'Changing this moves the entry; the old one is dropped.'**
-  String get bookmarkEditAddressHint;
 
   /// Entry that returns to the connect screen
   ///
@@ -647,13 +652,13 @@ abstract class AppLocalizations {
   /// Menu item: remove from the current channel only
   ///
   /// In en, this message translates to:
-  /// **'Kick from channel'**
+  /// **'Remove from channel'**
   String get memberKickChannel;
 
   /// Menu item: remove from the server entirely
   ///
   /// In en, this message translates to:
-  /// **'Kick from server'**
+  /// **'Remove from server'**
   String get memberKickServer;
 
   /// Menu item that opens the ban dialog
@@ -671,7 +676,7 @@ abstract class AppLocalizations {
   /// Label of the ban length selector
   ///
   /// In en, this message translates to:
-  /// **'Duration'**
+  /// **'Ban duration'**
   String get memberBanDuration;
 
   /// Ban length: until someone lifts it
@@ -707,7 +712,7 @@ abstract class AppLocalizations {
   /// Menu item that opens the per-person volume slider
   ///
   /// In en, this message translates to:
-  /// **'Volume…'**
+  /// **'Adjust volume…'**
   String get memberVolume;
 
   /// Title of the per-person volume dialog
@@ -719,7 +724,7 @@ abstract class AppLocalizations {
   /// Explains that a per-person volume is not remembered
   ///
   /// In en, this message translates to:
-  /// **'Applies for this session only. The output volume in the settings moves everyone together.'**
+  /// **'Applies to this session only. Output volume in the settings sets the default for everyone.'**
   String get memberVolumeHint;
 
   /// Tooltip on a menu item greyed out by permissions
@@ -749,7 +754,7 @@ abstract class AppLocalizations {
   /// Permission name
   ///
   /// In en, this message translates to:
-  /// **'Move other people'**
+  /// **'Move other members'**
   String get permissionsMoveClients;
 
   /// Permission name
@@ -767,13 +772,13 @@ abstract class AppLocalizations {
   /// Permission name
   ///
   /// In en, this message translates to:
-  /// **'Kick'**
+  /// **'Remove members'**
   String get permissionsKick;
 
   /// Permission name
   ///
   /// In en, this message translates to:
-  /// **'Ban'**
+  /// **'Ban members'**
   String get permissionsBan;
 
   /// Shown when the server sent no permission hints at all
@@ -785,7 +790,7 @@ abstract class AppLocalizations {
   /// Shown when the server answered but granted nothing special
   ///
   /// In en, this message translates to:
-  /// **'Nothing beyond what every user can do.'**
+  /// **'Nothing beyond what every user has by default.'**
   String get permissionsNone;
 
   /// Tooltip of the away badge on a member row
@@ -797,13 +802,13 @@ abstract class AppLocalizations {
   /// Tooltip of the muted badge on a member row
   ///
   /// In en, this message translates to:
-  /// **'Muted'**
+  /// **'Microphone muted'**
   String get memberMuted;
 
   /// Tooltip of the deafened badge on a member row
   ///
   /// In en, this message translates to:
-  /// **'Deafened'**
+  /// **'Speakers off'**
   String get memberDeafened;
 
   /// Tooltip of the recording badge on a member row
@@ -929,7 +934,7 @@ abstract class AppLocalizations {
   /// Tooltip when an attachment cannot be downloaded yet
   ///
   /// In en, this message translates to:
-  /// **'File transfer is coming in a later phase'**
+  /// **'File transfer is not supported yet'**
   String get chatFileTransferLater;
 
   /// Message timestamp for today; the clock is 24-hour
@@ -1007,13 +1012,13 @@ abstract class AppLocalizations {
   /// Tooltip of the speaker button while deafened
   ///
   /// In en, this message translates to:
-  /// **'Undeafen'**
+  /// **'Turn speakers on'**
   String get voiceUndeafen;
 
   /// Tooltip of the speaker button while listening
   ///
   /// In en, this message translates to:
-  /// **'Deafen (mute speakers)'**
+  /// **'Turn speakers off'**
   String get voiceDeafen;
 
   /// Shown when the session is gone and the page has nothing to draw
@@ -1037,13 +1042,13 @@ abstract class AppLocalizations {
   /// Shows where the log file lives
   ///
   /// In en, this message translates to:
-  /// **'Log: {path}'**
+  /// **'Log location: {path}'**
   String shellLogPath(String path);
 
   /// Tooltip of the button that closes the error bar
   ///
   /// In en, this message translates to:
-  /// **'Dismiss'**
+  /// **'Close'**
   String get shellDismissError;
 
   /// Button on the error snackbar that reveals the log directory
@@ -1187,7 +1192,7 @@ abstract class AppLocalizations {
   /// Snack bar when the crash report could not be written
   ///
   /// In en, this message translates to:
-  /// **'Could not generate the report; see the log'**
+  /// **'Could not generate the report; see the log for details'**
   String get crashReportFailed;
 
   /// Error sentence for the dead-worker variant
@@ -1250,17 +1255,33 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+      <String>['en', 'ja', 'ko', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+  // Lookup logic when language+script codes are specified.
+  switch (locale.languageCode) {
+    case 'zh':
+      {
+        switch (locale.scriptCode) {
+          case 'Hant':
+            return AppLocalizationsZhHant();
+        }
+        break;
+      }
+  }
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'ja':
+      return AppLocalizationsJa();
+    case 'ko':
+      return AppLocalizationsKo();
     case 'zh':
       return AppLocalizationsZh();
   }

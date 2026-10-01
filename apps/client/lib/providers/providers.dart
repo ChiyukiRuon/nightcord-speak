@@ -311,10 +311,48 @@ final systemLocalesProvider = Provider<List<Locale>>(
 final localeProvider = Provider<Locale>((ref) {
   final requested = ref.watch(settingsProvider)?.ui.requestedLanguage;
   final preferred = requested == null
-      ? ref.watch(systemLocalesProvider)
-      : <Locale>[Locale(requested)];
+      ? ref.watch(systemLocalesProvider).map(_withChineseScript).toList()
+      : <Locale>[_withChineseScript(_parse(requested))];
   return basicLocaleListResolution(preferred, AppLocalizations.supportedLocales);
 });
+
+/// Reads a stored language tag, which may name a script: `zh_Hant`.
+///
+/// Not `Locale(code)`: that constructor takes a *language* code, so `"zh_Hant"`
+/// would arrive as a language called `zh_Hant` and match nothing.
+Locale _parse(String code) {
+  final parts = code.split('_');
+  return parts.length < 2
+      ? Locale(parts.first)
+      : Locale.fromSubtags(languageCode: parts.first, scriptCode: parts[1]);
+}
+
+/// Names the script of a Chinese locale that does not name one.
+///
+/// `basicLocaleListResolution` matches on language code before it considers the
+/// script, so a `zh_TW` system locale finds our plain `zh` — Simplified — and
+/// stops there. A Traditional reader would then be handed Simplified glyph
+/// shapes for a great many characters, which is the one thing the separate
+/// font exists to prevent. Spelling the script out here is what gives the
+/// resolution something to match.
+///
+/// The three regions are the ones that write Traditional Chinese; everywhere
+/// else that speaks it writes Simplified.
+Locale _withChineseScript(Locale locale) {
+  if (locale.languageCode != 'zh') return locale;
+
+  final script =
+      locale.scriptCode ??
+      (const {'TW', 'HK', 'MO'}.contains(locale.countryCode) ? 'Hant' : 'Hans');
+
+  return Locale.fromSubtags(
+    languageCode: 'zh',
+    scriptCode: script,
+    // Kept even though no ARB is region-specific: dropping it would make
+    // `zh_TW` and `zh_CN` the same value to anything downstream.
+    countryCode: locale.countryCode,
+  );
+}
 
 /// The two themes to hand `MaterialApp`, resolved from the setting.
 ///

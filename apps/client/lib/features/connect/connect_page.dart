@@ -259,7 +259,6 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   autofocus: true,
                   decoration: InputDecoration(
                     labelText: l10n.connectAddressLabel,
-                    hintText: l10n.connectAddressHint,
                   ),
                   onSubmitted: (_) => _connect(),
                 ),

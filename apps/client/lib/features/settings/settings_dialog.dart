@@ -347,8 +347,17 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                 decoration: InputDecoration(labelText: l10n.settingsLanguageLabel),
                 items: [
                   DropdownMenuItem(value: null, child: Text(l10n.settingsLanguageSystem)),
+                  // Each language under its own name, in its own script: the
+                  // one list a reader can use without already knowing the
+                  // language they are looking for.
                   DropdownMenuItem(value: 'zh', child: Text(l10n.settingsLanguageZh)),
+                  DropdownMenuItem(
+                    value: 'zh_Hant',
+                    child: Text(l10n.settingsLanguageZhHant),
+                  ),
                   DropdownMenuItem(value: 'en', child: Text(l10n.settingsLanguageEn)),
+                  DropdownMenuItem(value: 'ja', child: Text(l10n.settingsLanguageJa)),
+                  DropdownMenuItem(value: 'ko', child: Text(l10n.settingsLanguageKo)),
                 ],
                 onChanged: (language) => _ui(
                   settings,
@@ -693,12 +702,6 @@ class _NotificationSection extends StatelessWidget {
           l10n.settingsNotifySystem,
           settings.system,
           (v) => onChanged(settings.copyWith(system: v)),
-        ),
-        Text(
-          l10n.settingsNotifyNote,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
       ],
     );

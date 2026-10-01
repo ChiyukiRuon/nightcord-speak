@@ -56,12 +56,12 @@ void main() {
       expect(missing.describe(en), contains('203'));
 
       const device = ClientError(kind: 'devices', detail: {'name': 'Headset'});
-      expect(device.describe(zh), '找不到设备 Headset');
+      expect(device.describe(zh), '找不到设备：Headset');
       expect(device.describe(en), 'Device not found: Headset');
     });
 
     test('the Dart-side kinds speak both languages', () {
-      expect(const ClientError(kind: 'command_failed').describe(zh), '命令失败');
+      expect(const ClientError(kind: 'command_failed').describe(zh), '命令执行失败');
       expect(const ClientError(kind: 'command_failed').describe(en), 'The command failed');
       expect(const ClientError(kind: 'join_denied').describe(en), contains('permission'));
       expect(const ClientError(kind: 'core_gone').describe(zh), contains('重启'));
@@ -96,16 +96,21 @@ void main() {
     });
 
     test('another year drops the clock', () {
-      expect(formatTimestamp(zh, DateTime(2025, 12, 31, 5, 4), now: now), '2025/12/31');
+      expect(formatTimestamp(zh, DateTime(2025, 12, 31, 5, 4), now: now), '2025年12月31日');
       expect(formatTimestamp(en, DateTime(2025, 12, 31, 5, 4), now: now), '2025/12/31');
     });
   });
 
-  test('the two ARB files carry the same keys', () {
+  test('every ARB carries the same keys as the template', () {
     // gen-l10n fails the build when a key is missing from the *template*, but
     // a key missing from a *translation* falls back to English silently — one
     // English sentence in a Chinese UI, which nobody notices until a user
     // does. Comparing the key sets turns that into a test failure.
+    //
+    // **The directory is the list.** An earlier version named `app_zh.arb` by
+    // hand, which meant every language added afterwards was unguarded: a
+    // missing key would have fallen back to English with nothing to say so.
+    // Reading the directory means a new ARB is covered the moment it exists.
     Set<String> keysOf(String path) =>
         (jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>)
             .keys
@@ -113,18 +118,48 @@ void main() {
             .toSet();
 
     final template = keysOf('lib/l10n/app_en.arb');
-    final translated = keysOf('lib/l10n/app_zh.arb');
+    final translations = Directory('lib/l10n')
+        .listSync()
+        .map((entry) => entry.path)
+        .where((path) => path.endsWith('.arb') && !path.endsWith('app_en.arb'))
+        .toList()
+      ..sort();
 
-    expect(
-      template.difference(translated),
-      isEmpty,
-      reason: 'untranslated in zh',
-    );
-    expect(
-      translated.difference(template),
-      isEmpty,
-      reason: 'zh has keys the template does not know',
-    );
+    expect(translations, isNotEmpty, reason: 'no translation files found');
+
+    for (final path in translations) {
+      final translated = keysOf(path);
+      expect(
+        template.difference(translated),
+        isEmpty,
+        reason: 'untranslated in $path',
+      );
+      expect(
+        translated.difference(template),
+        isEmpty,
+        reason: '$path has keys the template does not know',
+      );
+    }
+  });
+
+  test('every ARB names its own locale', () {
+    // `@@locale` is redundant with the file name, and gen-l10n infers it — but
+    // it is what a reader of the file sees, and some tooling reads it. Cheap to
+    // keep honest, and silent to get wrong.
+    final expected = {
+      'app_en.arb': 'en',
+      'app_zh.arb': 'zh',
+      'app_zh_Hant.arb': 'zh_Hant',
+      'app_ja.arb': 'ja',
+      'app_ko.arb': 'ko',
+    };
+
+    for (final entry in expected.entries) {
+      final json =
+          jsonDecode(File('lib/l10n/${entry.key}').readAsStringSync())
+              as Map<String, dynamic>;
+      expect(json['@@locale'], entry.value, reason: entry.key);
+    }
   });
 
   test('the crash note count is pluralized in English', () {

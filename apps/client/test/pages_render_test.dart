@@ -504,13 +504,15 @@ void main() {
     final content = tester.getRect(
       find.descendant(of: find.byType(SnackBar), matching: find.byType(Row)).first,
     );
-    final button = tester.getRect(find.byType(IconButton));
-    final label = tester.getRect(find.text('打开日志'));
-    final glyph = tester.getRect(find.byIcon(Icons.close));
-    // ignore: avoid_print
-    print('content=$content');
-    // ignore: avoid_print
-    print('icon-button=$button glyph=$glyph label=$label');
+
+    // Both buttons and the close glyph, against the bar's own centre line.
+    for (final glyph in [find.byIcon(Icons.close), find.text('打开日志')]) {
+      expect(
+        tester.getRect(glyph).center.dy,
+        closeTo(content.center.dy, 1.0),
+        reason: 'not on the bar centre line',
+      );
+    }
   });
 
   testWidgets('the permissions panel claims only what the server answered', (
@@ -546,7 +548,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('不向客户端报告权限'),
+      find.textContaining('不会向客户端提供权限信息'),
       findsOneWidget,
       reason: 'the server said nothing, so the panel says so',
     );
@@ -554,7 +556,7 @@ void main() {
       '加入频道',
       '发频道消息',
       '发私聊消息',
-      '踢人',
+      '移出成员',
       '封禁',
     ]) {
       expect(find.text(label), findsNothing, reason: '(label) was never confirmed');
@@ -589,7 +591,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('加入频道'), findsOneWidget);
-    expect(find.text('踢人'), findsOneWidget);
+    expect(find.text('移出成员'), findsOneWidget);
     // Granted by silence, not by the server.
     expect(find.text('封禁'), findsNothing);
     expect(
@@ -614,7 +616,7 @@ void main() {
       matching: find.text('Nightcord 测试服'),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('收藏这个服务器'));
+    await tester.tap(find.text('收藏服务器'));
     await tester.pumpAndSettle();
 
     // Through `addBookmark`, not `updateBookmarks`: the core owns the address
@@ -645,7 +647,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('收藏这个服务器'), findsNothing);
+    expect(find.text('收藏服务器'), findsNothing);
     await tester.tap(find.text('取消收藏'));
     await tester.pumpAndSettle();
 
@@ -758,9 +760,9 @@ void main() {
     expect(find.text('封禁…'), findsOneWidget);
 
     for (final label in [
-      '从频道踢出',
-      '从服务器踢出',
-      '移到频道…',
+      '移出频道',
+      '移出服务器',
+      '移动到频道…',
       '封禁…',
     ]) {
       expect(
@@ -802,11 +804,11 @@ void main() {
       buttons: kSecondaryMouseButton,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('从服务器踢出'));
+    await tester.tap(find.text('移出服务器'));
     await tester.pumpAndSettle();
 
     // The dialog collects a reason; confirming with it empty is still a kick.
-    await tester.tap(find.widgetWithText(FilledButton, '从服务器踢出'));
+    await tester.tap(find.widgetWithText(FilledButton, '移出服务器'));
     await tester.pumpAndSettle();
 
     expect(transport.calls, contains('kick:server:2:'));
@@ -833,11 +835,11 @@ void main() {
 
     for (final label in [
       '戳一戳',
-      '从频道踢出',
+      '移出频道',
       '封禁…',
       // Our own audio is already at whatever the output volume says; a second
       // control for it would be a way to make the same thing quiet twice.
-      '音量…',
+      '调整音量…',
     ]) {
       expect(
         _menuItemEnabled(tester, label),

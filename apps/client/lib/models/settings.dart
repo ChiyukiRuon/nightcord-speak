@@ -322,7 +322,7 @@ class UiSettings {
   /// this build does not have yet — falls back to the system language instead
   /// of reaching the locale lookup and matching nothing.
   String? get requestedLanguage => switch (language) {
-    'zh' || 'en' => language,
+    'zh' || 'zh_Hant' || 'en' || 'ja' || 'ko' => language,
     _ => null,
   };
 

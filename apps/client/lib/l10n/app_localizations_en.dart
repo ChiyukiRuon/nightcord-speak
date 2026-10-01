@@ -26,13 +26,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get startupFailureLogHint =>
-      'The record of this start-up (if any) is in this file:';
+      'This start-up\'s log, if there is one, is in this file:';
 
   @override
   String get settingsTitle => 'Settings';
 
   @override
-  String get settingsLoading => 'Reading settings…';
+  String get settingsLoading => 'Loading settings…';
 
   @override
   String get settingsAudioSection => 'Audio';
@@ -44,20 +44,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSpeakerLabel => 'Speakers';
 
   @override
-  String get settingsTransmissionMode => 'Transmission';
+  String get settingsTransmissionMode => 'Transmission mode';
 
   @override
   String get settingsDeviceChangeNote =>
-      'Changing a device reopens the audio at once.';
+      'Changing a device re-initialises the audio immediately.';
 
   @override
-  String get settingsConnectFirst => 'Connect to test the microphone.';
+  String get settingsConnectFirst =>
+      'Connect to a server to test the microphone.';
 
   @override
   String get settingsTestMicrophone => 'Test microphone';
 
   @override
-  String get settingsStopTest => 'Stop the test';
+  String get settingsStopTest => 'Stop test';
 
   @override
   String get settingsTestSpeaker => 'Test speakers';
@@ -73,7 +74,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsIdentityProfileHelper =>
-      'One profile name is one client identity on every server';
+      'The same profile name is the same client identity on every server.';
 
   @override
   String get settingsAfterDrop => 'After a drop';
@@ -97,7 +98,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShortcutsHelp =>
-      'Click the box and press the combination you want. Esc cancels, Delete clears (a cleared shortcut stops firing).';
+      'Click the box on the right, then press the combination you want. Esc cancels, Delete clears.';
 
   @override
   String get settingsInterfaceSection => 'Interface';
@@ -115,6 +116,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageEn => 'English';
 
   @override
+  String get settingsLanguageZhHant => '繁體中文';
+
+  @override
+  String get settingsLanguageJa => '日本語';
+
+  @override
+  String get settingsLanguageKo => '한국어';
+
+  @override
   String get settingsThemeLabel => 'Theme';
 
   @override
@@ -124,30 +134,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsThemeNightcord => 'Nightcord';
 
   @override
-  String get settingsThemeBlack => 'Black';
+  String get settingsThemeBlack => 'Pure black';
 
   @override
-  String get settingsThemeWhite => 'White';
+  String get settingsThemeWhite => 'Pure white';
 
   @override
   String get settingsVoiceNotStarted =>
-      'Voice has not started. Once it does, this shows the device actually in use and the microphone level.';
+      'Voice has not started. Once it does, this shows the devices in use and the microphone level.';
 
   @override
   String settingsDeviceInUse(String name) {
-    return 'In use: $name';
+    return 'Current device: $name';
   }
 
   @override
-  String get settingsNoMicrophone => 'No microphone';
+  String get settingsNoMicrophone => 'No microphone detected';
 
   @override
   String get settingsMicFellBack =>
-      'Your chosen microphone is gone; the system default is in use.';
+      'The chosen microphone is unavailable; the system default is in use.';
 
   @override
   String get settingsDeviceLost =>
-      'The device was unplugged while in use. Starting voice again will restore it.';
+      'The device in use was disconnected. Start voice again to recover.';
 
   @override
   String get settingsTransmitting => 'Transmitting';
@@ -160,7 +170,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Microphone level (shown once voice starts)';
 
   @override
-  String get settingsNotifyPresence => 'Someone joins or leaves';
+  String get settingsNotifyPresence => 'Members joining or leaving';
 
   @override
   String get settingsNotifyPoke => 'Someone pokes you';
@@ -179,26 +189,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use system notifications when the window is not in front';
 
   @override
-  String get settingsNotifyNote =>
-      'Never for the conversation you are looking at — you can already see it.';
-
-  @override
   String get settingsSensitivity => 'Sensitivity';
 
   @override
   String get settingsSensitivityHint =>
-      'Higher is harder to trigger by room noise, and takes a louder voice.';
+      'The higher the sensitivity, the less room noise triggers it — and the louder you have to speak.';
 
   @override
   String get settingsVolume => 'Output volume';
 
   @override
   String get settingsVolumeHint =>
-      'Applies to everyone. Individual people can be adjusted from their entry in the channel tree.';
+      'Sets the default volume for everyone. You can still adjust one member on their own from the channel list.';
 
   @override
   String get settingsNoLogDirectory =>
-      'This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)';
+      'This platform has no writable log directory.';
 
   @override
   String get settingsDeviceMissing =>
@@ -222,19 +228,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectAddressLabel => 'Server address';
 
   @override
-  String get connectAddressHint => 'example.com or 192.168.1.10:9987';
-
-  @override
   String get connectNicknameLabel => 'Nickname';
 
   @override
   String get connectServerPasswordLabel => 'Server password';
 
   @override
-  String get connectServerPasswordHint => 'Leave empty if none';
+  String get connectServerPasswordHint => 'Optional';
 
   @override
-  String get connectSaveServer => 'Save this server';
+  String get connectSaveServer => 'Save server';
 
   @override
   String get connectButton => 'Connect';
@@ -266,20 +269,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarSheetSaved => 'Saved';
 
   @override
-  String get sidebarBookmarkAdd => 'Bookmark this server';
+  String get sidebarBookmarkAdd => 'Bookmark server';
 
   @override
-  String get sidebarBookmarkRemove => 'Remove from saved';
+  String get sidebarBookmarkRemove => 'Remove bookmark';
 
   @override
   String get sidebarEditSaved => 'Edit';
 
   @override
   String get bookmarkEditTitle => 'Edit saved server';
-
-  @override
-  String get bookmarkEditAddressHint =>
-      'Changing this moves the entry; the old one is dropped.';
 
   @override
   String get sidebarAddServer => 'Add server';
@@ -312,10 +311,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get memberMoveChannel => 'Channel';
 
   @override
-  String get memberKickChannel => 'Kick from channel';
+  String get memberKickChannel => 'Remove from channel';
 
   @override
-  String get memberKickServer => 'Kick from server';
+  String get memberKickServer => 'Remove from server';
 
   @override
   String get memberBan => 'Ban…';
@@ -326,7 +325,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get memberBanDuration => 'Duration';
+  String get memberBanDuration => 'Ban duration';
 
   @override
   String get memberBanPermanent => 'Permanently';
@@ -368,7 +367,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get memberReason => 'Reason (optional)';
 
   @override
-  String get memberVolume => 'Volume…';
+  String get memberVolume => 'Adjust volume…';
 
   @override
   String memberVolumeTitle(String name) {
@@ -377,7 +376,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get memberVolumeHint =>
-      'Applies for this session only. The output volume in the settings moves everyone together.';
+      'Applies to this session only. Output volume in the settings sets the default for everyone.';
 
   @override
   String get memberNoPermission => 'Your server permissions do not allow this';
@@ -393,7 +392,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get permissionsJoinChannel => 'Join channels';
 
   @override
-  String get permissionsMoveClients => 'Move other people';
+  String get permissionsMoveClients => 'Move other members';
 
   @override
   String get permissionsSendChannelMessage => 'Send channel messages';
@@ -402,26 +401,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get permissionsSendPrivateMessage => 'Send private messages';
 
   @override
-  String get permissionsKick => 'Kick';
+  String get permissionsKick => 'Remove members';
 
   @override
-  String get permissionsBan => 'Ban';
+  String get permissionsBan => 'Ban members';
 
   @override
   String get permissionsNotReported =>
       'This server does not tell clients what they may do, so there is nothing to show.';
 
   @override
-  String get permissionsNone => 'Nothing beyond what every user can do.';
+  String get permissionsNone =>
+      'Nothing beyond what every user has by default.';
 
   @override
   String get memberAway => 'Away';
 
   @override
-  String get memberMuted => 'Muted';
+  String get memberMuted => 'Microphone muted';
 
   @override
-  String get memberDeafened => 'Deafened';
+  String get memberDeafened => 'Speakers off';
 
   @override
   String get memberRecording => 'Recording';
@@ -490,8 +490,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatDownload => 'Download';
 
   @override
-  String get chatFileTransferLater =>
-      'File transfer is coming in a later phase';
+  String get chatFileTransferLater => 'File transfer is not supported yet';
 
   @override
   String timestampToday(String clock) {
@@ -541,10 +540,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceMuteMic => 'Mute microphone';
 
   @override
-  String get voiceUndeafen => 'Undeafen';
+  String get voiceUndeafen => 'Turn speakers on';
 
   @override
-  String get voiceDeafen => 'Deafen (mute speakers)';
+  String get voiceDeafen => 'Turn speakers off';
 
   @override
   String get serverSessionEnded => 'Session ended';
@@ -557,11 +556,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String shellLogPath(String path) {
-    return 'Log: $path';
+    return 'Log location: $path';
   }
 
   @override
-  String get shellDismissError => 'Dismiss';
+  String get shellDismissError => 'Close';
 
   @override
   String get shellOpenLog => 'Open log';
@@ -656,7 +655,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get crashReportFailed => 'Could not generate the report; see the log';
+  String get crashReportFailed =>
+      'Could not generate the report; see the log for details';
 
   @override
   String get errorCoreGone => 'The core has crashed. Restart the application.';

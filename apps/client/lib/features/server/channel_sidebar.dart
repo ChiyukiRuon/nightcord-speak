@@ -896,8 +896,6 @@ class _BookmarkDialogState extends State<_BookmarkDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final tokens = DesignTokens.of(context);
-    final text = Theme.of(context).textTheme;
 
     return AlertDialog(
       title: Text(l10n.bookmarkEditTitle),
@@ -918,13 +916,6 @@ class _BookmarkDialogState extends State<_BookmarkDialog> {
               // reaches a server is the core's answer, and it is given when the
               // dialog is confirmed rather than guessed at here.
               onChanged: (_) => setState(() {}),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                l10n.bookmarkEditAddressHint,
-                style: text.bodySmall?.copyWith(color: tokens.textTertiary),
-              ),
             ),
             const SizedBox(height: 12),
             TextField(

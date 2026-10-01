@@ -466,7 +466,7 @@ void main() {
       settle(policy, clock, target);
 
       final before = policy.observe(session, const ClientLeftEvent(7), target, const Attention());
-      expect(before?.body, '离开了服务器');
+      expect(before?.body, '已离开服务器');
 
       l10n = lookupAppLocalizations(const Locale('en'));
       final after = policy.observe(session, const ClientLeftEvent(7), target, const Attention());

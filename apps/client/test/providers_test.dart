@@ -261,6 +261,49 @@ void main() {
       expect(container.read(localeProvider), const Locale('en'));
     });
 
+    test('a Traditional Chinese system gets Traditional, not Simplified', () {
+      // The one that needs a hand. `basicLocaleListResolution` matches on
+      // language code before it looks at the script, so a bare `zh_TW` finds
+      // our plain `zh` — Simplified — and stops. A reader in Taiwan would be
+      // handed Simplified glyph shapes for a great many characters, which is
+      // the whole reason a second CJK font is bundled.
+      for (final region in ['TW', 'HK', 'MO']) {
+        final container = containerWith(system: [Locale('zh', region)]);
+        expect(
+          container.read(localeProvider).scriptCode,
+          'Hant',
+          reason: 'zh_$region',
+        );
+      }
+    });
+
+    test('every other Chinese system gets Simplified', () {
+      for (final tag in [const Locale('zh'), const Locale('zh', 'CN'), const Locale('zh', 'SG')]) {
+        final container = containerWith(system: [tag]);
+        expect(
+          container.read(localeProvider).scriptCode,
+          isNot('Hant'),
+          reason: '$tag',
+        );
+      }
+    });
+
+    test('each new language resolves to itself', () {
+      for (final code in ['zh_Hant', 'ja', 'ko']) {
+        final container = containerWith(
+          settings: Settings(ui: UiSettings(language: code)),
+          // A system language that would otherwise win, so the setting is what
+          // is being measured.
+          system: const [Locale('en')],
+        );
+        expect(container.read(localeProvider).languageCode, code.split('_').first,
+            reason: code);
+
+        final explicit = containerWith(system: const [Locale('ja')]);
+        expect(explicit.read(localeProvider).languageCode, 'ja');
+      }
+    });
+
     test('an unrecognized stored language follows the system', () {
       // A hand-edited file, or a language a newer build supports. The stored
       // value stays in the file — see `settings_test` — but the UI falls back

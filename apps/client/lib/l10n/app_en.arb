@@ -22,7 +22,7 @@
   "@stackTraceLabel": {
     "description": "Label above the raw stack trace on the start-up failure screen"
   },
-  "startupFailureLogHint": "The record of this start-up (if any) is in this file:",
+  "startupFailureLogHint": "This start-up's log, if there is one, is in this file:",
   "@startupFailureLogHint": {
     "description": "Explains that the log file may hold the reason the core failed to start"
   },
@@ -31,7 +31,7 @@
   "@settingsTitle": {
     "description": "Title of the settings dialog"
   },
-  "settingsLoading": "Reading settings…",
+  "settingsLoading": "Loading settings…",
   "@settingsLoading": {
     "description": "Shown while the core has not answered the settings request yet"
   },
@@ -47,15 +47,15 @@
   "@settingsSpeakerLabel": {
     "description": "Label of the output device dropdown"
   },
-  "settingsTransmissionMode": "Transmission",
+  "settingsTransmissionMode": "Transmission mode",
   "@settingsTransmissionMode": {
     "description": "Label of the transmission mode dropdown"
   },
-  "settingsDeviceChangeNote": "Changing a device reopens the audio at once.",
+  "settingsDeviceChangeNote": "Changing a device re-initialises the audio immediately.",
   "@settingsDeviceChangeNote": {
     "description": "Explains that a device change is applied immediately"
   },
-  "settingsConnectFirst": "Connect to test the microphone.",
+  "settingsConnectFirst": "Connect to a server to test the microphone.",
   "@settingsConnectFirst": {
     "description": "Shown instead of the above when no session is connected"
   },
@@ -63,7 +63,7 @@
   "@settingsTestMicrophone": {
     "description": "Button that opens the selected microphone so its level can be watched"
   },
-  "settingsStopTest": "Stop the test",
+  "settingsStopTest": "Stop test",
   "@settingsStopTest": {
     "description": "The same button while the microphone test is running"
   },
@@ -83,7 +83,7 @@
   "@settingsIdentityProfile": {
     "description": "Label of the identity profile text field"
   },
-  "settingsIdentityProfileHelper": "One profile name is one client identity on every server",
+  "settingsIdentityProfileHelper": "The same profile name is the same client identity on every server.",
   "@settingsIdentityProfileHelper": {
     "description": "Helper text under the identity profile field"
   },
@@ -116,7 +116,7 @@
   "@settingsShortcutsSection": {
     "description": "Heading of the shortcuts section"
   },
-  "settingsShortcutsHelp": "Click the box and press the combination you want. Esc cancels, Delete clears (a cleared shortcut stops firing).",
+  "settingsShortcutsHelp": "Click the box on the right, then press the combination you want. Esc cancels, Delete clears.",
   "@settingsShortcutsHelp": {
     "description": "Explains how the shortcut recorder works"
   },
@@ -137,6 +137,18 @@
     "description": "Language option for Chinese, written in its own language"
   },
   "settingsLanguageEn": "English",
+  "settingsLanguageZhHant": "繁體中文",
+  "@settingsLanguageZhHant": {
+    "description": "The language's own name, shown in a picker"
+  },
+  "settingsLanguageJa": "日本語",
+  "@settingsLanguageJa": {
+    "description": "The language's own name, shown in a picker"
+  },
+  "settingsLanguageKo": "한국어",
+  "@settingsLanguageKo": {
+    "description": "The language's own name, shown in a picker"
+  },
   "@settingsLanguageEn": {
     "description": "Language option for English, written in its own language"
   },
@@ -152,19 +164,19 @@
   "@settingsThemeNightcord": {
     "description": "Theme option: the default, and the only one the colour specification defines. A product name, so it is not translated"
   },
-  "settingsThemeBlack": "Black",
+  "settingsThemeBlack": "Pure black",
   "@settingsThemeBlack": {
     "description": "Theme option: the neutral dark theme"
   },
-  "settingsThemeWhite": "White",
+  "settingsThemeWhite": "Pure white",
   "@settingsThemeWhite": {
     "description": "Theme option: the neutral light theme"
   },
-  "settingsVoiceNotStarted": "Voice has not started. Once it does, this shows the device actually in use and the microphone level.",
+  "settingsVoiceNotStarted": "Voice has not started. Once it does, this shows the devices in use and the microphone level.",
   "@settingsVoiceNotStarted": {
     "description": "Shown in place of the device-in-use line before the engine runs"
   },
-  "settingsDeviceInUse": "In use: {name}",
+  "settingsDeviceInUse": "Current device: {name}",
   "@settingsDeviceInUse": {
     "description": "The device the engine actually opened",
     "placeholders": {
@@ -173,15 +185,15 @@
       }
     }
   },
-  "settingsNoMicrophone": "No microphone",
+  "settingsNoMicrophone": "No microphone detected",
   "@settingsNoMicrophone": {
     "description": "Stand-in name when the engine reports no input device"
   },
-  "settingsMicFellBack": "Your chosen microphone is gone; the system default is in use.",
+  "settingsMicFellBack": "The chosen microphone is unavailable; the system default is in use.",
   "@settingsMicFellBack": {
     "description": "Warns that a saved input device no longer resolves"
   },
-  "settingsDeviceLost": "The device was unplugged while in use. Starting voice again will restore it.",
+  "settingsDeviceLost": "The device in use was disconnected. Start voice again to recover.",
   "@settingsDeviceLost": {
     "description": "Warns that the running stream lost its device"
   },
@@ -197,7 +209,7 @@
   "@settingsLevelMeterHint": {
     "description": "Level meter state before the engine runs"
   },
-  "settingsNotifyPresence": "Someone joins or leaves",
+  "settingsNotifyPresence": "Members joining or leaving",
   "@settingsNotifyPresence": {
     "description": "Notification switch: join/leave events"
   },
@@ -221,15 +233,11 @@
   "@settingsNotifySystem": {
     "description": "Notification switch: desktop toasts"
   },
-  "settingsNotifyNote": "Never for the conversation you are looking at — you can already see it.",
-  "@settingsNotifyNote": {
-    "description": "Explains why the focused conversation never raises a notice"
-  },
   "settingsSensitivity": "Sensitivity",
   "@settingsSensitivity": {
     "description": "Label of the voice activation slider"
   },
-  "settingsSensitivityHint": "Higher is harder to trigger by room noise, and takes a louder voice.",
+  "settingsSensitivityHint": "The higher the sensitivity, the less room noise triggers it — and the louder you have to speak.",
   "@settingsSensitivityHint": {
     "description": "Explains what the sensitivity value means"
   },
@@ -237,11 +245,11 @@
   "@settingsVolume": {
     "description": "Label above the master playback volume slider"
   },
-  "settingsVolumeHint": "Applies to everyone. Individual people can be adjusted from their entry in the channel tree.",
+  "settingsVolumeHint": "Sets the default volume for everyone. You can still adjust one member on their own from the channel list.",
   "@settingsVolumeHint": {
     "description": "Points at the per-person volume control"
   },
-  "settingsNoLogDirectory": "This platform has no writable log directory; records go to standard error only.\n(Android and iOS need the host app to supply a sandbox path.)",
+  "settingsNoLogDirectory": "This platform has no writable log directory.",
   "@settingsNoLogDirectory": {
     "description": "Shown in place of the log path where there is none"
   },
@@ -276,10 +284,6 @@
   "@connectAddressLabel": {
     "description": "Label of the address field on the connect screen"
   },
-  "connectAddressHint": "example.com or 192.168.1.10:9987",
-  "@connectAddressHint": {
-    "description": "Example address shown in the connect screen's address field"
-  },
   "connectNicknameLabel": "Nickname",
   "@connectNicknameLabel": {
     "description": "Label of the nickname field on the connect screen"
@@ -288,11 +292,11 @@
   "@connectServerPasswordLabel": {
     "description": "Label of the password field on the connect screen"
   },
-  "connectServerPasswordHint": "Leave empty if none",
+  "connectServerPasswordHint": "Optional",
   "@connectServerPasswordHint": {
     "description": "Hint under the server password field"
   },
-  "connectSaveServer": "Save this server",
+  "connectSaveServer": "Save server",
   "@connectSaveServer": {
     "description": "Button that stores the typed address as a bookmark"
   },
@@ -338,11 +342,11 @@
   "@sidebarSheetSaved": {
     "description": "Heading above the saved-server list in the session switcher"
   },
-  "sidebarBookmarkAdd": "Bookmark this server",
+  "sidebarBookmarkAdd": "Bookmark server",
   "@sidebarBookmarkAdd": {
     "description": "Sheet item that saves the connected server"
   },
-  "sidebarBookmarkRemove": "Remove from saved",
+  "sidebarBookmarkRemove": "Remove bookmark",
   "@sidebarBookmarkRemove": {
     "description": "Sheet item that unsaves the connected server"
   },
@@ -354,11 +358,6 @@
   "@bookmarkEditTitle": {
     "description": "Title of the dialog that edits a bookmark"
   },
-  "bookmarkEditAddressHint": "Changing this moves the entry; the old one is dropped.",
-  "@bookmarkEditAddressHint": {
-    "description": "Explains what editing the address does"
-  },
-
   "sidebarAddServer": "Add server",
   "@sidebarAddServer": {
     "description": "Entry that returns to the connect screen"
@@ -400,11 +399,11 @@
   "@memberMoveChannel": {
     "description": "Label of the channel dropdown in the move dialog"
   },
-  "memberKickChannel": "Kick from channel",
+  "memberKickChannel": "Remove from channel",
   "@memberKickChannel": {
     "description": "Menu item: remove from the current channel only"
   },
-  "memberKickServer": "Kick from server",
+  "memberKickServer": "Remove from server",
   "@memberKickServer": {
     "description": "Menu item: remove from the server entirely"
   },
@@ -419,7 +418,7 @@
       "name": { "type": "String" }
     }
   },
-  "memberBanDuration": "Duration",
+  "memberBanDuration": "Ban duration",
   "@memberBanDuration": {
     "description": "Label of the ban length selector"
   },
@@ -452,7 +451,7 @@
   "@memberReason": {
     "description": "Label of the optional explanation sent with a kick or ban"
   },
-  "memberVolume": "Volume…",
+  "memberVolume": "Adjust volume…",
   "@memberVolume": {
     "description": "Menu item that opens the per-person volume slider"
   },
@@ -463,7 +462,7 @@
       "name": { "type": "String" }
     }
   },
-  "memberVolumeHint": "Applies for this session only. The output volume in the settings moves everyone together.",
+  "memberVolumeHint": "Applies to this session only. Output volume in the settings sets the default for everyone.",
   "@memberVolumeHint": {
     "description": "Explains that a per-person volume is not remembered"
   },
@@ -483,7 +482,7 @@
   "@permissionsJoinChannel": {
     "description": "Permission name"
   },
-  "permissionsMoveClients": "Move other people",
+  "permissionsMoveClients": "Move other members",
   "@permissionsMoveClients": {
     "description": "Permission name"
   },
@@ -495,11 +494,11 @@
   "@permissionsSendPrivateMessage": {
     "description": "Permission name"
   },
-  "permissionsKick": "Kick",
+  "permissionsKick": "Remove members",
   "@permissionsKick": {
     "description": "Permission name"
   },
-  "permissionsBan": "Ban",
+  "permissionsBan": "Ban members",
   "@permissionsBan": {
     "description": "Permission name"
   },
@@ -507,7 +506,7 @@
   "@permissionsNotReported": {
     "description": "Shown when the server sent no permission hints at all"
   },
-  "permissionsNone": "Nothing beyond what every user can do.",
+  "permissionsNone": "Nothing beyond what every user has by default.",
   "@permissionsNone": {
     "description": "Shown when the server answered but granted nothing special"
   },
@@ -516,11 +515,11 @@
   "@memberAway": {
     "description": "Tooltip of the away badge on a member row"
   },
-  "memberMuted": "Muted",
+  "memberMuted": "Microphone muted",
   "@memberMuted": {
     "description": "Tooltip of the muted badge on a member row"
   },
-  "memberDeafened": "Deafened",
+  "memberDeafened": "Speakers off",
   "@memberDeafened": {
     "description": "Tooltip of the deafened badge on a member row"
   },
@@ -618,7 +617,7 @@
   "@chatDownload": {
     "description": "Tooltip of an attachment's download button"
   },
-  "chatFileTransferLater": "File transfer is coming in a later phase",
+  "chatFileTransferLater": "File transfer is not supported yet",
   "@chatFileTransferLater": {
     "description": "Tooltip when an attachment cannot be downloaded yet"
   },
@@ -712,11 +711,11 @@
   "@voiceMuteMic": {
     "description": "Tooltip of the microphone button while open"
   },
-  "voiceUndeafen": "Undeafen",
+  "voiceUndeafen": "Turn speakers on",
   "@voiceUndeafen": {
     "description": "Tooltip of the speaker button while deafened"
   },
-  "voiceDeafen": "Deafen (mute speakers)",
+  "voiceDeafen": "Turn speakers off",
   "@voiceDeafen": {
     "description": "Tooltip of the speaker button while listening"
   },
@@ -735,7 +734,7 @@
     "description": "Shortcut recorder placeholder for an unbound action"
   },
 
-  "shellLogPath": "Log: {path}",
+  "shellLogPath": "Log location: {path}",
   "@shellLogPath": {
     "description": "Shows where the log file lives",
     "placeholders": {
@@ -744,7 +743,7 @@
       }
     }
   },
-  "shellDismissError": "Dismiss",
+  "shellDismissError": "Close",
   "@shellDismissError": {
     "description": "Tooltip of the button that closes the error bar"
   },
@@ -884,7 +883,7 @@
       }
     }
   },
-  "crashReportFailed": "Could not generate the report; see the log",
+  "crashReportFailed": "Could not generate the report; see the log for details",
   "@crashReportFailed": {
     "description": "Snack bar when the crash report could not be written"
   },

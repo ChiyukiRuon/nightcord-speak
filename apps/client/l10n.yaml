@@ -22,10 +22,12 @@ output-class: AppLocalizations
 # only add `!`s. The delegate is installed on every MaterialApp in the app.
 nullable-getter: false
 
-# The order here is the fallback order: a system language that is neither zh
-# nor en resolves to the first entry, which is English on purpose — an
-# international client's neutral fallback. A Chinese system gets `zh` by
-# matching, not by this list (docs/localization.md).
+# The order here is the fallback order: a system language this app does not
+# ship resolves to the first entry, which is English on purpose — an
+# international client's neutral fallback. The four CJK languages are found by
+# matching, not by this list. `zh_Hant` is the one that needs a hand: see
+# `_withChineseScript` in `providers.dart` for why a `zh_TW` system locale
+# would otherwise land on Simplified (docs/localization.md).
 preferred-supported-locales:
   - en
   - zh
