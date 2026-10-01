@@ -218,6 +218,18 @@ export CMAKE_GENERATOR="Visual Studio 16 2019"
 > 写死会让 CI（windows-latest 预装完整 VS 2022）出错。
 > 给 VS 2022 装上「使用 C++ 的桌面开发」后就不需要了。
 
+**macOS 侧**——构建**不在这台 Windows 上做**，在局域网内一台 Mac 上做，细节见
+[`docs/macos.md`](docs/macos.md)。Rust、cmake、UI 字体三条与上面的要求相同，
+另有两样 Windows 不需要的：
+
+| 项 | 为什么 |
+| --- | --- |
+| Xcode | 27.0。`xcode-select -p` 要指向 `/Applications/Xcode.app/Contents/Developer` |
+| CocoaPods | `flutter build macos` 靠它链接带原生代码的插件（`local_notifier`、`hotkey_manager`）。装：`brew install cocoapods` |
+
+`CMAKE_GENERATOR` 那条**在 macOS 上不适用**（cmake 默认就用 Xcode）；CMake 4 与
+Opus 1.3 的问题照旧由 `.cargo/config.toml` 挡住，跨平台。
+
 ### 3.3 语音构建踩过的两个坑（已由仓库配置绕过，记录备查）
 
 都不需要手动做，但如果哪天在别的机器/CI 上看到这两条错误，答案在这里：
@@ -268,13 +280,25 @@ cd apps/client && flutter gen-l10n
 > exe/DLL，文件被占用时构建以 `error MSB3073`（cmake_install 失败）告终，
 > 报错信息不会直说原因。冒烟测试时踩到过一次。
 
+**macOS（在 Mac 构建节点上，见 [`docs/macos.md`](docs/macos.md)）**：
+
+```bash
+ssh agent@192.168.31.33                     # 先连上去，其余命令都在那边跑
+cd ~/workspace/nightcord-speak/apps/client
+git pull
+flutter build macos --debug                 # 会连着 cargo build -p ts-ffi 一起跑
+```
+
+`flutter run -d macos` 也支持，但**从 SSH 启动会失败**：构建账号没有图形会话
+（`docs/macos.md` §4）。看界面得把 `.app` 复制到 `/Users/Shared/` 再在访达里打开。
+
 ### 3.5 门禁：提交前必须全绿
 
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 388 个
-cd apps/client && flutter analyze && flutter test                  # 245 个
+cargo test  --workspace --all-features                             # 400 个
+cd apps/client && flutter analyze && flutter test                  # 272 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -300,6 +324,7 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
   `logging`……）。**语言用中文**（§4.1）。
 - 改动 API、修 bug、定决策，同步更新本文档对应小节。
 - 未经要求不要提交/推送。
+- 提交的信息应当简洁明了，不要长篇大论。
 
 ---
 
@@ -397,9 +422,12 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **23,877 行**，16 crates + CLI + gateway |
-| Dart | **22,304 行**，77 文件（含 l10n 生成文件，约 3,000 行） |
-| 测试 | **399 Rust + 270 Dart**，全绿  |
+| Rust | **23,951 行**，16 crates + CLI + gateway |
+| Dart | **22,513 行**，78 文件（含 l10n 生成文件，约 3,000 行） |
+| 测试 | **400 Rust（macOS 上 399，差的是 SEH 那条）+ 272 Dart**，两个平台都全绿 |
+
+> macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
+> 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。
 
 ### 5.3 实测验证过什么
 
@@ -643,7 +671,7 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 
 | 项 | 结果 |
 | --- | --- |
-| 窗口最小尺寸 | ✅ **Windows runner** 的 `WM_GETMINMAXINFO`（`windows/runner/win32_window.cpp`）：`960x640` 逻辑像素，用 `AdjustWindowRectEx` 把边框加回去，所以下限管的是**客户区**；`FlutterDesktopGetDpiForHWND` 让 150% 缩放下是同一个窗口。默认 `1280x720` 仍在其上。**只有 Windows 有**——仓库里目前也只有 `windows/` 这一个平台目录 |
+| 窗口最小尺寸 | ✅ 两个平台各一份，同一个数、同一个理由（低于它聊天头部溢出）。**Windows** 走 `WM_GETMINMAXINFO`（`windows/runner/win32_window.cpp`），`AdjustWindowRectEx` 把边框加回去所以下限管**客户区**，`FlutterDesktopGetDpiForHWND` 让 150% 缩放下是同一个窗口；**macOS** 走 `MainFlutterWindow.swift` 的 `contentMinSize`，它量的本来就是绘制区、point 本来就是逻辑单位。默认 `1280x720` 仍在其上 |
 | 为什么是这个数 | ✅ 溢出的是 `chat_panel.dart` 的头部行：侧栏 288 + 聊天面板里那行固定件（图标 32 + 名称 + 话题分隔 + 在线数）约 300；960 给聊天面板留 671，长一点的频道名和四位在线数都放得下。**没有实测拖到下限**（见 §5.4） |
 | 断开图标 | ✅ `Icons.link_off` → `Icons.logout`：门 + 箭头，和登录界面「退出」是同一个记号；断链读起来像「链路坏了」——是故障，不是选择 |
 | AFK 图标 | ✅ `Icons.schedule` → `Icons.snooze`（在线 `snooze_outlined`）：闹钟脸里一个大 Z，是全仓库里最接近「zzz」的 Material 字形；成员列表的离开徽章同时换成同一个，两者仍然读作同一件事 |
@@ -672,14 +700,63 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 | 测试 | ✅ 4 处改用页面（渲染、连接页入口、增益滑杆、每主题构建）；新增 2 条：左栏切节真的换内容、返回按钮真的回到连接页 |
 | **实机看过没有** | ❌ 见 §5.4 |
 
+**macOS 平台（2026-10-01，第一轮）**
+
+细节在 [`docs/macos.md`](docs/macos.md)。**这一轮全部是构建与测试层面的结论，
+界面本身没有人看过**——原因见 §5.4 第一条。
+
+| 项 | 结果 |
+| --- | --- |
+| Rust workspace 在 macOS 上编译 | ✅ arm64，含 libopus。cmake 是 4.4.3（就是 Windows 上出事的那个大版本），`.cargo/config.toml` 的 `CMAKE_POLICY_VERSION_MINIMUM` **跨平台生效**，没报错 |
+| `flutter build macos --debug` | ✅ `Nightcord Speak.app`，一条命令 |
+| dylib 进了 bundle | ✅ `Contents/Frameworks/libnightcord_ffi.dylib`，arm64，34 个 `nightcord_*` 导出符号 |
+| **签名里的权限** | ✅ `codesign -d --entitlements` 实读到 `network.client` 与 `audio-input`——不是只看源文件里的 plist |
+| 产品名 | ✅ `CFBundleName` = `Nightcord Speak`；窗口标题与菜单栏同源 |
+| 图标 | ✅ 7 个尺寸由 `make-app-icon.py` 生成；**Windows 的 `.ico` 与改动前逐字节相同**（重构没动原产物） |
+| `flutter analyze` | ✅ 无问题 |
+| Rust 测试 | ✅ 398 全绿（少的那一个是 Windows 专有的 SEH，见 §5.2） |
+| Dart 测试 | ✅ 270 全绿 |
+| **抓到 1 个真 bug** | ✅ `ts-crash` 的进程存活探测在 macOS 上恒真，见 §6 ⑱ |
+| **看界面 / 连服务器 / 语音** | ❌ 见 §5.4（第二轮里前两项补上了，见下） |
+
+**macOS 第二轮（2026-10-01，用户实机反馈后）**
+
+用户双击看了界面，报回四条。逐条查下来，**只有两条是真 bug**：
+
+| 项 | 结果 |
+| --- | --- |
+| 「检测不到麦克风」 | ✅ **不是 bug**——**这台 Mac mini 没有麦克风**。沙箱外的探针枚举出 0 个输入设备，`system_profiler` 全机只有一个 `Mac mini扬声器`。见 [`docs/macos.md`](docs/macos.md) §5.1 |
+| 「播放不出声音」 | ✅ **不是 bug**。用户随后在一台 **MacBook** 上实测：扬声器与麦克风、收发语音全部正常——**macOS 端的语音是通的**，构建节点没有麦克风只是那台机器的硬件现状 |
+| 顺带留下两条诊断 | ✅ `pump_audio` 的两条静默返回（没有输出设备 / 队列已满且不排空）加了节流告警，成功路径加一条一次性 `info`。原来这两处是**直接 `return`、一个字都不记**，于是「有人在说话而你听不见」在日志里查不到任何线索。查这轮问题时正是靠它们把范围从「整个音频栈」缩到「混音之后」 |
+| **通知不出现** | ✅ **真 bug**，且**三个方向全静默**。`local_notifier` 0.1.6 的 macOS 侧建在废弃的 `NSUserNotificationCenter` 上：Dart 的 `setup()` 在 macOS 上不发原生调用、原生 `deliver` 无条件 `result(true)`、两边都没申请过权限——「坏了」与「正常」在日志里无法区分。换成 `UNUserNotificationCenter` 的方法通道，权限改到第一次真要发通知时申请，回给 Dart 的是「显示了没有」而不是「调用成功了没有」。见 §6 ⑲ 与 [`docs/notifications.md`](notifications.md)。**中间撤回过一次**，见下 |
+| **快捷键显示没适配** | ✅ 真 bug 但只是显示：`Chord.format()` 把修饰键写死成 `Ctrl/Shift/Alt/Meta`，在 macOS 上按 ⌘ 显示成 `Meta`、⌥ 显示成 `Alt`。改成按平台拼。**注册路径本身是对的**——`uni_platform` 的扩展会把 Flutter 的 HID usage 查表换成 Carbon 虚拟键码，读插件源码确认过 |
+| **默认修饰键改成 Command** | ✅ 用户拍板。macOS 默认改为 ⌘⇧M/D/P，其余平台不变。默认值由 `ts-settings` 拥有，只改 Rust 一处 |
+| **⌘, 打开设置** | ✅ 用户拍板走 macOS 惯例而不是全局热键。`MainMenu.xib` 里模板自带的 `Preferences…`（`keyEquivalent=","`）**本来就是个没有 action/target 的死项**，接上即可 |
+| 新 Swift 进了产物 | ✅ `strings` 在二进制里找得到 `nightcord/shell` 与 `nightcord/notifications` |
+| **快捷键与 ⌘,** | ✅ **用户实测通过**：⌘⇧M/D/P 触发正常，`⌘,` 打开设置正常 |
+| **通知** | ✅ **用户实测通过**——但绕了一圈，见下 |
+
+> **通知那一条的弯路值得单独记**：用户报「通知正常」，于是按指示把那套
+> `UNUserNotificationCenter` 通道整体撤销。**撤销之后通知立刻不工作**——原来那次
+> 「正常」跑在**本身就含新通道的构建**上。
+>
+> 教训不是「别撤」，是：**判断一个替代实现是否必要，必须拿不含它的构建去测**。
+> 拿含它的构建测，测的是替代实现自己。这条对以后任何「我们加了 X 绕过 Y」的改动都成立。
+| 编解码往返 | ✅ 新增测试 `a_tone_survives_the_codec_at_its_own_level`（`ts-audio/src/encoder.rs`）：编码一个 0.5 幅度的正弦、再用 libopus 解码、断言电平回来。**两个平台都通过**。这是唯一一处让 `opus_encode_float` 与 `opus_decode_float` 互相验证的地方——`audiopus_sys` 是用当时机器上的 cmake 现场编 libopus 的，而一个「解码恒定为 ±1 LSB」的构建在其他任何测试里都看不出来 |
+
 ### 5.4 未验证
 
+- ~~macOS 的通知、`⌘,`、快捷键~~ ——**用户实测全部通过**（见 §5.3）。
+- ~~macOS 上的真实服务器与语音~~ ——**已由用户在一台 MacBook 上实测通过**：连接、扬声器、
+  麦克风、收发语音都正常。构建节点（Mac mini，无输入设备）上听不到声音，是那台机器的
+  硬件现状，不是平台限制；[`docs/macos.md`](docs/macos.md) §5.1 记了怎么一眼看出机器
+  有没有输入设备。**麦克风那个 TCC 对话框长什么样仍未记录**。
 - **音质**：单测只验证了帧长、码率常量、codec 字节。**立体声档的实际听感**，以及
   **官方客户端能否解出 Opus Music 档**，全部待实机。后者是真风险：别的客户端若只
   认单声道，我们发的立体声会被降混。
 - **音量**：总音量与单人音量的即时性、以及总音量跨进程重启后是否还在，待实机。
 - **poke / kick / ban**：命令链与权限门控有单测，**没有对真实服务器发过一次**。
-- **窗口最小尺寸**：`WM_GETMINMAXINFO` 只编译过，**没有把窗口拖到下限试过**（`960x640` 是否真的够、以及在 150% 缩放下是否如预期）。
+- ~~窗口最小尺寸~~ ——**用户实测确认挡住了**（macOS 侧；Windows 的 `WM_GETMINMAXINFO` 用的是同一个数，机制不同）。150% 缩放那一条仍未单独试过。
 - **设置页**：左栏切换、返回、六节各自的观感只有单测与静态检查，**没有人在真机上点过**；
   尤其没试过窗口拖到 960 下限时内容区（960 − 240 = 720）的样子。
 - **麦克风增益**：换算、clamp、存储、滑杆曲线、两处 UI 都有单测，**没有人真机听过**
@@ -710,6 +787,19 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 `flutter analyze`。⑯ 也是同一路数：长按那条测试刚写下就红了，红得有价值——
 它跑在默认的 Android 目标平台上，而长按在那里根本到不了我们的处理器。
 
+⑱ 是另一类，第一次出现：**平台假设从没在另一个平台上跑过**。那段代码在 Windows
+上是对的、在 Linux 上也是对的，唯独 macOS 上是错的——而 macOS 是这轮才加的。
+抓到它的不是新写的测试，是**把已有的测试换一台机器跑**。
+
+⑲ 是 ⑱ 的同源版本（移植到 macOS），但错在**依赖**而不是我们自己的代码：插件声称支持
+macOS，实际那条路径是空壳，而且**把失败报成了成功**。它的教训不是「换个包」，是
+**「不可见也不落日志」比「报错」坏得多**——⑲ 直接违反了 M0.6 立下的那条不变式，
+所以修法的重点在于让回答变成真的（回「显示了没有」而不是「调用成功了没有」）。
+
+它中间被撤回过一次：用户报「通知正常」，于是按指示整体撤销；**撤销之后通知立刻不工作**
+——那次「正常」跑在含新通道的构建上。真正该记的是**怎么测一个替代实现**：
+**要拿不含它的构建去测**，否则测的是它自己。这条已经写进 [`docs/notifications.md`](notifications.md)。
+
 | # | 症状                           | 根因                                                    | 修法                                                          |
 |---|--------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
 | ① | 两台在线服务器都显示「未连接」 | `ConnectedEvent` 不设连接状态；后端只在重连时发状态事件 | 前端由 `connected` 事件置位；后端把状态变更与事件发布**绑定** |
@@ -728,6 +818,7 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 | ⑩ | 戳一戳的合成 id 会撞 | 第一版用 `-时间戳`，两次戳在同一毫秒就重复，而消息列表按 id 作键 | 视图上一个从 0 单调递减、**先减后取**的计数器（服务器从 1 往上数，两者不会碰面） |
 | ⑧ | **别人换频道，看起来像是下线了** | 我们**从没订阅过频道**。TS3 只推你订阅了的频道的事件，所以别人搬走时发来的是 `notifyclientleftview`（语义是「离开你的视野」），而 book 的规则是**无条件 `remove`** | 握手后发 `channelsubscribeall`，并在权限快照变化后重发。见 `docs/ts3.md` §8——**这条是从 webspeak3 学来的** |
 | ⑰ | **设为离开后，麦克风一触发就报「未连接」** | away 只发给了服务器，**本地的发送闸门没关**——`TransmitPolicy` 里只有静音与闭麦两扇门。于是门限照常放行、帧被编出来、库以 `can_send_audio()` 拒绝，FFI 把这次拒绝当成 `voice_send` 失败弹了出来。**同一个 bug 在 deafen 上已经修过一次**（`TransmitPolicy::output_muted` 的注释逐字写着同样的症状），away 是把同一件事又做了一遍 | `TransmitPolicy` 加第三扇门 `away`（`ts-audio/src/engine.rs`），两处宿主在 `SetAway` 时顺手关闸；再在 `ConnectionStateChanged(Connected)` 上清掉它——away 是连接状态，服务器不跨连接记它，而引擎会活过重连（麦克风不会重开）。回归测试照 deafen 那条写。**用户实测报上来的** |
+| ⑱ | **崩溃报告永远发现不了「上次异常结束」**（macOS） | `ts-crash` 判断留下运行标记的进程是否还活着，非 Windows 分支只认 `/proc`，**没有 `/proc` 就 `return true`**。macOS 与 BSD 都没有 `/proc`，于是每个 pid 都算活着：硬杀留下的标记永远不判异常，报告也永远不消费它们。这个 crate 从没在 macOS 上编译过，所以 Windows 与 Linux 的测试一直是绿的 | 补 `kill(pid, 0)`：0 是活着、`EPERM` 是活着但不是我们的、`ESRCH` 才是没了。**转换要先检查**——负的 `pid_t` 不是进程号而是进程*组*号，`kill` 会对存在的组返回成功，那是个假的「活着」；超出 `pid_t` 的 pid 是这个内核不可能发出的，直接判死（测试里的 `u32::MAX - 3` 正靠这一点）。`libc` 本来就由 `cpal`/`tokio` 带在树里，加进去不增加编译量。见 [`docs/macos.md`](docs/macos.md) §6 |
 | ⑯ | **触屏上长按打不开离开消息** | `IconButton` 的 `tooltip` 是它**内部**的一个 `Tooltip`，而 `Tooltip` 在触屏平台认长按。手势竞技场里最深的那层先被命中、先赢，所以长按弹的是提示框——在**唯一没有右键**的那类平台上，功能正好够不到 | 有第二个动作的按钮把 `Tooltip` 挪到最外层、`IconButton` 不再自带，`GestureDetector` 于是成为最深的那层。测试跑在 `flutter_test` 默认的 Android 目标平台上，所以这条路径**是被测过的**，不是「桌面能点就行」 |
 
 ③ 由用户指出。**教训**：错误只以 SnackBar 出现、不落日志，线索几秒就没了——
@@ -779,7 +870,10 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 ### 视觉层欠账（见 [`docs/ui.md`](docs/ui.md)）
 
 - [ ] **布局那一层**：配色规范 §19/§28 的 Server Rail + 独立成员栏、§29/§30 的
-      移动端 Shell、§10 的自绘窗口标题栏。token 与组件已就位，改的是结构。
+      移动端 Shell。token 与组件已就位，改的是结构。
+- **§10 的自绘窗口标题栏：不做**（用户定，2026-10-02）。这条原先挂在上面那一行里，
+  于是每次列待办都会冒出来一次——**它不是欠账，是不做**，所以从欠账里摘出来了。
+  两个平台都用系统标题栏。
 - [x] ~~设置的左右布局~~ —— 弹窗改成了页面（左栏导航 + 右侧一节），见 §5.3 第六轮与
       [`docs/ui.md`](docs/ui.md)。**这是布局那一层的第一块**，其余照旧未动。
 - [ ] **§19 的侧栏宽度**：现状 288，规范给 240–280（代码里有注释）。
@@ -794,6 +888,18 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 - [ ] 语音是 PCM over WebSocket（第一阶段），最终要换成浏览器侧编解码
 - [ ] 调试页（`crates/ts-gateway/web/`）要按目标目录迁进 `tools/web-debug/`，
       产品 UI 是 Flutter Web，尚未开始
+
+### macOS（见 [`docs/macos.md`](docs/macos.md)）
+
+`.app` 每次构建后复制到 `/Users/Shared/`，双击即可（构建账号没有图形会话，见该文 §4）。
+
+- [x] ~~验通知、`⌘,`、⌘⇧M/D/P~~ ——**用户实测全部通过**（见 §5.3）。通知那条绕了
+      一圈：「正常」是在含新通道的构建上测的，撤销后立刻不工作，已装回
+- [x] ~~拖动窗口到 960x640 下限~~ ——**用户实测确认挡住了**
+- [x] ~~设置文件的迁移~~ ——macOS 默认值从 Ctrl 改成 ⌘ 之后存量的那份 `settings.json`
+      里还是 Ctrl。**用户已自行删掉该文件**，没有写迁移（见 §5.4 的理由）
+- [ ] 连真实 TS3 / TS6（服务器地址见 §5.3）——**语音部分用户已在 MacBook 上验过**，
+      剩下的是微信道 / 频道切换、通知与弹窗的文案这些非语音项
 
 ### 其他
 
@@ -857,6 +963,7 @@ cd apps/client && flutter analyze && flutter test                  # 245 个
 | `docs/ui.md`               | 视觉层：设计系统住哪、规范没写全或互相打架的地方怎么裁的、字体为什么下载而不是提交 |
 | `docs/UI设计与配色规范.md` | UI 设计系统 **v2.0**：颜色 / 字体 / 间距 token 与组件规范（v2 换掉了 v1 的全套颜色） |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
+| `docs/macos.md`            | macOS：构建节点、要改的六处模板、沙箱数据目录、启动为什么从 SSH 做不到 |
 | `docs/tsclientlib-fork.md` | 为什么用 submodule、fork 的 `nightcord` 分支、局域网改动   |
 
 ### 怎么更新本文档
@@ -892,6 +999,13 @@ cd apps/client && flutter test        # Dart 测试数看最后一行 +N
 **约定**：**用已知可用的工具去测**（要测服务器在不在，先用能连上的客户端试一次），
 别用临时拼的探针。
 
+**先找一遍仓库里有没有。** 加 macOS 时为了回答「沙箱之外能不能看到音频设备」，又临时
+写了一个 example——而 `crates/ts-audio/examples/list_devices.rs` **本来就在仓库里**，
+还比临时写的那个更全（默认设备标记、采样率、声道数）。更糟的是收尾时 `rm -rf examples/`
+把那个**已提交的文件**一起删了，`git status` 里的 `D` 才暴露出来（已 `git checkout` 恢复）。
+
+两条都是同一个动作能避免的：**写工具之前先 `ls`，删目录之前先看 `git status`**。
+
 ### 构建结果要验真
 
 `cargo build | tail -N` 的退出码是 `tail` 的，不是 cargo 的——**早期因此两次把失败的
@@ -907,6 +1021,29 @@ cd apps/client && flutter test        # Dart 测试数看最后一行 +N
 一个 em dash（U+2014）就会被读成当前代码页（936）表示不了的字符，C4819 直接升级成硬
 错误——**报错指向文件第 1 行**，完全看不出是哪一句。C++ 侧（runner）的注释一律纯 ASCII；
 Rust 与 Dart 侧不受影响（§4.1 说注释用英文，这条是同一个方向的硬约束）。
+
+### 带转义的值，别让它穿过 shell
+
+加 macOS 平台时改 `project.pbxproj`，连坏了两次，两次都不是 Xcode 的错：
+
+1. **heredoc 吃掉了一个反斜杠。** `python - <<'PY'` 里的 `"\\n"` 到 Python 手上变成
+   了 `"\n"`，于是「把换行转义成 `\n` 两字符」的函数实际是「把换行换成换行」——
+   no-op。写进文件的是真换行，再被文本模式的写放大成 CRLF，Xcode 生成出来的脚本
+   第一行就成了 `set -e\r`，bash 报 `set: -` + `: invalid option`。
+2. **`re.subn` 的替换串会解释转义。** 用函数做替换不会，用字符串会——`\n` 又被
+   还原成了换行。
+
+**约定**：
+
+- 要交给 Python 的代码里有反斜杠，就**写成文件**再执行，别走 heredoc。
+- 内容本身含转义序列的文件（`.pbxproj`、任何内嵌脚本的工程文件），**用字节读写**，
+  并且在源码里用 `chr(92)` 拼反斜杠——源码里一个反斜杠字面量都不留。
+- 改完**验字节**，不是看 diff 像不像：数 CR、数转义、`plutil -lint`、最后还要
+  `xcodebuild -list` 真的读一遍。前两次「看着没问题」都骗过了人眼。
+
+> 附带一条：`.gitattributes` 是 `* text=auto eol=lf`，而本机 `core.autocrlf=true`，
+> 所以**工作区里一堆 CRLF 是正常的**，git 存的是 LF。看到 CRLF 先别当污染去修——
+> 先确认它在不在一个值的**内部**。
 
 ### 不确定就问，不要猜
 
