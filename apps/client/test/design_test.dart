@@ -370,12 +370,31 @@ void main() {
       expect(AppFonts.forLocale(const Locale('zh', 'CN')), AppFonts.simplifiedChinese);
     });
 
-    test('everything else falls back to the Latin face', () {
+    test('Traditional Chinese, Japanese and Korean get their own faces', () {
+      // One face per language rather than one for all CJK: the same ideograph
+      // is drawn with different shapes in each, and a reader of one notices
+      // immediately when handed another's.
+      expect(
+        AppFonts.forLocale(const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant')),
+        AppFonts.traditionalChinese,
+      );
+      expect(AppFonts.forLocale(const Locale('ja')), AppFonts.japanese);
+      expect(AppFonts.forLocale(const Locale('ko')), AppFonts.korean);
+    });
+
+    test('Simplified Chinese is the one without a script, or with Hans', () {
+      expect(
+        AppFonts.forLocale(const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans')),
+        AppFonts.simplifiedChinese,
+      );
+    });
+
+    test('a language the app does not ship falls back to the Latin face', () {
       expect(AppFonts.forLocale(const Locale('en')), AppFonts.latin);
       // Not a supported locale, but it must not pick a family that is not
       // bundled — Flutter would render it in the system font and say nothing.
       expect(AppFonts.forLocale(const Locale('fr')), AppFonts.latin);
-      expect(AppFonts.forLocale(const Locale('ja')), AppFonts.latin);
+      expect(AppFonts.forLocale(const Locale('ar')), AppFonts.latin);
     });
 
     test('the theme carries the family through', () {

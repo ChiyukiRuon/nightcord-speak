@@ -78,7 +78,7 @@ flutter:
 
   # --- UI fonts (docs/UI字体规范.md) -----------------------------------------
   #
-  # **These files are not in the repository.** They are ~20 MB of binary that
+  # **These files are not in the repository.** They are ~50 MB of binary that
   # never changes, so `scripts/fetch-fonts.sh` downloads them and
   # `assets/fonts/` is gitignored. A build without them fails on a missing
   # asset — deliberately, because the alternative is every screen quietly
@@ -91,11 +91,16 @@ flutter:
   # `TextStyle.fontVariations` — see `AppTypography`, which sets it (and
   # `fontWeight` beside it) for every style in the scale.
   #
-  # Only the two families the app's locales need are bundled (`en` and `zh` —
-  # see `l10n.yaml`); §9 of the specification is explicit that a language the
-  # app does not ship should not be paid for in bundle size. Text in other
-  # languages still renders through Flutter's per-glyph system fallback, the
-  # same mechanism §8 relies on for emoji.
+  # One family per language the app ships (`en`, `zh`, `zh_Hant`, `ja`, `ko` —
+  # see `l10n.yaml`), and no more: §9 of the specification is explicit that a
+  # language the app does not ship should not be paid for in bundle size. Text
+  # in other languages still renders through Flutter's per-glyph system
+  # fallback, the same mechanism §8 relies on for emoji.
+  #
+  # Four CJK faces rather than one, because they are not interchangeable: the
+  # same ideograph is drawn with different shapes in Simplified Chinese,
+  # Traditional Chinese, Japanese and Korean. `AppFonts.forLocale` picks one;
+  # adding a locale means a family here *and* a case there, together.
   fonts:
     - family: NotoSans
       fonts:
@@ -104,6 +109,18 @@ flutter:
     - family: NotoSansSC
       fonts:
         - asset: assets/fonts/NotoSansSC-Variable.ttf
+
+    - family: NotoSansTC
+      fonts:
+        - asset: assets/fonts/NotoSansTC-Variable.ttf
+
+    - family: NotoSansJP
+      fonts:
+        - asset: assets/fonts/NotoSansJP-Variable.ttf
+
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
 
   # The fonts' own licence. OFL §1 requires it to travel with the font, and it
   # is fetched alongside them because it is not in the repository either. An

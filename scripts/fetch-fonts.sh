@@ -35,9 +35,18 @@ JSDELIVR="https://cdn.jsdelivr.net/gh/google/fonts@main"
 GITHUB="https://raw.githubusercontent.com/google/fonts/main"
 
 # name|sha256|path-within-the-repo
+# One CJK face per language the app ships, because they are not
+# interchangeable: the same ideograph is drawn with different shapes in
+# Simplified Chinese, Traditional Chinese, Japanese and Korean, and a reader of
+# one notices immediately when handed another's. `docs/UI字体规范.md` §2 is where
+# that rule lives; the cost — about 50 MB of fonts before a build — is the
+# reason this script exists rather than the files themselves.
 FILES=(
 	"NotoSans-Variable.ttf|bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d|ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"
 	"NotoSansSC-Variable.ttf|a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da|ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf"
+	"NotoSansTC-Variable.ttf|864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f|ofl/notosanstc/NotoSansTC%5Bwght%5D.ttf"
+	"NotoSansJP-Variable.ttf|c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f|ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf"
+	"NotoSansKR-Variable.ttf|194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252|ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf"
 	"OFL.txt|1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9|ofl/notosanssc/OFL.txt"
 )
 

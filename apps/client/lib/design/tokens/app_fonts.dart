@@ -1,10 +1,10 @@
 // Which family text is drawn in, from `docs/UI字体规范.md` §2 and §5.
 //
-// Two families are bundled, both variable: one Latin and one Simplified
-// Chinese. They are *not* in the repository — `scripts/fetch-fonts.sh`
-// downloads them before a build, and `assets/fonts/` is gitignored, so a fresh
-// clone that skips that step will fail to build rather than silently render in
-// the system font. The reasoning is in the script's header.
+// Five families are bundled, all variable: one Latin and four CJK. They are
+// *not* in the repository — `scripts/fetch-fonts.sh` downloads them before a
+// build, and `assets/fonts/` is gitignored, so a fresh clone that skips that
+// step will fail to build rather than silently render in the system font. The
+// reasoning is in the script's header.
 
 import 'package:flutter/widgets.dart';
 
@@ -16,26 +16,39 @@ abstract final class AppFonts {
   /// Simplified Chinese.
   static const String simplifiedChinese = 'NotoSansSC';
 
+  /// Traditional Chinese — Taiwan, Hong Kong, Macao.
+  static const String traditionalChinese = 'NotoSansTC';
+
+  /// Japanese.
+  static const String japanese = 'NotoSansJP';
+
+  /// Korean.
+  static const String korean = 'NotoSansKR';
+
   /// Which family `locale`'s text is drawn in.
   ///
-  /// Only these two are reachable today: `supportedLocales` is exactly `en`
-  /// and `zh` (see `l10n.yaml`), so locale resolution never produces anything
-  /// else — a `ja`, `ko` or `zh_TW` system locale resolves to one of the two
-  /// before it gets here.
+  /// One CJK face per language rather than one for all of them, because they
+  /// are not interchangeable: 直 and 骨 and a great many others are drawn with
+  /// different shapes in each, and a reader of one notices immediately when
+  /// handed another's. §2 of the specification is where that rule lives.
   ///
-  /// `docs/UI字体规范.md` §2 also specifies Noto Sans TC (zh-TW/HK/MO), JP and
-  /// KR, and §5 wants a branch for each, because sharing one CJK face across
-  /// languages draws Japanese kanji with Chinese glyph shapes. Adding one is
-  /// three edits **together** — the font in `assets/fonts/`, the family in
-  /// `pubspec.yaml`, and a case here. A case on its own would name a family
-  /// that does not exist, and Flutter would quietly draw the default font
-  /// instead of failing.
+  /// **The script matters as much as the case.** Writing a case for a family
+  /// that `pubspec.yaml` does not declare would not fail: Flutter would draw
+  /// the default font and say nothing. So adding a language is three edits
+  /// together — the file in `assets/fonts/` (via `scripts/fetch-fonts.sh`), the
+  /// family in `pubspec.yaml`, and the case here.
   ///
-  /// Until then, text in a language we do not bundle still renders: Flutter
-  /// falls back per glyph to the system fonts, the same mechanism §8 relies on for
-  /// emoji.
+  /// Script subtags are what separate the two Chinese faces: a `zh` locale
+  /// carrying `Hant` is Traditional, and one carrying nothing or `Hans` is
+  /// Simplified. `flutter gen-l10n` produces exactly `zh` and `zh_Hant` from
+  /// the ARB files, so those are the two that arrive here.
   static String forLocale(Locale locale) => switch (locale.languageCode) {
-    'zh' => simplifiedChinese,
+    'zh' => switch (locale.scriptCode) {
+      'Hant' => traditionalChinese,
+      _ => simplifiedChinese,
+    },
+    'ja' => japanese,
+    'ko' => korean,
     _ => latin,
   };
 }
