@@ -145,6 +145,17 @@ pub struct NewBookmark {
 
     #[serde(default)]
     pub server_password: Option<String>,
+
+    /// The address of the entry this one supersedes, when the caller is
+    /// changing a server that is already saved rather than adding one.
+    ///
+    /// Exists because the address is the entry's *identity* — [`BookmarkList::upsert`]
+    /// matches on host and port — so editing an address is not an update at all:
+    /// without this the old row would stay and a second one would appear beside
+    /// it. Parsed with the same parser as [`NewBookmark::address`], so an edit
+    /// finds the old row whatever spelling it was saved under.
+    #[serde(default)]
+    pub replaces: Option<String>,
 }
 
 /// The saved servers, as they are stored.

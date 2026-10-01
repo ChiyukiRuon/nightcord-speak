@@ -140,9 +140,27 @@ impl Client {
     /// Returns [`ClientError::InvalidAddress`] if the address cannot be parsed,
     /// or [`ClientError::Settings`] if the file cannot be written.
     pub fn add_bookmark(&mut self, new: NewBookmark) -> Result<BookmarkList, ClientError> {
+        // The address being replaced goes through the same parser, so an edit
+        // finds the old row whatever spelling it was saved under.
+        let replaces = match new.replaces.as_deref() {
+            Some(address) => {
+                Some(ConnectionTarget::parse(address).map_err(ClientError::InvalidAddress)?)
+            }
+            None => None,
+        };
         let bookmark = Bookmark::from_new(new).map_err(ClientError::InvalidAddress)?;
 
         let mut next = self.bookmarks.clone();
+        if let Some(old) = replaces
+            && (old.host != bookmark.host || old.port != bookmark.port)
+        {
+            // Only when it really is a different entry. Keeping the address is
+            // an ordinary save, and `upsert` already covers that — and this must
+            // not run for it, or the entry would be removed and re-added at the
+            // end of the list.
+            next.bookmarks
+                .retain(|saved| saved.host != old.host || saved.port != old.port);
+        }
         next.upsert(bookmark);
         self.update_bookmarks(next)?;
 
