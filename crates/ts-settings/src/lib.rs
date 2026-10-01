@@ -155,37 +155,39 @@ pub struct Chord {
     pub meta: bool,
 }
 
-fn default_mute_shortcut() -> Option<Chord> {
+/// §42's combination for `key`, with this platform's primary modifier.
+///
+/// The modifier differs and the gesture does not. A Mac has no Ctrl key where a
+/// Windows keyboard has one — the key in that corner is Control, and the one
+/// next to the letter keys is Command, which is where a Mac user's hand goes for
+/// a shortcut. Registering Ctrl+Shift on macOS would work and feel wrong.
+///
+/// One function rather than three so the three defaults cannot disagree about
+/// which platform they are on.
+fn default_shortcut(key: u32) -> Option<Chord> {
+    let macos = cfg!(target_os = "macos");
     Some(Chord {
-        // 0x00070010 — the key labelled M on a US layout.
-        key: 0x0007_0010,
-        ctrl: true,
+        key,
+        ctrl: !macos,
         shift: true,
         alt: false,
-        meta: false,
+        meta: macos,
     })
+}
+
+fn default_mute_shortcut() -> Option<Chord> {
+    // 0x00070010 — the key labelled M on a US layout.
+    default_shortcut(0x0007_0010)
 }
 
 fn default_deafen_shortcut() -> Option<Chord> {
-    Some(Chord {
-        // 0x00070007 — the key labelled D on a US layout.
-        key: 0x0007_0007,
-        ctrl: true,
-        shift: true,
-        alt: false,
-        meta: false,
-    })
+    // 0x00070007 — the key labelled D on a US layout.
+    default_shortcut(0x0007_0007)
 }
 
 fn default_push_to_talk_shortcut() -> Option<Chord> {
-    Some(Chord {
-        // 0x00070013 — the key labelled P on a US layout.
-        key: 0x0007_0013,
-        ctrl: true,
-        shift: true,
-        alt: false,
-        meta: false,
-    })
+    // 0x00070013 — the key labelled P on a US layout.
+    default_shortcut(0x0007_0013)
 }
 
 /// What raises a notification (§43).
@@ -776,13 +778,24 @@ mod tests {
         // stopped working is worse than one that never had them.
         let shortcuts = Settings::default().shortcuts;
 
+        // Which modifier depends on the platform; that it is exactly one of
+        // them, and that it is the primary one next to the letter keys, does not.
+        let macos = cfg!(target_os = "macos");
+
         for (chord, label) in [
             (shortcuts.mute, "mute"),
             (shortcuts.deafen, "deafen"),
             (shortcuts.push_to_talk, "push to talk"),
         ] {
             let chord = chord.unwrap_or_else(|| panic!("{label} has no default"));
-            assert!(chord.ctrl && chord.shift, "{label} should be Ctrl+Shift");
+            assert_eq!(
+                (chord.ctrl, chord.meta),
+                (!macos, macos),
+                "{label} should be primary-modifier+Shift, and primary is Command \
+                 on macOS and Control everywhere else"
+            );
+            assert!(chord.shift, "{label} should have Shift");
+            assert!(!chord.alt, "{label} should not have Alt/Option");
             // Not the letter: the *physical* key, USB HID usage and all.
             assert!(
                 chord.key > 0x0007_0000,

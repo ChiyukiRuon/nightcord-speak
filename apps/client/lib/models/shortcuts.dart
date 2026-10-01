@@ -3,6 +3,7 @@
 // The shape mirrors `ts_settings::ShortcutSettings` — which is why the key is
 // stored as a raw code rather than something prettier. See [Chord].
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 
 /// What a shortcut can set off.
@@ -64,12 +65,32 @@ class Chord {
       this.meta == meta;
 
   /// The combination as a person would write it, e.g. `Ctrl+Shift+M`.
+  ///
+  /// macOS spells two of the four modifiers differently — `Option` for Alt and
+  /// `Cmd` for Meta — and a Mac user reading `Meta+Alt` has to translate before
+  /// recognising their own shortcut. The primary modifier leads on both
+  /// platforms, as it does in the Windows spelling; the remaining three keep
+  /// Apple's order (Control, Option, Shift) rather than this file's, so the
+  /// common case reads `Cmd+Shift+M` and the full house is unambiguous.
+  ///
+  /// [defaultTargetPlatform] rather than `Platform.isMacOS`, deliberately:
+  /// `Platform` reads the machine the test is running on, so only one of the
+  /// two spellings could ever be covered. `defaultTargetPlatform` is a value a
+  /// test can stand in for, and the two agree on every platform this app ships.
   String format() {
+    final macos = defaultTargetPlatform == TargetPlatform.macOS;
     final parts = <String>[
-      if (ctrl) 'Ctrl',
-      if (shift) 'Shift',
-      if (alt) 'Alt',
-      if (meta) 'Meta',
+      if (macos) ...<String>[
+        if (meta) 'Cmd',
+        if (ctrl) 'Ctrl',
+        if (alt) 'Option',
+        if (shift) 'Shift',
+      ] else ...<String>[
+        if (ctrl) 'Ctrl',
+        if (shift) 'Shift',
+        if (alt) 'Alt',
+        if (meta) 'Meta',
+      ],
       _keyName(key),
     ];
     return parts.join('+');
@@ -82,6 +103,22 @@ class Chord {
     'alt': alt,
     'meta': meta,
   };
+
+  /// Value equality, because [ShortcutSettings] compares bindings to decide
+  /// whether anything moved — and without this every comparison is a reference
+  /// comparison between two structurally identical objects, so it always says
+  /// they differ.
+  @override
+  bool operator ==(Object other) =>
+      other is Chord &&
+      other.key == key &&
+      other.ctrl == ctrl &&
+      other.shift == shift &&
+      other.alt == alt &&
+      other.meta == meta;
+
+  @override
+  int get hashCode => Object.hash(key, ctrl, shift, alt, meta);
 
   /// Reads a combination, or null when there is not a usable one here.
   ///
@@ -142,6 +179,18 @@ class ShortcutSettings {
 
   /// §42's combinations, and the defaults a file written before this section
   /// existed comes back with.
+  ///
+  /// **The core owns these, not this file.** `ts_settings` fills them in with
+  /// serde before it ever serializes, so the JSON the FFI hands over always
+  /// carries all three keys and [fromJson]'s fallback below cannot be reached by
+  /// data from a real run. What is here is the placeholder a [Settings] carries
+  /// before the core has answered, and the safety net for a hand-written file.
+  ///
+  /// They are written in the Windows spelling on purpose: they are `const`, and
+  /// a `const` cannot ask what platform it is on. The conversions that matter —
+  /// what the core defaults to, and how this is displayed — both live somewhere
+  /// that can. On macOS the core supplies Command+Shift, and [format] prints it
+  /// as `Cmd+Shift+M`; these constants are never what a user sees there.
   static const Chord defaultMute = Chord(key: PhysicalKeyboardKey.keyM, ctrl: true, shift: true);
   static const Chord defaultDeafen = Chord(key: PhysicalKeyboardKey.keyD, ctrl: true, shift: true);
   static const Chord defaultPushToTalk = Chord(key: PhysicalKeyboardKey.keyP, ctrl: true, shift: true);
@@ -175,6 +224,19 @@ class ShortcutSettings {
   /// Whether every action is unbound, which is what a cleared section looks
   /// like. Not the same as the defaults.
   bool get isEmpty => mute == null && deafen == null && pushToTalk == null;
+
+  /// Value equality: `ShortcutHost` uses this to skip re-registering when a
+  /// settings emission moved nothing, and a reference comparison made that
+  /// guard a no-op — every emission tore the hotkeys down and built them again.
+  @override
+  bool operator ==(Object other) =>
+      other is ShortcutSettings &&
+      other.mute == mute &&
+      other.deafen == deafen &&
+      other.pushToTalk == pushToTalk;
+
+  @override
+  int get hashCode => Object.hash(mute, deafen, pushToTalk);
 
   Map<String, dynamic> toJson() => {
     'mute': mute?.toJson(),

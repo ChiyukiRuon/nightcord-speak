@@ -105,10 +105,41 @@ PTT 例外：它是瞬时的（按下说话、松开停），直接打给引擎�
 
 ---
 
+## 默认值与显示按平台分
+
+|  | Windows / Linux | macOS |
+| --- | --- | --- |
+| 默认组合 | `Ctrl+Shift+M/D/P` | `Cmd+Shift+M/D/P` |
+| 显示拼写 | `Ctrl` / `Shift` / `Alt` / `Meta` | `Cmd` / `Ctrl` / `Option` / `Shift` |
+
+**默认值由 `ts-settings` 拥有**：serde 补齐后它总会把三个键都序列化出去，所以 Dart 侧
+`ShortcutSettings` 里那两个 `const` 默认值在实际运行中走不到——它们是「core 还没答复」
+的占位，以及手写文件的兜底。它们是 `const`，而 `const` 问不了自己在哪个平台，所以保持
+Windows 拼写；真正管事的和真正显示的都在能问的地方。`apps/client/lib/models/shortcuts.dart`
+里那段注释写明了这件事。
+
+**显示**用 `defaultTargetPlatform` 而不是 `Platform.isMacOS`：后者读的是跑测试的这台
+机器，两种拼写里只有一种能被覆盖到。主修饰键在两边都排最前，其余三个按 Apple 的顺序
+（Control、Option、Shift），所以常见情形读作 `Cmd+Shift+M`，四个全占时也不会有歧义。
+
+**注册路径不需要按平台分**：`uni_platform` 的扩展在 macOS 上会把 Flutter 的 HID usage
+查 `kMacOsToPhysicalKey` 换成正的 Carbon 虚拟键码。这一段是读插件源码确认的——不确认
+很容易误以为是错键。
+
+## 设置没有可绑定的动作，但有 ⌘,
+
+`MainMenu.xib` 里模板自带一个 `Preferences…`，`keyEquivalent=","` 配默认修饰键就是
+**⌘,**——但它**没有 action 也没有 target，是个死的**。`MainFlutterWindow` 按 key
+equivalent 找到它、接上 target/action，经 `nightcord/shell` 通道让 Dart 打开设置页。
+
+采纳的是 macOS 的惯例而不是一个全局热键：设置本来就不该占一个系统级组合，而且菜单项
+这条路不花任何注册成本。Windows 上仍只有齿轮与语音栏两个入口。
+
 ## 已知取舍
 
 - **只做三个动作**。切频道、离开频道、断开、打开设置都可以绑，但 §42 只列了三个，
-  每个动作都要有自己的边界处理。
+  每个动作都要有自己的边界处理。**「打开设置」在 macOS 上走的是 ⌘, 菜单项**（见上），
+  不是第四个可绑定动作。
 - **每个动作只能绑一个组合**。§42 没有多绑定的要求，仓库里也没有列表型设置节的先例
   （`BookmarkList` 是独立文件，不是设置的一节）。
 - **手柄与鼠标侧键不支持**：插件只处理键盘。

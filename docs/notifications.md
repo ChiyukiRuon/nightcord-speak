@@ -92,11 +92,53 @@ Flutter 决定怎么显示。
 
 ---
 
-## 系统通知：桌面插件与它的 Windows 风险
+## 系统通知：两条实现，由平台分
 
-`local_notifier` 一个包覆盖 Windows / macOS / Linux。**移动端插件没加**：仓库里只有
-`windows/` 一个平台目录，`android/` 与 `ios/` 根本不存在，应用也从未在那两个平台上构建过。
-插件只在 `lib/util/system_notifications.dart` 一个文件里出现，将来换掉或补移动端只动那里。
+两个实现，`lib/util/system_notifications.dart` 是唯一知道谁是谁的地方——换掉任何一条
+都只动那一个文件：
+
+| 平台 | 走什么 |
+| --- | --- |
+| Windows | `local_notifier` |
+| macOS | runner 的 `nightcord/notifications` 通道（`UNUserNotificationCenter`） |
+
+**移动端插件没加**：`android/` 与 `ios/` 目录根本不存在，应用也从未在那两个平台上构建过。
+
+### Windows：`local_notifier` 与它的一个坑
+
+Windows 上非打包应用的 toast 通常需要 Start Menu 里一个带 AppUserModelID 的快捷方式，
+而本仓库的 runner 是原版模板，一个都没有。首次启动时插件确实报了
+`Error, shell link not found`——**然后它自己把那个 `.lnk` 创建了出来**，第二次起就正常。
+已实测：应用在后台时收到「后台测试员 加入了服务器」的 Windows toast。
+
+### macOS：插件不能用，换成了自己的通道
+
+`local_notifier` 0.1.6 的 macOS 侧建在**已废弃的 `NSUserNotificationCenter`** 上，
+而在新系统上它是**静默失效**的——不是失败，是什么都不发生，且**三个方向全都不报**：
+
+- Dart 层的 `setup()` 在 macOS 上不发原生调用，直接 `_isInitialized = true`
+- 原生 `deliver` 是 fire-and-forget，**无条件 `result(true)`**
+- 应用与插件都没有申请过通知权限
+
+于是「通知坏了」和「通知正常」在那条路径上完全无法区分，日志里一条都没有。
+
+现在是 `macos/Runner/MainFlutterWindow.swift` 里一个方法通道：
+
+- **权限在第一次真要发通知时申请**，不在启动时——弹窗带着理由出现
+- 回给 Dart 的是**「显示了没有」**而不是「调用成功了没有」；用户拒绝权限会记一行
+- `willPresent` 返回 `.banner`：macOS 默认在应用位于前台时不显示横幅，而这个客户端
+  恰恰是在前台时告诉你别的频道有消息。Dart 在前台走应用内浮层、不请求系统通知，所以
+  这里只在焦点切换的竞态里生效——那种情况下显示比丢弃好
+
+> **这一段是撤回过又装回来的。** 移植时先按源码读出上面这些，写了通道；随后一次
+> 「通知正常」的实测看起来否掉了它，于是整体撤销。撤销之后通知立刻不工作了——原来
+> 那次实测跑在**本身就含新通道的构建**上。教训是**测一个替代实现时，要拿不含它的
+> 构建去测**，否则测的是替代实现自己。细节见 [`docs/macos.md`](macos.md) §2.7。
+
+### 两条共有的兜底
+
+`initSystemNotifications` 与 `showSystemNotification` 都不抛，把原因写进 core 的日志
+（`warn`）而不是静默消失——这条不变式正是 macOS 那条路径原先破坏得最彻底的地方。
 
 **风险与实测结果**：Windows 上非打包应用的 toast 通常需要 Start Menu 里一个带
 AppUserModelID 的快捷方式，而本仓库的 runner 是原版模板，一个都没有。首次启动时

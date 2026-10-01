@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/models/settings.dart';
@@ -20,6 +21,41 @@ void main() {
       expect(ShortcutSettings.defaultMute.format(), 'Ctrl+Shift+M');
       expect(ShortcutSettings.defaultDeafen.format(), 'Ctrl+Shift+D');
       expect(ShortcutSettings.defaultPushToTalk.format(), 'Ctrl+Shift+P');
+    });
+
+    test('spells the modifiers the way the platform does', () {
+      // A Mac has no key labelled Alt or Meta — it has Option and Command — and
+      // Apple lists the modifiers in the opposite order from this file's
+      // Windows-first one. Both spellings are checked on whatever machine this
+      // runs on, which is why the getter reads `defaultTargetPlatform` rather
+      // than the OS.
+      const everything = Chord(
+        key: PhysicalKeyboardKey.keyM,
+        ctrl: true,
+        shift: true,
+        alt: true,
+        meta: true,
+      );
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      expect(everything.format(), 'Cmd+Ctrl+Option+Shift+M');
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      expect(everything.format(), 'Ctrl+Shift+Alt+Meta+M');
+    });
+
+    test('the default the core sends on macOS reads as Command', () {
+      // What `ts_settings` produces there. The constant in this file is the
+      // Windows spelling, so this is the shape the UI actually receives.
+      const macDefault = Chord(key: PhysicalKeyboardKey.keyM, shift: true, meta: true);
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      expect(macDefault.format(), 'Cmd+Shift+M');
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      expect(macDefault.format(), 'Shift+Meta+M');
     });
 
     test('matches only its own modifiers', () {

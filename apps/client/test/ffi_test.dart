@@ -84,7 +84,21 @@ void main() {
 
     test('the platform name is what Cargo produces', () {
       // A mismatch here is the whole reason a library turns up "not found".
-      expect(NativeLibrary.libraryFileName, endsWith('.dll'));
+      //
+      // Spelled out per platform rather than read back from
+      // `libraryFileName`, which would only assert that the getter equals
+      // itself. These are Cargo's rules for a `cdylib` named `nightcord_ffi`:
+      // a `lib` prefix and `.dylib`/`.so` on the unixes, neither on Windows.
+      //
+      // This used to hardcode `.dll`, so it passed only on the one platform it
+      // was written on — and the name it guards is exactly the thing that has
+      // to be right on every platform.
+      final expected = switch (Platform.operatingSystem) {
+        'windows' => 'nightcord_ffi.dll',
+        'macos' => 'libnightcord_ffi.dylib',
+        _ => 'libnightcord_ffi.so',
+      };
+      expect(NativeLibrary.libraryFileName, expected);
     });
   });
 

@@ -1,20 +1,44 @@
 // Desktop notifications, behind one file.
 //
-// The plugin appears here and nowhere else, so swapping it — or adding the
-// mobile one when there is something to build for — touches this file alone.
+// Two implementations, and this is the only file that knows which is which:
 //
-// The app has exactly one target today (`windows/` is the only platform
-// directory), so this is deliberately the desktop-only package: adding
-// `flutter_local_notifications` now would be writing code for platforms that
-// cannot be built, let alone verified.
+//   Windows   `local_notifier`
+//   macOS     the runner's `nightcord/notifications` channel
+//             (`macos/Runner/MainFlutterWindow.swift`)
+//
+// Full coverage of either appears here and nowhere else, so swapping one
+// touches this file alone.
+//
+// Why macOS is not the plugin: `local_notifier` 0.1.6 builds its macOS side on
+// `NSUserNotificationCenter`, deprecated since macOS 11 and inert on current
+// ones -- and it reports success regardless. Its Dart `setup` does not call into
+// native code at all on macOS, its `deliver` is fire-and-forget, and it answers
+// `true` unconditionally, so a client whose notifications never worked is
+// indistinguishable from a working one and nothing reaches the log.
+//
+// This was established twice, in the only order that settles it: first by
+// reading the plugin, and then -- after the replacement was reverted on the
+// strength of a test that turned out to have been run against the replacement
+// itself -- by watching notifications stop. Do not undo it again without a test
+// on a build that does not contain it.
 
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:local_notifier/local_notifier.dart';
 
 import '../ffi/rust_client.dart';
 
-/// Whether the plugin was set up successfully.
+/// The runner's notification channel. See `macos/Runner/MainFlutterWindow.swift`.
+const MethodChannel _channel = MethodChannel('nightcord/notifications');
+
+/// Whether this platform goes through the runner rather than the plugin.
+///
+/// `Platform` rather than `defaultTargetPlatform`: the question is which native
+/// implementation exists, not how anything should be laid out.
+bool get _viaRunner => Platform.isMacOS;
+
+/// Whether notifications were set up successfully.
 ///
 /// Starts optimistic so a notification arriving before `initSystemNotifications`
 /// finishes is not silently dropped; the setup reports failure itself.
@@ -22,6 +46,12 @@ bool _ready = false;
 
 /// Whether notifications have been set up.
 bool _attempted = false;
+
+/// Whether a refusal has already been written to the log on this run.
+///
+/// See [showSystemNotification]: the first refusal is worth a line, the two
+/// hundredth is not.
+bool _reportedRefusal = false;
 
 /// Prepares desktop notifications.
 ///
@@ -38,6 +68,35 @@ Future<void> initSystemNotifications() async {
   // own `setup` would throw rather than do nothing.
   if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) {
     logToCore('info', 'desktop notifications are not available on this platform');
+    return;
+  }
+
+  if (_viaRunner) {
+    // Not an assumption: ask the runner what macOS thinks. `_ready = true`
+    // here would be the same unconditional "yes" that made `local_notifier`
+    // impossible to diagnose on macOS — a runner too old to serve the channel
+    // would look exactly like one that works.
+    try {
+      final status = await _channel.invokeMethod<String>('status');
+      if (status == null) {
+        logToCore('warn', 'the runner did not say whether notifications are allowed');
+        return;
+      }
+      _ready = true;
+      // Said out loud because it is the one state with an answer the user has
+      // to act on: once refused, macOS never asks again.
+      if (status == 'denied') {
+        logToCore(
+          'warn',
+          'macOS notifications are denied for this app; they stay off until '
+          'they are switched on in System Settings > Notifications',
+        );
+      } else {
+        logToCore('info', 'desktop notifications are $status');
+      }
+    } catch (error) {
+      logToCore('warn', 'the runner does not serve desktop notifications: $error');
+    }
     return;
   }
 
@@ -62,7 +121,53 @@ Future<void> showSystemNotification({required String title, required String body
   }
 
   try {
+    if (_viaRunner) {
+      // The answer is *what happened*, not whether the call was made. A
+      // refusal used to be recorded at debug level, which meant the log said
+      // nothing at all about a notification the user asked for and did not
+      // get — the same silent-failure shape this channel replaced.
+      final status = await _channel.invokeMethod<String>('show', {
+        'title': title,
+        'body': body,
+      });
+      if (status == 'shown') {
+        // Anything that works later clears the memory, so a refusal after it
+        // is reported again rather than swallowed.
+        _reportedRefusal = false;
+        // Recorded, because a desktop notification is user-visible and this
+        // codebase's rule is that what the user can see, the log can account
+        // for. It is also the only way to tell "no notification was asked for"
+        // from "one was asked for and did not appear" — the two look identical
+        // from outside, and only one of them is a bug here.
+        //
+        // The title is deliberately not included: for a private message it is
+        // the sender and for a channel message it can be the message itself,
+        // and the log does not carry user content.
+        logToCore('info', 'showed a desktop notification');
+        return;
+      }
+
+      // Once per run: a refused notification is refused for every message that
+      // follows, and the reason is a switch the user has to find, not
+      // something each event needs to repeat.
+      if (!_reportedRefusal) {
+        _reportedRefusal = true;
+        logToCore(
+          'warn',
+          status == 'denied'
+              ? 'macOS refused to show "$title": notifications are off for this '
+                    'app in System Settings > Notifications'
+              : 'macOS answered "$status" instead of showing "$title"',
+        );
+      }
+      return;
+    }
+
     await LocalNotification(title: title, body: body).show();
+    // See the macOS branch: the same record for the same reason. The plugin
+    // cannot say whether Windows actually drew it, so this records the request
+    // rather than the result.
+    logToCore('info', 'asked for a desktop notification');
   } catch (error) {
     logToCore('warn', 'could not show a desktop notification: $error');
   }

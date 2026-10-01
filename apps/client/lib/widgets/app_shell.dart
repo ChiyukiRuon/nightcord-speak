@@ -12,6 +12,7 @@ import '../features/crash/crash_banner.dart';
 import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
+import '../features/settings/settings_page.dart';
 import '../ffi/rust_client.dart';
 import '../models/connect_request.dart';
 import '../l10n/app_localizations.dart';
@@ -20,6 +21,7 @@ import '../models/crash.dart';
 import '../models/events.dart';
 import '../models/settings.dart';
 import '../providers/providers.dart';
+import '../util/app_menu.dart';
 import '../util/reveal.dart';
 import '../util/system_notifications.dart';
 
@@ -216,6 +218,9 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     // unpackaged app needs a Start Menu shortcut carrying an AppUserModelID.
     // The wrapper logs the failure rather than letting it pass unnoticed.
     initSystemNotifications();
+    // The runner's Preferences... item, which is the macOS menu bar's way in.
+    // Harmless elsewhere: see the file header.
+    listenForAppMenu(onOpenSettings: _openSettings);
     // The defaults the environment does not override — nickname and identity
     // profile — come from the settings, so this waits for them to arrive. It is
     // a development aid; a round trip is nothing next to typing an address.
@@ -224,6 +229,16 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
     // In case the answer beat the subscription above.
     _autoConnect(ref.read(settingsProvider));
+  }
+
+  /// Opens the settings page, the same one the gear buttons open.
+  ///
+  /// The session is whatever is on screen, or nothing on the connect page —
+  /// exactly what those buttons pass. Menu items can arrive while the app is
+  /// mid-teardown, so the `mounted` check is not decoration.
+  void _openSettings() {
+    if (!mounted) return;
+    SettingsPage.open(context, session: ref.read(activeSessionProvider));
   }
 
   /// Connects to every address named in the environment.

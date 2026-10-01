@@ -1,0 +1,32 @@
+// Application-level settings for the Runner target.
+//
+// This may be replaced with something auto-generated from metadata (e.g., pubspec.yaml) in the
+// future. If not, the values below would default to using the project name when this becomes a
+// 'flutter create' template.
+
+// The application's name. This one setting is the window title (`MainMenu.xib`
+// substitutes it for its `APP_NAME` token), the menu-bar title, the name in the
+// Dock and Finder, and the name of the executable inside the bundle — so it is
+// the display name, spelled the way the brand is, exactly as `Runner.rc` spells
+// it on Windows. The bundle identifier below is the machine-facing name and
+// deliberately stays in the project's own spelling.
+//
+// Changing it means changing the three places that hardcode the product: the
+// `PBXFileReference` and two `TEST_HOST`s in `Runner.xcodeproj/project.pbxproj`,
+// and the `BuildableName`s in `xcshareddata/xcschemes/Runner.xcscheme`. Flutter's
+// own tooling does not need updating: `macos_assemble.sh embed` writes the built
+// name into `Flutter/ephemeral/.app_filename`, which is how `flutter run` finds
+// the bundle whatever it is called.
+PRODUCT_NAME = Nightcord Speak
+
+// The application's bundle identifier
+PRODUCT_BUNDLE_IDENTIFIER = com.chiyukiruon.nightcordClient
+
+// The copyright displayed in application information
+PRODUCT_COPYRIGHT = Copyright © 2026 ChiyukiRuon. MIT OR Apache-2.0.
+
+// The application's bundle identifier
+PRODUCT_BUNDLE_IDENTIFIER = com.chiyukiruon.nightcordClient
+
+// The copyright displayed in application information
+PRODUCT_COPYRIGHT = Copyright © 2026 com.chiyukiruon. All rights reserved.

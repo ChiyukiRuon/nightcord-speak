@@ -17,9 +17,9 @@ class NativeLibraryNotFound implements Exception {
   String toString() =>
       'Could not load the Nightcord core.\n'
       'Tried:\n${tried.map((p) => '  - $p').join('\n')}\n'
-      'Build it with `cargo build -p ts-ffi`, or run through '
-      '`flutter run -d windows` so the CMake hook copies it next to the '
-      'executable.';
+      'Build it with `cargo build -p ts-ffi`, or run through `flutter run`, '
+      'which copies it into the bundle as part of the platform build '
+      '(CMake on Windows, a script phase in the Xcode target on macOS).';
 }
 
 /// Loads and binds the Rust core.
@@ -51,7 +51,11 @@ class NativeLibrary {
     final name = libraryFileName;
     final tried = <String>[];
 
-    for (final candidate in [name, ..._developmentPaths(name)]) {
+    for (final candidate in [
+      name,
+      ..._bundledPaths(name),
+      ..._developmentPaths(name),
+    ]) {
       tried.add(candidate);
       try {
         return DynamicLibrary.open(candidate);
@@ -62,6 +66,25 @@ class NativeLibrary {
     }
 
     throw NativeLibraryNotFound(tried);
+  }
+
+  /// Where the library lands inside a built `.app`, on macOS.
+  ///
+  /// The Xcode target copies it into `Contents/Frameworks` and sets
+  /// `LD_RUNPATH_SEARCH_PATHS` to `@executable_path/../Frameworks` — but a bare
+  /// leaf name does not go through rpath resolution, so the path is spelled out
+  /// from the running executable instead of left to the loader to guess.
+  ///
+  /// Both spellings are offered because they are the same file reached the same
+  /// way, and whichever resolves is the one the setting actually points at.
+  /// Outside a bundle — `flutter test`, which runs a plain Dart VM — neither
+  /// exists and the caller falls through to the build directories below.
+  static Iterable<String> _bundledPaths(String name) sync* {
+    if (!Platform.isMacOS) return;
+
+    yield '@rpath/$name';
+    yield '${File(Platform.resolvedExecutable).parent.parent.path}'
+        '/Frameworks/$name';
   }
 
   /// Where the library lands when built from source.

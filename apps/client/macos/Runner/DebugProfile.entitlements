@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Opening a TCP connection to a TeamSpeak server. The template ships this
+	     in Release only, which is the trap: a sandboxed app without it gets
+	     `Operation not permitted` from connect(2), and the symptom is
+	     indistinguishable from an unreachable server. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Capture. The Rust core opens the microphone through CoreAudio; without
+	     this the process is denied at the audio HAL, and unlike the TCC prompt
+	     below there is no dialog — just silence. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

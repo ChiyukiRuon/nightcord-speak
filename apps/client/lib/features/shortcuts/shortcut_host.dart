@@ -68,6 +68,13 @@ class _ShortcutHostState extends ConsumerState<ShortcutHost> {
   }
 
   Future<void> _register(ShortcutAction action, Chord chord) async {
+    // Said out loud on the way in, not only on the way out. The settings page
+    // shows what is bound, so the log has to as well — otherwise "I pressed it
+    // and nothing happened" has no answer in the record, and the two things it
+    // could mean (registered something else / registered nothing) look alike
+    // from outside. `format` spells it the way the settings page does.
+    logToCore('info', 'shortcut ${action.name} is ${chord.format()}');
+
     final hotKey = HotKey(
       key: chord.key,
       modifiers: [
