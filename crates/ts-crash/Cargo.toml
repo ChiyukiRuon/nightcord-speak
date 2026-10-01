@@ -20,6 +20,12 @@ crash-handler.workspace = true
 # Asking whether the process that left a marker is still alive.
 windows-sys.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+# The same question, asked with `kill(pid, 0)`. Linux could answer by looking in
+# `/proc`, and did, but macOS and the BSDs have no `/proc` — see `is_pid_alive`
+# for what the fallback used to do instead.
+libc.workspace = true
+
 [dev-dependencies]
 # The integration tests drive `write_exception_note` through the real handler.
 crash-handler.workspace = true

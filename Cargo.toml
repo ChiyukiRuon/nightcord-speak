@@ -43,6 +43,12 @@ serde_json = "1"
 # `time::SignedDuration`, and it is not re-exported. Pinned to the same range
 # the vendored library asks for, so the two cannot resolve to different majors.
 time = "0.3"
+# `ts-crash` asks whether the process that left a run marker is still alive.
+# Windows answers from `windows-sys`; everywhere else answers from
+# `kill(pid, 0)`, which needs the constant and the function. It is already in
+# the tree under `cpal` and `tokio`, so depending on it adds no compilation —
+# the same reason `time` is named above.
+libc = "0.2"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"

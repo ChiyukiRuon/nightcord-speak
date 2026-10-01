@@ -630,17 +630,45 @@ fn is_pid_alive(pid: u32) -> bool {
 }
 
 /// See the Windows implementation for the reasoning.
+///
+/// Linux answers out of `/proc`, one `stat` per question. macOS and the BSDs
+/// have no `/proc`, and what used to stand in for it was `true` — every pid was
+/// alive, so a marker left by a hard kill was never recognised as abnormal and
+/// no report ever consumed it. Nothing caught that until this crate was built
+/// on a Mac: the tests that cover it fail there, and only there.
 #[cfg(not(windows))]
 fn is_pid_alive(pid: u32) -> bool {
     if pid == std::process::id() {
         return true;
     }
+
     let proc = Path::new("/proc");
     if proc.is_dir() {
-        proc.join(pid.to_string()).exists()
-    } else {
-        true
+        return proc.join(pid.to_string()).exists();
     }
+
+    // `kill(pid, 0)` runs the permission check and validates the pid without
+    // sending anything. 0 means the process is there; `EPERM` means it is there
+    // and merely not ours, which is still alive; `ESRCH` is the only answer that
+    // means gone.
+    //
+    // The conversion is checked first because a negative `pid_t` is not a pid:
+    // it names a process *group*, and the call would happily succeed for one
+    // that exists. A pid too large to be a `pid_t` is one this kernel could not
+    // have handed out — which is what the tests' `u32::MAX - 3` relies on.
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
+    if pid <= 0 {
+        return false;
+    }
+
+    // SAFETY: signal 0 is a liveness probe — no signal is delivered and no
+    // memory is read or written.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return true;
+    }
+    io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
 }
 
 fn unix_secs() -> u64 {

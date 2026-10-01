@@ -19,8 +19,11 @@ M0.6 的最后一项。`docs/logging.md` 回答「运行中发生了什么」；
 ## 2. 标记的语义
 
 - **按 pid 一个文件**，而不是一个共享文件：两个实例不会互相覆盖证据、也不会互相
-  清掉对方的标记。`status` 扫描 `last-run.*`，**只有 pid 已不存活**的才算异常
-  （Windows 用 `OpenProcess`，其余平台对 `/proc` 可用性保守处理）。
+  清掉对方的标记。`status` 扫描 `last-run.*`，**只有 pid 已不存活**的才算异常。
+  探测方式按平台分三种：Windows 用 `OpenProcess` + `GetExitCodeProcess`，Linux 读
+  `/proc`，**macOS 与 BSD 用 `kill(pid, 0)`**（它们没有 `/proc`）。最后这条是
+ 移植到 macOS 时才补的——在那之前那里是 `return true`，于是每个 pid 都算活着，
+  见 `AGENTS.md` §6。
 - **写标记在 FFI 导出层（`nightcord_create`）而不是 `NightcordClient::new`**：
   cargo 测试直接构造客户端，因此既不装全进程的 hook，也不会往真实目录丢东西。
 - **笔记只在本进程的标记存在时写**（`our_run_is_live`）：测试进程 panic 不产生
