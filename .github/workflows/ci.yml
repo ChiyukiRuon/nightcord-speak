@@ -1,8 +1,18 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # Pushes to `main` deliberately do **not** trigger this.
+  #
+  # Turned off on request (2026-10-02) while the macOS work is landing in
+  # bursts; every push ran the whole matrix and the signal was not being read.
+  # `workflow_dispatch` keeps it runnable by hand from the Actions tab, so this
+  # is a pause rather than a removal — put the `push:` block back when the
+  # churn settles.
+  #
+  # Note for whoever restores it: GitHub reads the workflow file **from the
+  # commit being pushed**, so a commit that removes the trigger does not run it
+  # either. The push that turned this off was itself silent.
+  workflow_dispatch:
   pull_request:
 
 env:
