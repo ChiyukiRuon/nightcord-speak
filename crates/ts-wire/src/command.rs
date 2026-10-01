@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use ts_core::ConnectRequest;
-use ts_model::{ChannelId, ClientId, MessageTarget, SessionId};
+use ts_model::{BanDuration, ChannelId, ClientId, KickScope, MessageTarget, SessionId};
 use ts_settings::{BookmarkList, NewBookmark, Settings};
 
 /// Which way audio flows, as the wire spells it.
@@ -103,6 +103,40 @@ pub enum Command {
         channel_id: ChannelId,
     },
 
+    /// Poke another client, which typically makes their client beep.
+    Poke {
+        /// Which session to act on.
+        session: SessionId,
+        /// Who to poke.
+        client_id: ClientId,
+        /// What to say with the poke.
+        message: String,
+    },
+
+    /// Remove another client from a channel or from the server.
+    Kick {
+        /// Which session to act on.
+        session: SessionId,
+        /// Who to kick.
+        client_id: ClientId,
+        /// How far the kick reaches.
+        scope: KickScope,
+        /// An optional explanation the kicked client is shown.
+        message: Option<String>,
+    },
+
+    /// Ban another client.
+    Ban {
+        /// Which session to act on.
+        session: SessionId,
+        /// Who to ban.
+        client_id: ClientId,
+        /// How long the ban lasts.
+        duration: BanDuration,
+        /// An optional reason, recorded on the ban list.
+        reason: Option<String>,
+    },
+
     /// Enumerate the machine's audio devices.
     ///
     /// Renamed to match [`Command::name`]: the request tag and the name
@@ -149,6 +183,19 @@ pub enum Command {
     VoicePushToTalk {
         /// Whether the key is held.
         held: bool,
+    },
+
+    /// Scale one client's audio within the mix.
+    ///
+    /// Local to the client that asked: the server is not told, because nothing
+    /// about what anyone else receives changes.
+    VoiceSetClientVolume {
+        /// Which session to act on.
+        session: SessionId,
+        /// Whose audio to scale.
+        client_id: ClientId,
+        /// Playback gain, `0.0..=2.0`.
+        volume: f32,
     },
 
     /// Report the preferences in force.
@@ -207,6 +254,9 @@ impl Command {
             Self::LeaveChannel { .. } => "leave_channel",
             Self::SendMessage { .. } => "send_message",
             Self::MoveClient { .. } => "move_client",
+            Self::Poke { .. } => "poke",
+            Self::Kick { .. } => "kick",
+            Self::Ban { .. } => "ban",
             Self::ListDevices { .. } => "audio_devices",
             Self::VoiceStatus => "voice_status",
             Self::VoiceTestOutput => "voice_test_output",
@@ -215,6 +265,7 @@ impl Command {
             Self::VoiceSetInputMuted { .. } => "voice_set_input_muted",
             Self::VoiceSetOutputMuted { .. } => "voice_set_output_muted",
             Self::VoicePushToTalk { .. } => "voice_push_to_talk",
+            Self::VoiceSetClientVolume { .. } => "voice_set_client_volume",
             Self::SettingsGet => "settings",
             Self::SettingsUpdate(_) => "settings_update",
             Self::BookmarksGet => "bookmarks",
@@ -328,6 +379,28 @@ mod tests {
             },
             Command::SettingsGet,
             Command::VoiceStop,
+            Command::Poke {
+                session: SessionId::new(1),
+                client_id: ClientId::new(2),
+                message: "hi".into(),
+            },
+            Command::Kick {
+                session: SessionId::new(1),
+                client_id: ClientId::new(2),
+                scope: KickScope::Channel,
+                message: None,
+            },
+            Command::Ban {
+                session: SessionId::new(1),
+                client_id: ClientId::new(2),
+                duration: BanDuration::Seconds(600),
+                reason: None,
+            },
+            Command::VoiceSetClientVolume {
+                session: SessionId::new(1),
+                client_id: ClientId::new(2),
+                volume: 0.5,
+            },
         ] {
             let json = serde_json::to_value(&command).unwrap();
             assert_eq!(
@@ -336,6 +409,61 @@ mod tests {
                 "tag and name disagree for {command:?}"
             );
         }
+    }
+
+    #[test]
+    fn moderation_commands_survive_a_round_trip() {
+        // The gateway deserialises these straight off a WebSocket, so the wire
+        // shape is a contract with the browser as much as with the desktop.
+        for command in [
+            Command::Poke {
+                session: SessionId::new(3),
+                client_id: ClientId::new(11),
+                message: "look at this".into(),
+            },
+            Command::Kick {
+                session: SessionId::new(3),
+                client_id: ClientId::new(11),
+                scope: KickScope::Server,
+                message: Some("spamming".into()),
+            },
+            Command::Ban {
+                session: SessionId::new(3),
+                client_id: ClientId::new(11),
+                duration: BanDuration::Permanent,
+                reason: None,
+            },
+        ] {
+            let json = serde_json::to_string(&command).unwrap();
+            let back: Command = serde_json::from_str(&json).unwrap();
+            assert_eq!(
+                serde_json::to_value(&back).unwrap(),
+                serde_json::to_value(&command).unwrap(),
+                "{json} did not survive the trip"
+            );
+        }
+    }
+
+    #[test]
+    fn a_kick_says_how_far_it_reaches() {
+        // The two menu items differ only by this field, so a front-end that
+        // wired both to the same value would otherwise look correct.
+        let channel = Command::Kick {
+            session: SessionId::new(1),
+            client_id: ClientId::new(2),
+            scope: KickScope::Channel,
+            message: None,
+        };
+        let server = Command::Kick {
+            session: SessionId::new(1),
+            client_id: ClientId::new(2),
+            scope: KickScope::Server,
+            message: None,
+        };
+        assert_ne!(
+            serde_json::to_string(&channel).unwrap(),
+            serde_json::to_string(&server).unwrap()
+        );
     }
 
     #[test]

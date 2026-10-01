@@ -33,7 +33,10 @@ mod string;
 use std::ffi::c_char;
 
 use ts_core::ConnectRequest;
-use ts_model::{ChannelId, ClientError, ClientId, MessageTarget, ProtocolError, SessionId};
+use ts_model::{
+    BanDuration, ChannelId, ClientError, ClientId, KickScope, MessageTarget, ProtocolError,
+    SessionId,
+};
 use ts_wire::{AudioDirection, Command};
 
 use crate::client::NightcordClient;
@@ -413,6 +416,127 @@ pub unsafe extern "C" fn nightcord_move_client(
         session: SessionId::new(session),
         client_id: ClientId::new(client_id),
         channel_id: ChannelId::new(channel_id),
+    });
+}
+
+/// Pokes another client, which typically makes their client beep.
+///
+/// # Safety
+///
+/// `handle` must be live, and `message` a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_poke(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+    message: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    // A poke with nothing in it is still a poke; the sound is the point.
+    let message = (unsafe { from_c_str(message) }).unwrap_or_default();
+
+    client.send(Command::Poke {
+        session: SessionId::new(session),
+        client_id: ClientId::new(client_id),
+        message,
+    });
+}
+
+/// Removes another client from a channel or from the server.
+///
+/// `scope_json` is a serialised `KickScope` — `"\"channel\""` or `"\"server\""`
+/// — and `message` may be null for no explanation.
+///
+/// # Safety
+///
+/// `handle` must be live, and both strings NUL-terminated UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_kick(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+    scope_json: *const c_char,
+    message: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(scope_text) = (unsafe { from_c_str(scope_json) }) else {
+        reject(client, "kick", "no scope provided");
+        return;
+    };
+    let message = unsafe { from_c_str(message) }.filter(|text| !text.is_empty());
+
+    if let Some(scope) = parse_json::<KickScope>(client, "kick", &scope_text) {
+        client.send(Command::Kick {
+            session: SessionId::new(session),
+            client_id: ClientId::new(client_id),
+            scope,
+            message,
+        });
+    }
+}
+
+/// Bans another client.
+///
+/// `duration_json` is a serialised `BanDuration` — `"\"permanent\""` or
+/// `{"seconds":600}` — and `reason` may be null.
+///
+/// # Safety
+///
+/// `handle` must be live, and both strings NUL-terminated UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_ban(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+    duration_json: *const c_char,
+    reason: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(duration_text) = (unsafe { from_c_str(duration_json) }) else {
+        reject(client, "ban", "no duration provided");
+        return;
+    };
+    let reason = unsafe { from_c_str(reason) }.filter(|text| !text.is_empty());
+
+    if let Some(duration) = parse_json::<BanDuration>(client, "ban", &duration_text) {
+        client.send(Command::Ban {
+            session: SessionId::new(session),
+            client_id: ClientId::new(client_id),
+            duration,
+            reason,
+        });
+    }
+}
+
+/// Scales one client's audio within the mix.
+///
+/// Local only: nothing is sent to the server, and nothing anyone else receives
+/// changes. The gain applies while they are talking and is put back the next
+/// time they speak.
+///
+/// # Safety
+///
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_voice_set_client_volume(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+    volume: f32,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    client.send(Command::VoiceSetClientVolume {
+        session: SessionId::new(session),
+        client_id: ClientId::new(client_id),
+        volume,
     });
 }
 

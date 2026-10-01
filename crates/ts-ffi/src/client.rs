@@ -439,6 +439,49 @@ async fn handle(
             report(events, name, Some(session), outcome);
         }
 
+        Command::Poke {
+            session,
+            client_id,
+            message,
+        } => {
+            let outcome = with_session!(core, session, s => s.poke(client_id, &message));
+            report(events, name, Some(session), outcome);
+        }
+
+        Command::Kick {
+            session,
+            client_id,
+            scope,
+            message,
+        } => {
+            let outcome =
+                with_session!(core, session, s => s.kick(client_id, scope, message.as_deref()));
+            report(events, name, Some(session), outcome);
+        }
+
+        Command::Ban {
+            session,
+            client_id,
+            duration,
+            reason,
+        } => {
+            let outcome =
+                with_session!(core, session, s => s.ban(client_id, duration, reason.as_deref()));
+            report(events, name, Some(session), outcome);
+        }
+
+        Command::VoiceSetClientVolume {
+            session,
+            client_id,
+            volume,
+        } => {
+            // Goes through the session like everything else, even though the
+            // backend only changes local mixing state: the session is what
+            // knows whether there is a backend to change it on.
+            let outcome = with_session!(core, session, s => s.set_client_volume(client_id, volume));
+            report(events, name, Some(session), outcome);
+        }
+
         Command::ListDevices { direction } => match crate::audio::list(direction) {
             Ok(devices) => {
                 // The direction goes back with the list so the UI can tell which

@@ -315,6 +315,62 @@ impl Worker {
                 self.report(name, Some(session), outcome);
             }
 
+            Command::Poke {
+                session,
+                client_id,
+                message,
+            } => {
+                let session = *session;
+                let outcome = with_session!(self.core, session, s => s.poke(*client_id, message));
+                self.report(name, Some(session), outcome);
+            }
+
+            Command::Kick {
+                session,
+                client_id,
+                scope,
+                message,
+            } => {
+                let session = *session;
+                let outcome = with_session!(
+                    self.core, session,
+                    s => s.kick(*client_id, *scope, message.as_deref())
+                );
+                self.report(name, Some(session), outcome);
+            }
+
+            Command::Ban {
+                session,
+                client_id,
+                duration,
+                reason,
+            } => {
+                let session = *session;
+                let outcome = with_session!(
+                    self.core, session,
+                    s => s.ban(*client_id, *duration, reason.as_deref())
+                );
+                self.report(name, Some(session), outcome);
+            }
+
+            Command::VoiceSetClientVolume {
+                session,
+                client_id,
+                volume,
+            } => {
+                // Applied on the gateway, which is where the mixing happens:
+                // the browser hears everyone else's streams mixed here, so a
+                // gain set in one tab is audible in all of them. That is the
+                // documented v1 behaviour of shared command results, not an
+                // accident — see `docs/gateway.md`.
+                let session = *session;
+                let outcome = with_session!(
+                    self.core, session,
+                    s => s.set_client_volume(*client_id, *volume)
+                );
+                self.report(name, Some(session), outcome);
+            }
+
             // The gateway runs no audio engine, and the devices of *this*
             // machine are not the browser's anyway.
             Command::ListDevices { direction } => self.send(FfiEvent::failed(

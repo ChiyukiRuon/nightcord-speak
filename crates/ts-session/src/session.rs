@@ -1,8 +1,8 @@
 //! One connection to one server (§17).
 
 use ts_model::{
-    Capabilities, ChannelId, ClientError, ClientId, ConnectionState, MessageTarget, Permissions,
-    ProtocolKind, Server, ServerInfo, SessionId, VoiceState,
+    BanDuration, Capabilities, ChannelId, ClientError, ClientId, ConnectionState, KickScope,
+    MessageTarget, Permissions, ProtocolKind, Server, ServerInfo, SessionId, VoiceState,
 };
 use ts_protocol::{Backend, ConnectionConfig, VoicePacket};
 
@@ -153,6 +153,47 @@ impl Session {
             .await
     }
 
+    /// Pokes another client.
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend failures, including permission denial.
+    pub async fn poke(&mut self, client_id: ClientId, message: &str) -> Result<(), ClientError> {
+        self.backend.clients().poke(client_id, message).await
+    }
+
+    /// Removes another client from a channel or from the server.
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend failures, including permission denial — which is the
+    /// interesting one here, and arrives naming the permission that was missing.
+    pub async fn kick(
+        &mut self,
+        client_id: ClientId,
+        scope: KickScope,
+        message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        self.backend.clients().kick(client_id, scope, message).await
+    }
+
+    /// Bans another client.
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend failures, including permission denial.
+    pub async fn ban(
+        &mut self,
+        client_id: ClientId,
+        duration: BanDuration,
+        message: Option<&str>,
+    ) -> Result<(), ClientError> {
+        self.backend
+            .clients()
+            .ban(client_id, duration, message)
+            .await
+    }
+
     /// Sends one encoded voice frame.
     ///
     /// # Errors
@@ -160,6 +201,22 @@ impl Session {
     /// Returns [`ClientError::Unsupported`] on a backend without voice.
     pub async fn send_voice(&mut self, packet: VoicePacket) -> Result<(), ClientError> {
         self.backend.voice().send_voice(packet).await
+    }
+
+    /// Scales one client's audio within the mix.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Unsupported`] on a backend without voice.
+    pub async fn set_client_volume(
+        &mut self,
+        client_id: ClientId,
+        volume: f32,
+    ) -> Result<(), ClientError> {
+        self.backend
+            .voice()
+            .set_client_volume(client_id, volume)
+            .await
     }
 
     /// Applies a local voice-state change.
