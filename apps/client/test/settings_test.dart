@@ -107,6 +107,20 @@ void main() {
       expect(back.notifications.poke, isTrue);
     });
 
+    test('the away message defaults to empty and round trips', () {
+      // A file written before this section existed has no `presence` key, and
+      // it has to come back empty: nobody has said anything yet. Empty is also
+      // a value in its own right — the away button works without a message.
+      final bare = Settings.fromJson(const {});
+      expect(bare.presence.awayMessage, '');
+
+      const withMessage = Settings(
+        presence: PresenceSettings(awayMessage: '在开会'),
+      );
+      final back = Settings.fromJson(roundTrip(withMessage));
+      expect(back.presence.awayMessage, '在开会');
+    });
+
     test('the mode names are the ones the core accepts', () {
       // The transmission mode travels inside this object now, so renaming one
       // here would silently change what the core does.
@@ -236,6 +250,50 @@ void main() {
       expect(back.outputVolume, closeTo(0.4, 1e-9));
     });
 
+    test('a file written before the microphone gain existed is unity', () {
+      // The opposite default from the playback volume next door: here zero is
+      // the right answer, because a file without the field came from a build
+      // that sent the microphone's own level.
+      final audio = AudioSettings.fromJson(const <String, dynamic>{
+        'output_volume': 0.5,
+      });
+
+      expect(audio.inputGainDb, 0.0);
+      expect(audio.outputVolume, closeTo(0.5, 1e-9), reason: 'the old key still means what it did');
+    });
+
+    test('an out-of-range gain is pulled into the offered range', () {
+      expect(
+        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': 50}).inputGainDb,
+        gainMaxDb,
+      );
+      expect(
+        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': -300}).inputGainDb,
+        gainSilenceDb,
+      );
+      // A value that is not a number at all cannot come from a file, so it
+      // means something is broken rather than old — and silence is the reading
+      // that never surprises anyone with loudness.
+      expect(
+        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': double.nan}).inputGainDb,
+        gainSilenceDb,
+      );
+    });
+
+    test('the microphone gain survives a round trip', () {
+      const settings = Settings(audio: AudioSettings(inputGainDb: -12.5));
+      final back = Settings.fromJson(settings.toJson()).audio;
+      expect(back.inputGainDb, closeTo(-12.5, 1e-9));
+    });
+
+    test('copyWith leaves the gain alone when it was not given', () {
+      const audio = AudioSettings(inputGainDb: 3.0);
+      final changed = audio.copyWith(outputVolume: 0.5);
+
+      expect(changed.outputVolume, closeTo(0.5, 1e-9));
+      expect(changed.inputGainDb, closeTo(3.0, 1e-9));
+    });
+
     test('copyWith leaves the volume alone when it was not given', () {
       const audio = AudioSettings(outputVolume: 0.25);
       final changed = audio.copyWith(mode: VoiceActivationMode.continuous);
@@ -253,6 +311,7 @@ void main() {
       expect(json.keys, isNot(contains('voice_quality')));
       expect(json.keys, isNot(contains('music_quality')));
       expect(json.keys, contains('output_volume'));
+      expect(json.keys, contains('input_gain_db'));
     });
   });
 

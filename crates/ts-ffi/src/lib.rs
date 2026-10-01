@@ -514,6 +514,35 @@ pub unsafe extern "C" fn nightcord_ban(
     }
 }
 
+/// Marks us away, or back at the keyboard.
+///
+/// `away` is the switch and `message` is what to say about it; `message` may be
+/// null and carries no meaning when `away` is false. Away with no message is
+/// its own state on the server — not the same as being back — which is why the
+/// two are separate arguments rather than "null means here".
+///
+/// # Safety
+///
+/// `handle` must be live, and `message` null or a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_set_away(
+    handle: *mut NightcordClient,
+    session: u32,
+    away: bool,
+    message: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let message = unsafe { from_c_str(message) }.filter(|text| !text.is_empty());
+
+    client.send(Command::SetAway {
+        session: SessionId::new(session),
+        away,
+        message,
+    });
+}
+
 /// Scales one client's audio within the mix.
 ///
 /// Local only: nothing is sent to the server, and nothing anyone else receives

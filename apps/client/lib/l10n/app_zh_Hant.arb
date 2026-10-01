@@ -60,6 +60,9 @@
   "settingsNotifySystem": "視窗不在前景時顯示系統通知",
   "settingsSensitivity": "靈敏度",
   "settingsSensitivityHint": "靈敏度越高，越不容易被環境噪音觸發，但需要更大聲說話才能觸發。",
+  "settingsMicGain": "麥克風增益",
+  "settingsMicGainHint": "其他人聽到你的音量。拖到最底端為靜音。",
+  "settingsMicGainSilent": "靜音",
   "settingsVolume": "輸出音量",
   "settingsVolumeHint": "調整所有成員的預設音量。你也可以在頻道清單中個別調整某個成員的音量。",
   "settingsNoLogDirectory": "此平台沒有可寫入的日誌目錄。",
@@ -164,6 +167,11 @@
   "voiceMuteMic": "靜音麥克風",
   "voiceUndeafen": "開啟喇叭",
   "voiceDeafen": "關閉喇叭",
+  "voiceAway": "設為離開",
+  "voiceBackOnline": "回到線上",
+  "awayMessageTitle": "離開訊息",
+  "awayMessageLabel": "要說的話",
+  "awayMessageNote": "伺服器上的其他人都會看到這則訊息；下次點離開按鈕還會用它。",
 
   "serverSessionEnded": "工作階段已結束",
 

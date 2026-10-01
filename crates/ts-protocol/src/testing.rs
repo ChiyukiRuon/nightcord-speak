@@ -4,8 +4,8 @@
 //! `ts-ffi` can exercise their logic without a live server.
 //!
 //! It doubles as executable documentation of the composition in
-//! [`crate::Backend`]: six narrow capability objects, all sharing one state, no
-//! wide interface anywhere.
+//! [`crate::Backend`]: seven narrow capability objects, all sharing one state,
+//! no wide interface anywhere.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -21,7 +21,7 @@ use ts_model::{
 
 use crate::{
     Backend, ChannelOperations, ClientOperations, Connection, ConnectionConfig, Messaging, NoVoice,
-    PermissionsReport, Voice, VoicePacket,
+    PermissionsReport, Presence, Voice, VoicePacket,
 };
 
 /// State shared by every capability of one fake backend.
@@ -193,6 +193,7 @@ macro_rules! fake_capability {
 fake_capability!(FakeConnection, state);
 fake_capability!(FakeChannels, state);
 fake_capability!(FakeClients, state);
+fake_capability!(FakePresence, state);
 fake_capability!(FakeMessaging, state);
 fake_capability!(FakeVoice, state);
 fake_capability!(FakePermissions, state);
@@ -302,6 +303,21 @@ impl ClientOperations for FakeClients {
 }
 
 #[async_trait]
+impl Presence for FakePresence {
+    async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError> {
+        // Away and back are recorded apart, and the message itself is never
+        // recorded: it is text the user typed, and a fake that kept it would
+        // put user content into every failure message that prints the calls.
+        let name = if message.is_some() {
+            "Presence.set_away"
+        } else {
+            "Presence.set_away_cleared"
+        };
+        self.0.lock().expect("fake state poisoned").record(name)
+    }
+}
+
+#[async_trait]
 impl Messaging for FakeMessaging {
     async fn send_text(&mut self, _target: MessageTarget, _text: &str) -> Result<(), ClientError> {
         self.0
@@ -367,6 +383,7 @@ pub fn fake_backend(kind: ProtocolKind, with_voice: bool) -> (Backend, FakeHandl
     let connection = Box::new(FakeConnection(state.clone()));
     let channels = Box::new(FakeChannels(state.clone()));
     let clients = Box::new(FakeClients(state.clone()));
+    let presence = Box::new(FakePresence(state.clone()));
     let messaging = Box::new(FakeMessaging(state.clone()));
     let permissions = Box::new(FakePermissions(state.clone()));
     let voice: Box<dyn Voice> = if with_voice {
@@ -381,6 +398,7 @@ pub fn fake_backend(kind: ProtocolKind, with_voice: bool) -> (Backend, FakeHandl
             connection,
             channels,
             clients,
+            presence,
             messaging,
             voice,
             permissions,

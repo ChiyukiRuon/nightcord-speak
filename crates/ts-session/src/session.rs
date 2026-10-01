@@ -194,6 +194,26 @@ impl Session {
             .await
     }
 
+    /// Marks us away, or back at the keyboard.
+    ///
+    /// `away: true` with no message is a legitimate state — away, with nothing
+    /// to say — and it is *not* the same as `away: false`, which clears the
+    /// mark. Collapsing the front-end's two arguments into the protocol's one
+    /// optional message happens here and nowhere else, so no host has to
+    /// remember which combination means what.
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend failures.
+    pub async fn set_away(&mut self, away: bool, message: Option<&str>) -> Result<(), ClientError> {
+        let message = if away {
+            Some(message.unwrap_or_default())
+        } else {
+            None
+        };
+        self.backend.presence().set_away(message).await
+    }
+
     /// Sends one encoded voice frame.
     ///
     /// # Errors
@@ -254,5 +274,41 @@ impl std::fmt::Debug for Session {
             .field("protocol", &self.protocol())
             .field("state", &self.state())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ts_protocol::testing::{FakeHandle, fake_backend, fake_server};
+
+    fn session() -> (Session, FakeHandle) {
+        let (backend, handle) = fake_backend(ProtocolKind::Ts3, true);
+        let server = fake_server(1, ProtocolKind::Ts3);
+        (Session::new(SessionId::new(1), server, backend), handle)
+    }
+
+    #[tokio::test]
+    async fn away_without_a_message_is_still_away() {
+        // Three states go in, two come out: "away, nothing to say" must not
+        // collapse into "back at the keyboard", which is what a caller passing
+        // an absent message by accident would otherwise produce.
+        let (mut session, handle) = session();
+
+        session.set_away(true, Some("in a meeting")).await.unwrap();
+        session.set_away(true, None).await.unwrap();
+        assert_eq!(
+            handle.call_count("Presence.set_away"),
+            2,
+            "away with no message should still mark us away"
+        );
+
+        session.set_away(false, Some("ignored")).await.unwrap();
+        assert_eq!(handle.call_count("Presence.set_away_cleared"), 1);
+        assert_eq!(
+            handle.call_count("Presence.set_away"),
+            2,
+            "coming back is not another away, whatever the caller passed"
+        );
     }
 }

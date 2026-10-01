@@ -9,6 +9,7 @@ import '../../design/components/app_avatar.dart';
 import '../../design/components/app_badge.dart';
 import '../../design/components/app_logo.dart';
 import '../../design/components/app_section_title.dart';
+import '../../design/components/app_text_prompt.dart';
 import '../../design/components/app_unread_dot.dart';
 import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -135,13 +136,11 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
   /// Asks what to say with the poke, then sends it.
   Future<void> _promptPoke(Client member) async {
     final l10n = AppLocalizations.of(context);
-    final message = await showDialog<String>(
-      context: context,
-      builder: (context) => _TextPromptDialog(
-        title: l10n.memberPokePrompt(member.name),
-        label: l10n.memberPokeMessage,
-        confirm: l10n.memberPoke,
-      ),
+    final message = await showTextPrompt(
+      context,
+      title: l10n.memberPokePrompt(member.name),
+      label: l10n.memberPokeMessage,
+      confirm: l10n.memberPoke,
     );
     if (message == null || !mounted) return;
 
@@ -787,8 +786,23 @@ class _MemberRow extends StatelessWidget {
             Avatar(name: member.name, size: 28),
             SizedBox(width: tokens.space2),
             Expanded(
-              child: Text(
-                member.name,
+              // The away message rides with the name rather than hiding in a
+              // tooltip: nobody hovers to find out why someone is quiet, and
+              // the message is the whole answer. One `Text.rich` rather than
+              // two widgets side by side, so the name keeps its room and the
+              // message takes what is left — the line ellipsizes once, at the
+              // end, instead of squeezing the name to half a row.
+              child: Text.rich(
+                TextSpan(
+                  text: member.name,
+                  children: [
+                    if (member.awayMessage case final message?)
+                      TextSpan(
+                        text: ' ($message)',
+                        style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                      ),
+                  ],
+                ),
                 overflow: TextOverflow.ellipsis,
                 style: (member.isSelf ? text.titleMedium : text.bodyMedium)?.copyWith(
                   color: nameColour,
@@ -799,7 +813,9 @@ class _MemberRow extends StatelessWidget {
               StateBadge(
                 colour: tokens.idle,
                 tooltip: l10n.memberAway,
-                icon: Icons.schedule,
+                // The same glyph the voice bar's away button wears, so the
+                // badge and the button read as one fact.
+                icon: Icons.snooze,
               ),
             if (member.flags.inputMuted)
               StateBadge(
@@ -1053,59 +1069,6 @@ class _ModerationRequest {
 
   /// Only meaningful for a ban.
   final BanDuration duration;
-}
-
-/// Asks for one line of text and returns it, or null if cancelled.
-class _TextPromptDialog extends StatefulWidget {
-  const _TextPromptDialog({
-    required this.title,
-    required this.label,
-    required this.confirm,
-  });
-
-  final String title;
-  final String label;
-  final String confirm;
-
-  @override
-  State<_TextPromptDialog> createState() => _TextPromptDialogState();
-}
-
-class _TextPromptDialogState extends State<_TextPromptDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: widget.label),
-        // Enter sends, because the field is one line and there is nothing else
-        // it could mean.
-        onSubmitted: (value) => Navigator.of(context).pop(value),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: Text(widget.confirm),
-        ),
-      ],
-    );
-  }
 }
 
 /// Asks which channel, and returns its id.

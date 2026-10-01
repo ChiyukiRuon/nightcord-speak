@@ -445,6 +445,24 @@ abstract class AppLocalizations {
   /// **'The higher the sensitivity, the less room noise triggers it — and the louder you have to speak.'**
   String get settingsSensitivityHint;
 
+  /// Label above the slider that sets how loud others hear us
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone gain'**
+  String get settingsMicGain;
+
+  /// Explains the gain slider, including that its bottom position is silence
+  ///
+  /// In en, this message translates to:
+  /// **'How loud everyone else hears you. All the way down is silence.'**
+  String get settingsMicGainHint;
+
+  /// Replaces the decibel value when the gain slider sits at the bottom
+  ///
+  /// In en, this message translates to:
+  /// **'Silent'**
+  String get settingsMicGainSilent;
+
   /// Label above the master playback volume slider
   ///
   /// In en, this message translates to:
@@ -1020,6 +1038,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turn speakers off'**
   String get voiceDeafen;
+
+  /// Tooltip of the away button while we are here
+  ///
+  /// In en, this message translates to:
+  /// **'Set yourself away'**
+  String get voiceAway;
+
+  /// Tooltip of the away button while we are away
+  ///
+  /// In en, this message translates to:
+  /// **'Come back online'**
+  String get voiceBackOnline;
+
+  /// Title of the dialog that sets what we say when we are away
+  ///
+  /// In en, this message translates to:
+  /// **'Away message'**
+  String get awayMessageTitle;
+
+  /// Label of the one field in the away message dialog
+  ///
+  /// In en, this message translates to:
+  /// **'What to say'**
+  String get awayMessageLabel;
+
+  /// Says that the message is public, and that it is remembered
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone on the server sees this, and the away button will use it again next time.'**
+  String get awayMessageNote;
 
   /// Shown when the session is gone and the page has nothing to draw
   ///

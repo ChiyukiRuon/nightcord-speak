@@ -60,6 +60,9 @@
   "settingsNotifySystem": "ウィンドウが前面にないときにシステム通知を表示",
   "settingsSensitivity": "感度",
   "settingsSensitivityHint": "感度が高いほど周囲の騒音では反応しにくく、その分大きな声が必要。",
+  "settingsMicGain": "マイクの増幅",
+  "settingsMicGainHint": "相手に届く音量。一番下まで下げると無音になる。",
+  "settingsMicGainSilent": "無音",
   "settingsVolume": "出力音量",
   "settingsVolumeHint": "全メンバー共通の既定音量を調整。個々のメンバーはチャンネルツリーから個別に変更可能。",
   "settingsNoLogDirectory": "このプラットフォームに書き込み可能なログディレクトリはない。",
@@ -164,6 +167,11 @@
   "voiceMuteMic": "マイクをミュート",
   "voiceUndeafen": "スピーカーをオン",
   "voiceDeafen": "スピーカーをオフ",
+  "voiceAway": "離席中にする",
+  "voiceBackOnline": "戻る",
+  "awayMessageTitle": "離席メッセージ",
+  "awayMessageLabel": "伝える内容",
+  "awayMessageNote": "サーバー上の全員に表示される。次に離席ボタンを押したときもこの内容を使う。",
 
   "serverSessionEnded": "セッション終了",
 

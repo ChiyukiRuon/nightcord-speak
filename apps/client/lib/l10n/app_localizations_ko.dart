@@ -189,6 +189,15 @@ class AppLocalizationsKo extends AppLocalizations {
       '값이 높을수록 주변 소음에 덜 반응하고, 더 큰 소리로 말해야 합니다.';
 
   @override
+  String get settingsMicGain => '마이크 증폭';
+
+  @override
+  String get settingsMicGainHint => '상대방에게 들리는 음량입니다. 맨 아래까지 내리면 무음이 됩니다.';
+
+  @override
+  String get settingsMicGainSilent => '무음';
+
+  @override
   String get settingsVolume => '출력 음량';
 
   @override
@@ -515,6 +524,22 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get voiceDeafen => '스피커 끄기';
+
+  @override
+  String get voiceAway => '자리 비움 설정';
+
+  @override
+  String get voiceBackOnline => '돌아오기';
+
+  @override
+  String get awayMessageTitle => '자리 비움 메시지';
+
+  @override
+  String get awayMessageLabel => '남길 말';
+
+  @override
+  String get awayMessageNote =>
+      '서버의 모든 사용자에게 표시되며, 다음에 자리 비움 버튼을 누를 때도 이 내용을 사용합니다.';
 
   @override
   String get serverSessionEnded => '세션이 종료되었습니다';

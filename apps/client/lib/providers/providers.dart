@@ -211,6 +211,48 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     }
   }
 
+  /// Marks us away, or back at the keyboard.
+  ///
+  /// Unlike muting there is nothing to apply optimistically: the core's own
+  /// view of our client changes the moment the command is queued, so
+  /// `ownClient.flags.away` is already right by the time the event lands. A
+  /// second copy here would only be a second thing to disagree with.
+  void setAway(int session, {required bool away, String? message}) {
+    final view = state[session];
+    // No live session, nothing to tell — same rule as the mute buttons.
+    if (view == null || !view.isConnected) return;
+
+    ref.read(clientTransportProvider).setAway(session, away: away, message: message);
+  }
+
+  /// Flips our away state without saying anything about it.
+  ///
+  /// The voice bar's button comes through here, and it never carries a message
+  /// — not even the one the settings remember. Going away and *announcing* why
+  /// are two different acts: the button does the first, the dialog does both.
+  /// What is stored is what the dialog starts from, not what this button means.
+  void toggleAway(int session) {
+    final view = state[session];
+    if (view == null || !view.isConnected) return;
+
+    setAway(session, away: !(view.ownClient?.flags.away ?? false));
+  }
+
+  /// Goes away saying [message], and remembers it for next time.
+  ///
+  /// One method for the two halves because they belong together: a message the
+  /// user typed and we did not keep would have to be typed again this evening.
+  /// The write goes down the same path the settings dialog uses.
+  void goAwayWith(int session, String message) {
+    final settings = ref.read(settingsProvider);
+    if (settings != null) {
+      ref
+          .read(settingsProvider.notifier)
+          .update(settings.copyWith(presence: settings.presence.copyWith(awayMessage: message)));
+    }
+    setAway(session, away: true, message: message);
+  }
+
   /// Asks the core to close a session, and stops showing it.
   ///
   /// Optimistic: the view goes as soon as the user asks, rather than when the

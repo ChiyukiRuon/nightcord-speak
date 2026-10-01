@@ -189,6 +189,14 @@ fn client_of(id: tsclientlib::ClientId, client: &BookClient, own: tsclientlib::C
             recording: client.is_recording,
             channel_commander: client.is_channel_commander,
         },
+        // Away with an empty message is a real state — it is what a plain
+        // "away" toggle sends — but there is nothing to show for it, so the
+        // model keeps one representation of "no message to read". Whether they
+        // are away at all stays in the flag above.
+        away_message: client
+            .away_message
+            .clone()
+            .filter(|message| !message.is_empty()),
         unique_id: client.uid.as_ref().map(|uid| base64_encode(&uid.0)),
         // TeamSpeak's own distinction between a person and a server-query
         // connection, which the book does report. It matters because every

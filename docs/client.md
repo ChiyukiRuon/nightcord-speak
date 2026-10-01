@@ -4,7 +4,7 @@
 
 | 项 | 状态 |
 | --- | --- |
-| `crates/ts-ffi` — C ABI + JSON | ✅ 18 个导出函数，41 个 Rust 测试 |
+| `crates/ts-ffi` — C ABI + JSON | ✅ 34 个导出函数（当时是 18），41 个 Rust 测试 |
 | dart:ffi 绑定与生命周期管理 | ✅ 9 个 Dart 测试（`ffi_test.dart`，加载的是真实动态库，不是 stub） |
 | 原生库打包（CMake 钩子） | ✅ `flutter run -d windows` 单命令可用，DLL 自动就位 |
 | 事件流 → Riverpod store | ✅ 移植了 CLI 的 `view.rs` 规则，27 个测试对等（`server_view_test.dart`） |

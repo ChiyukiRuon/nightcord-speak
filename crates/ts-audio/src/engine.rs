@@ -27,6 +27,57 @@ use crate::format::{FRAME_MS, FRAME_SAMPLES, PLAYBACK_CHANNELS, PLAYBACK_SAMPLES
 use crate::playback::Playback;
 use crate::vad::{VoiceGate, peak, rms};
 
+/// Digital silence, as a decibel figure rather than a limit to approach.
+///
+/// `apply_gain` turns it into an amplitude of 1e-10, which encodes to silence
+/// and is exactly what a user dragging a gain slider to the bottom asked for.
+/// The number is the front-end's too: it is the bottom of the travel, not a
+/// value the audio layer picks.
+pub const SILENCE_DB: f32 = -200.0;
+
+/// The loudest the microphone may be pushed, in decibels.
+///
+/// Above unity because a quiet microphone is the reason the control exists.
+/// +10 dB is a gain of about 3.2, which will clip anything already loud — a
+/// consequence of turning a microphone up, not a bug.
+pub const MAX_GAIN_DB: f32 = 10.0;
+
+/// The quietest gain that is still audible, in decibels.
+///
+/// Below this a signal is inaudible on any normal equipment, so the front-end's
+/// slider spends its travel on the range that does something and treats
+/// everything below as the silence position. The audio layer does not use it;
+/// it is here so both the desktop and the web draw the same curve.
+pub const MIN_AUDIBLE_DB: f32 = -60.0;
+
+/// Converts a decibel figure into the linear gain the pipeline multiplies by.
+///
+/// Non-finite input is read as silence rather than propagated: `NaN` samples
+/// reaching the encoder would corrupt the stream, and there is no reading of
+/// "not a number decibels" that a user could have meant.
+#[must_use]
+pub fn gain_from_db(db: f32) -> f32 {
+    if !db.is_finite() {
+        return 0.0;
+    }
+    10f32.powf(db / 20.0)
+}
+
+/// Scales a frame in place, clipping rather than wrapping.
+///
+/// Unity returns untouched — the default setting spends no work and leaves the
+/// samples bit-for-bit as the microphone produced them. The clamp is what makes
+/// a large positive gain sound loud instead of producing infinities the encoder
+/// would have to guess at.
+pub fn apply_gain(frame: &mut [f32], gain: f32) {
+    if gain == 1.0 {
+        return;
+    }
+    for sample in frame {
+        *sample = (*sample * gain).clamp(-1.0, 1.0);
+    }
+}
+
 /// Decides whether a captured frame should be sent.
 ///
 /// Holds all the state that makes that decision, and nothing else — no devices,
@@ -45,6 +96,15 @@ pub struct TransmitPolicy {
     /// nothing about, caused by a button they had just pressed on purpose.
     /// TeamSpeak's own deafen stops the microphone as well.
     output_muted: bool,
+    /// Whether we have marked ourselves away.
+    ///
+    /// Away closes the gate for exactly the reason deafening does — the same
+    /// field of the library's `can_send_audio` is false while
+    /// `client_away_message` is set, and every frame sent through that window
+    /// came back as `VoiceError::NotConnected`. Being away means being
+    /// elsewhere; the microphone stopping is the honest reading of that, and
+    /// the alternative was an error dialog per brush of the microphone.
+    away: bool,
     /// Whether the push-to-talk key is currently held.
     ptt_held: bool,
     /// Whether the previous frame was transmitted.
@@ -63,6 +123,7 @@ impl TransmitPolicy {
             mode,
             input_muted: false,
             output_muted: false,
+            away: false,
             ptt_held: false,
             transmitted_last: false,
             resume: false,
@@ -75,7 +136,7 @@ impl TransmitPolicy {
     pub fn should_transmit(&mut self, level: f32, frame_ms: u32) -> bool {
         let previous = self.transmitted_last;
 
-        let wants = if self.input_muted || self.output_muted {
+        let wants = if self.input_muted || self.output_muted || self.away {
             false
         } else {
             match self.mode {
@@ -159,6 +220,23 @@ impl TransmitPolicy {
         self.input_muted
     }
 
+    /// Marks us away or back, which closes the transmit gate with it.
+    ///
+    /// See the note on `TransmitPolicy::away` for why away stops the
+    /// microphone.
+    pub fn set_away(&mut self, away: bool) {
+        if self.away != away {
+            self.gate.reset();
+            self.away = away;
+        }
+    }
+
+    /// Whether we are marked away.
+    #[must_use]
+    pub const fn away(&self) -> bool {
+        self.away
+    }
+
     /// Records the push-to-talk key going down or up.
     pub fn set_push_to_talk(&mut self, held: bool) {
         self.ptt_held = held;
@@ -206,6 +284,13 @@ pub struct VoiceEngine {
     output_muted: Arc<AtomicBool>,
     /// Playback gain, remembered so a device switch does not reset it.
     output_volume: f32,
+    /// Microphone gain, as a linear factor — the decibels the user chose,
+    /// converted once on the way in.
+    ///
+    /// A plain field rather than the atomic `output_volume` needs: this one is
+    /// applied while frames are encoded, on the worker task, never inside a
+    /// device callback.
+    input_gain: f32,
     /// Scratch for rendering one frame to stereo before queueing it.
     frame_stereo: Vec<f32>,
     /// Scratch for downmixing a captured stereo frame, for the gate and the
@@ -401,6 +486,9 @@ impl VoiceEngine {
             policy: TransmitPolicy::new(VoiceActivationMode::default(), settings),
             output_muted: Arc::new(AtomicBool::new(false)),
             output_volume: clamp_volume(output_volume),
+            // Unity until told otherwise, which is what every build before the
+            // gain existed did.
+            input_gain: 1.0,
             frame_stereo: vec![0.0; PLAYBACK_SAMPLES],
             frame_mono: vec![0.0; FRAME_SAMPLES],
             last_level: 0.0,
@@ -429,6 +517,25 @@ impl VoiceEngine {
     #[must_use]
     pub const fn output_volume(&self) -> f32 {
         self.output_volume
+    }
+
+    /// The microphone gain in force, in decibels.
+    #[must_use]
+    pub fn input_gain_db(&self) -> f32 {
+        if self.input_gain <= 0.0 {
+            return SILENCE_DB;
+        }
+        20.0 * self.input_gain.log10()
+    }
+
+    /// Sets the microphone gain, in decibels: how loud everyone else hears us.
+    ///
+    /// Applied where frames are encoded, so the gate and the level meter keep
+    /// reading the microphone itself. A gain that moved the level the
+    /// sensitivity threshold is compared against would make one slider silently
+    /// retune the other.
+    pub fn set_input_gain_db(&mut self, db: f32) {
+        self.input_gain = gain_from_db(clamp_gain_db(db));
     }
 
     /// Sets the playback gain, `0.0..=1.0`.
@@ -555,6 +662,21 @@ impl VoiceEngine {
         self.output_muted.load(Ordering::Relaxed)
     }
 
+    /// Marks us away or back.
+    ///
+    /// Applied to transmission only: the server is told separately, by the
+    /// session, and the speakers keep playing — an away client still hears the
+    /// room it walked out of.
+    pub fn set_away(&mut self, away: bool) {
+        self.policy.set_away(away);
+    }
+
+    /// Whether we are marked away.
+    #[must_use]
+    pub fn away(&self) -> bool {
+        self.policy.away()
+    }
+
     /// Records the push-to-talk key going down or up (§30).
     pub fn set_push_to_talk(&mut self, held: bool) {
         self.policy.set_push_to_talk(held);
@@ -634,7 +756,7 @@ impl VoiceEngine {
         let mut packets = Vec::new();
         let mut first_error = None;
 
-        for frame in frames {
+        for mut frame in frames {
             if !is_full_frame(frame.len(), PLAYBACK_CHANNELS) {
                 // The assembler only emits whole frames, so this cannot happen
                 // — but sending a short frame would corrupt the stream, so it
@@ -661,6 +783,13 @@ impl VoiceEngine {
             downmix(&frame, &mut mono);
 
             if self.measure(&mono) {
+                // After the gate, never before: the gain is what other people
+                // hear, and the levels above are what the sensitivity slider is
+                // compared against. Applying it earlier would make turning the
+                // gain down close the gate — one control silently moving the
+                // other's threshold.
+                apply_gain(&mut frame, self.input_gain);
+
                 match self.encoder.encode(&frame) {
                     Ok(mut packet) => {
                         packet.is_dtx_resume = self.policy.is_resume();
@@ -791,6 +920,23 @@ fn clamp_volume(volume: f32) -> f32 {
         volume.clamp(0.0, 1.0)
     } else {
         1.0
+    }
+}
+
+/// Keeps a microphone gain inside the range the front-end offers.
+///
+/// Public because the gateway's voice path applies the same setting and must
+/// clamp it the same way: two implementations of one range is how the two hosts
+/// end up disagreeing about what "-300 dB" means.
+///
+/// Unlike [`clamp_volume`], non-finite input becomes silence rather than unity:
+/// a gain nobody could express is not a reason to be suddenly loud.
+#[must_use]
+pub fn clamp_gain_db(db: f32) -> f32 {
+    if db.is_finite() {
+        db.clamp(SILENCE_DB, MAX_GAIN_DB)
+    } else {
+        SILENCE_DB
     }
 }
 
@@ -928,6 +1074,55 @@ mod tests {
                 }
             }
             assert!(reopened, "{mode:?} stayed silent after undeafening");
+        }
+    }
+
+    #[test]
+    fn being_away_beats_every_mode() {
+        // Regression, and the twin of the deafening test above: the away button
+        // stopped nothing. The server refuses voice from an away client —
+        // `can_send_audio` is false while `client_away_message` is set — so
+        // every frame encoded while away came back refused, and the refusal
+        // reached the UI as "voice error: not connected": an error about a
+        // connection that is fine, produced by a button pressed on purpose, and
+        // repeated every time the microphone was triggered.
+        for mode in [
+            VoiceActivationMode::PushToTalk,
+            VoiceActivationMode::Continuous,
+            VoiceActivationMode::VoiceActivation,
+        ] {
+            let mut policy = policy(mode);
+            policy.set_push_to_talk(true);
+
+            let mut open = false;
+            for _ in 0..40 {
+                if policy.should_transmit(LOUD, FRAME_MS) {
+                    open = true;
+                    break;
+                }
+            }
+            assert!(open, "{mode:?} never opened its gate");
+
+            policy.set_away(true);
+            for _ in 0..40 {
+                assert!(
+                    !policy.should_transmit(LOUD, FRAME_MS),
+                    "{mode:?} transmitted while away"
+                );
+            }
+
+            // Coming back restarts the gate, exactly as unmuting does: the
+            // first frame after a minute away should not be a burst of whatever
+            // the room was doing.
+            policy.set_away(false);
+            let mut reopened = false;
+            for _ in 0..40 {
+                if policy.should_transmit(LOUD, FRAME_MS) {
+                    reopened = true;
+                    break;
+                }
+            }
+            assert!(reopened, "{mode:?} stayed silent after coming back");
         }
     }
 
@@ -1194,6 +1389,69 @@ mod tests {
         // broken device, so it falls back to unity rather than propagating.
         engine.set_output_volume(f32::NAN);
         assert_eq!(engine.output_volume(), 1.0);
+    }
+
+    #[test]
+    fn decibels_convert_to_the_gain_the_pipeline_multiplies_by() {
+        assert!((gain_from_db(0.0) - 1.0).abs() < f32::EPSILON);
+        assert!((gain_from_db(6.0) - 2.0).abs() < 0.01, "twice as loud");
+        assert!((gain_from_db(-6.0) - 0.5).abs() < 0.01, "half as loud");
+        assert!(
+            gain_from_db(SILENCE_DB) < 1e-9,
+            "the bottom of the slider has to be silence, not a quiet signal"
+        );
+
+        // There is no reading of "not a number decibels" a user could have
+        // meant, and NaN samples would corrupt the encoded stream.
+        assert_eq!(gain_from_db(f32::NAN), 0.0);
+        assert_eq!(gain_from_db(f32::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn applying_unity_leaves_the_frame_exactly_as_it_was() {
+        // The default setting must cost nothing and change nothing: the samples
+        // the encoder sees are the microphone's own, bit for bit.
+        let original: Vec<f32> = vec![0.25, -0.5, 1.0, -1.0];
+        let mut frame = original.clone();
+        apply_gain(&mut frame, 1.0);
+        assert_eq!(frame, original);
+    }
+
+    #[test]
+    fn a_gain_scales_the_frame_and_a_loud_one_clips() {
+        let mut frame = vec![0.25, -0.25];
+        apply_gain(&mut frame, gain_from_db(6.0));
+        assert!((frame[0] - 0.5).abs() < 0.01);
+        assert!((frame[1] + 0.5).abs() < 0.01);
+
+        // +10 dB on material that is already loud: louder, and bounded. The
+        // clamp is what keeps a boosted signal from becoming infinity.
+        let mut loud = vec![0.9, -0.9];
+        apply_gain(&mut loud, gain_from_db(MAX_GAIN_DB));
+        assert!((loud[0] - 1.0).abs() < f32::EPSILON);
+        assert!((loud[1] + 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_microphone_gain_is_clamped_to_the_offered_range() {
+        // Hand-edited settings files produce every one of these.
+        let mut engine = engine_with_defaults();
+        assert_eq!(engine.input_gain_db(), 0.0, "unity until told otherwise");
+
+        engine.set_input_gain_db(-12.0);
+        assert!((engine.input_gain_db() + 12.0).abs() < 0.01);
+
+        engine.set_input_gain_db(-300.0);
+        assert_eq!(engine.input_gain_db(), SILENCE_DB);
+
+        engine.set_input_gain_db(50.0);
+        assert_eq!(engine.input_gain_db(), MAX_GAIN_DB);
+
+        // Unlike the playback volume, nonsense becomes silence rather than
+        // unity: a gain nobody could express is not a reason to be suddenly
+        // loud.
+        engine.set_input_gain_db(f32::NAN);
+        assert_eq!(engine.input_gain_db(), SILENCE_DB);
     }
 
     #[test]

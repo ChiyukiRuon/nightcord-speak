@@ -74,6 +74,10 @@ pub struct Settings {
     #[serde(default)]
     pub shortcuts: ShortcutSettings,
 
+    /// What other people see about us when we are away.
+    #[serde(default)]
+    pub presence: PresenceSettings,
+
     /// How the front-end presents itself — currently just the language.
     #[serde(default)]
     pub ui: UiSettings,
@@ -87,6 +91,7 @@ impl Default for Settings {
             connection: ConnectionSettings::default(),
             notifications: NotificationSettings::default(),
             shortcuts: ShortcutSettings::default(),
+            presence: PresenceSettings::default(),
             ui: UiSettings::default(),
         }
     }
@@ -277,6 +282,20 @@ pub struct AudioSettings {
     /// every file written before this field existed as *silence*.
     #[serde(default = "default_output_volume")]
     pub output_volume: f32,
+
+    /// Microphone gain in decibels: how loud everyone else hears us.
+    ///
+    /// `0.0` is unity — the raw microphone — and is what `f32::default()`
+    /// gives, so here the bare serde default is the *right* one: a file written
+    /// before this field existed loads as "unchanged", which is what it was.
+    /// The bottom of the range is `ts_audio::SILENCE_DB`, a real value rather
+    /// than a small one: a user who drags the slider down means silence.
+    ///
+    /// Kept out of the `output_volume` key on purpose — that one is a linear
+    /// fraction of the *playback* gain, and reading its `0.35` as decibels
+    /// would be a silent change of meaning for everyone with a settings file.
+    #[serde(default)]
+    pub input_gain_db: f32,
 }
 
 // Hand-written rather than derived: a derived `Default` would give
@@ -292,8 +311,14 @@ impl Default for AudioSettings {
             mode: VoiceActivationMode::default(),
             activation: VoiceActivationSettings::default(),
             output_volume: default_output_volume(),
+            input_gain_db: default_input_gain_db(),
         }
     }
+}
+
+/// Unity: every build before the gain existed sent the microphone's own level.
+const fn default_input_gain_db() -> f32 {
+    0.0
 }
 
 /// Every build before volume existed played at unity.
@@ -384,6 +409,23 @@ pub struct UiSettings {
     /// malformed, and it survives in the file for a build that does know it.
     #[serde(default)]
     pub theme: Option<String>,
+}
+
+/// How we present ourselves to everyone else.
+///
+/// Separate from [`ConnectionSettings`] — this is not about reaching a server —
+/// and from [`UiSettings`] — the message is not drawn on our own screen, it is
+/// sent to the server for other people's clients to show.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PresenceSettings {
+    /// What to say when we go away, remembered so nobody has to retype the same
+    /// sentence every evening.
+    ///
+    /// Empty is the default and a legitimate value: going away without a word
+    /// is what the away button does before anyone has set one. Deleting the
+    /// line is how you clear it, like every other field here.
+    #[serde(default)]
+    pub away_message: String,
 }
 
 /// Reads and writes [`Settings`] in one directory.
@@ -532,6 +574,7 @@ mod tests {
                     release_ms: 250,
                 },
                 output_volume: 0.6,
+                input_gain_db: 4.5,
             },
             connection: ConnectionSettings {
                 nickname: "Alice".into(),
@@ -540,6 +583,9 @@ mod tests {
             },
             notifications: NotificationSettings::default(),
             shortcuts: ShortcutSettings::default(),
+            presence: PresenceSettings {
+                away_message: "in a meeting".into(),
+            },
             ui: UiSettings {
                 language: Some("en".into()),
                 theme: Some("black".into()),
@@ -642,6 +688,39 @@ mod tests {
 
         let loaded = store.load().unwrap();
         assert!((loaded.audio.output_volume - 0.35).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_microphone_gain_round_trips_in_decibels() {
+        let dir = TempDir::new("gain");
+        let store = dir.store();
+
+        let mut settings = Settings::default();
+        settings.audio.input_gain_db = -12.5;
+        store.save(&settings).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert!((loaded.audio.input_gain_db + 12.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_file_written_before_the_microphone_gain_existed_is_unity() {
+        // The opposite of the playback volume's upgrade path: here zero *is*
+        // the right default, because a file from a build without the control
+        // was a client that sent the microphone's own level.
+        let dir = TempDir::new("nogain");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"audio":{"input_device":"wasapi:Mic","output_volume":0.35}}"#,
+        )
+        .unwrap();
+
+        let audio = store.load().unwrap().audio;
+        assert_eq!(audio.input_gain_db, 0.0);
+        // And the neighbouring field is untouched by the new one: the old key
+        // still means what it always did.
+        assert!((audio.output_volume - 0.35).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -757,6 +836,24 @@ mod tests {
 
         let loaded = store.load().unwrap();
         assert_eq!(loaded.ui.language, None);
+    }
+
+    #[test]
+    fn a_file_written_before_the_presence_section_existed_says_nothing() {
+        // Empty is the right default, not a missing value to guess at: nobody
+        // has set an away message yet, so going away says nothing — which is
+        // exactly what the away button did before this section existed.
+        let dir = TempDir::new("nopresence");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"version":1,"connection":{"nickname":"Bob"}}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.presence, PresenceSettings::default());
+        assert_eq!(loaded.presence.away_message, "");
     }
 
     #[test]

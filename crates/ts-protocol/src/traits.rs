@@ -91,6 +91,22 @@ pub trait ClientOperations: Send + Sync {
     ) -> Result<(), ClientError>;
 }
 
+/// Saying whether we are at the keyboard.
+///
+/// Its own capability rather than a method on [`ClientOperations`], which acts
+/// on *other* clients, or on [`Voice`], whose state is about sound: being away
+/// is a fact about us that everyone else can see, and the server is what
+/// carries it.
+#[async_trait]
+pub trait Presence: Send + Sync {
+    /// Marks us away with `message`, or back at the keyboard with `None`.
+    ///
+    /// `Some("")` is a third state the protocol distinguishes and the UI has a
+    /// use for: away, with nothing to say. It is not the same as `None`, which
+    /// clears the mark entirely.
+    async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError>;
+}
+
 /// Sending messages.
 #[async_trait]
 pub trait Messaging: Send + Sync {
@@ -171,6 +187,7 @@ pub struct Backend {
     connection: Box<dyn Connection>,
     channels: Box<dyn ChannelOperations>,
     clients: Box<dyn ClientOperations>,
+    presence: Box<dyn Presence>,
     messaging: Box<dyn Messaging>,
     voice: Box<dyn Voice>,
     permissions: Box<dyn PermissionsReport>,
@@ -188,6 +205,7 @@ impl Backend {
         connection: Box<dyn Connection>,
         channels: Box<dyn ChannelOperations>,
         clients: Box<dyn ClientOperations>,
+        presence: Box<dyn Presence>,
         messaging: Box<dyn Messaging>,
         voice: Box<dyn Voice>,
         permissions: Box<dyn PermissionsReport>,
@@ -197,6 +215,7 @@ impl Backend {
             connection,
             channels,
             clients,
+            presence,
             messaging,
             voice,
             permissions,
@@ -230,6 +249,11 @@ impl Backend {
     /// The client-moderation half of the backend.
     pub fn clients(&mut self) -> &mut dyn ClientOperations {
         self.clients.as_mut()
+    }
+
+    /// The presence half of the backend.
+    pub fn presence(&mut self) -> &mut dyn Presence {
+        self.presence.as_mut()
     }
 
     /// The messaging half of the backend.

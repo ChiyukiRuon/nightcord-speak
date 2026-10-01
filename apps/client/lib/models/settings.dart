@@ -16,6 +16,7 @@ class Settings {
     this.connection = const ConnectionSettings(),
     this.notifications = const NotificationSettings(),
     this.shortcuts = const ShortcutSettings(),
+    this.presence = const PresenceSettings(),
     this.ui = const UiSettings(),
   });
 
@@ -26,6 +27,7 @@ class Settings {
   final ConnectionSettings connection;
   final NotificationSettings notifications;
   final ShortcutSettings shortcuts;
+  final PresenceSettings presence;
   final UiSettings ui;
 
   Settings copyWith({
@@ -33,6 +35,7 @@ class Settings {
     ConnectionSettings? connection,
     NotificationSettings? notifications,
     ShortcutSettings? shortcuts,
+    PresenceSettings? presence,
     UiSettings? ui,
   }) => Settings(
     version: version,
@@ -40,6 +43,7 @@ class Settings {
     connection: connection ?? this.connection,
     notifications: notifications ?? this.notifications,
     shortcuts: shortcuts ?? this.shortcuts,
+    presence: presence ?? this.presence,
     ui: ui ?? this.ui,
   );
 
@@ -49,6 +53,7 @@ class Settings {
     connection: ConnectionSettings.fromJson(_object(json['connection'])),
     notifications: NotificationSettings.fromJson(_object(json['notifications'])),
     shortcuts: ShortcutSettings.fromJson(_object(json['shortcuts'])),
+    presence: PresenceSettings.fromJson(_object(json['presence'])),
     ui: UiSettings.fromJson(_object(json['ui'])),
   );
 
@@ -58,6 +63,7 @@ class Settings {
     'connection': connection.toJson(),
     'notifications': notifications.toJson(),
     'shortcuts': shortcuts.toJson(),
+    'presence': presence.toJson(),
     'ui': ui.toJson(),
   };
 }
@@ -140,6 +146,7 @@ class AudioSettings {
     this.mode = VoiceActivationMode.voiceActivation,
     this.activation = const VoiceActivationSettings(),
     this.outputVolume = 1.0,
+    this.inputGainDb = 0.0,
   });
 
   /// Capture device id, or null for the system default.
@@ -153,9 +160,16 @@ class AudioSettings {
 
   /// Playback gain, `0.0..=1.0`.
   ///
-  /// The only audio setting there is. The codec has none: it always runs the
-  /// stereo profile at the top of its range, see `ts_audio::encoder`.
+  /// The codec has no setting: it always runs the stereo profile at the top of
+  /// its range, see `ts_audio::encoder`.
   final double outputVolume;
+
+  /// Microphone gain in decibels: how loud everyone else hears us.
+  ///
+  /// `0.0` is unity, and [`gainSilenceDb`] is silence. Not the same control as
+  /// [outputVolume], which is what *we* hear — the two are deliberately
+  /// separate fields with separate units.
+  final double inputGainDb;
 
   AudioSettings copyWith({
     String? inputDevice,
@@ -165,6 +179,7 @@ class AudioSettings {
     VoiceActivationMode? mode,
     VoiceActivationSettings? activation,
     double? outputVolume,
+    double? inputGainDb,
   }) => AudioSettings(
     // A nullable field cannot be set back to null by passing null — that is what
     // `copyWith` means everywhere else — so choosing 「系统默认」 says so
@@ -174,6 +189,7 @@ class AudioSettings {
     mode: mode ?? this.mode,
     activation: activation ?? this.activation,
     outputVolume: outputVolume ?? this.outputVolume,
+    inputGainDb: inputGainDb ?? this.inputGainDb,
   );
 
   factory AudioSettings.fromJson(Map<String, dynamic> json) => AudioSettings(
@@ -182,6 +198,7 @@ class AudioSettings {
     mode: VoiceActivationMode.fromWire(json['mode'] as String?),
     activation: VoiceActivationSettings.fromJson(_object(json['activation'])),
     outputVolume: _volume(json['output_volume']),
+    inputGainDb: _gainDb(json['input_gain_db']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -190,6 +207,7 @@ class AudioSettings {
     'mode': mode.wire,
     'activation': activation.toJson(),
     'output_volume': outputVolume,
+    'input_gain_db': inputGainDb,
   };
 }
 
@@ -199,6 +217,33 @@ class AudioSettings {
 /// must not load as silence.
 double _volume(Object? value) =>
     (value as num?)?.toDouble().clamp(0.0, 1.0) ?? 1.0;
+
+/// A microphone gain read back from a file, pulled into range.
+///
+/// Missing is unity, for the same reason as the volume beside it — except that
+/// unity *is* zero for a gain in decibels, so the two defaults agree by
+/// construction.
+///
+/// A value that is not a number at all is silence rather than unity: it cannot
+/// come from the file (JSON has no such literal), so it means something is
+/// broken rather than something is old, and a slider holding one would assert
+/// on the first frame. The core reads it the same way.
+double _gainDb(Object? value) {
+  final db = (value as num?)?.toDouble() ?? 0.0;
+  if (db.isNaN) return gainSilenceDb;
+  return db.clamp(gainSilenceDb, gainMaxDb);
+}
+
+/// The bottom of the microphone gain range, in decibels: silence.
+///
+/// The core clamps to the same pair (`ts_audio::SILENCE_DB` and
+/// `ts_audio::MAX_GAIN_DB`) — they are the contract of the stored value, which
+/// is why they live beside the field rather than in the slider that draws them.
+const double gainSilenceDb = -200.0;
+
+/// The top of it: loud enough to rescue a quiet microphone, and honest about
+/// clipping anything already loud.
+const double gainMaxDb = 10.0;
 
 /// The voice-activation gate's tuning (§29).
 class VoiceActivationSettings {
@@ -291,6 +336,26 @@ class ConnectionSettings {
     'profile': profile,
     'max_reconnect_attempts': maxReconnectAttempts,
   };
+}
+
+/// What other people see about us when we are away.
+///
+/// The core stores this but never reads it: the message is sent to the server
+/// when we go away, and until then it is just a preference.
+class PresenceSettings {
+  const PresenceSettings({this.awayMessage = ''});
+
+  /// What to say when we go away. Empty — the default — is a legitimate value:
+  /// the away button says nothing until someone has set something.
+  final String awayMessage;
+
+  PresenceSettings copyWith({String? awayMessage}) =>
+      PresenceSettings(awayMessage: awayMessage ?? this.awayMessage);
+
+  factory PresenceSettings.fromJson(Map<String, dynamic> json) =>
+      PresenceSettings(awayMessage: json['away_message'] as String? ?? '');
+
+  Map<String, dynamic> toJson() => {'away_message': awayMessage};
 }
 
 /// How the front-end presents itself.

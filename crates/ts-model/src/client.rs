@@ -62,6 +62,13 @@ pub struct Client {
     pub channel_id: ChannelId,
     /// Simultaneous status flags.
     pub flags: ClientFlags,
+    /// What they said when they went away.
+    ///
+    /// `None` when they are not away, and also when they are away with nothing
+    /// to say: an empty message is not worth rendering. Those two are not the
+    /// same state, and telling them apart is [`ClientFlags::away`]'s job —
+    /// this field only ever carries something worth reading.
+    pub away_message: Option<String>,
     /// Stable per-user id. Survives reconnects and nick changes, unlike
     /// [`Client::id`]. Absent for server-query connections.
     pub unique_id: Option<String>,
@@ -80,6 +87,7 @@ impl Client {
             name: name.into(),
             channel_id,
             flags: ClientFlags::none(),
+            away_message: None,
             unique_id: None,
             client_type: ClientType::Voice,
             is_self: false,

@@ -82,6 +82,9 @@ pub(crate) struct RemoteVoice {
     pub session: SessionId,
     encoder: OpusEncoder,
     policy: TransmitPolicy,
+    /// Microphone gain, as a linear factor — the decibels the user chose in the
+    /// same settings file the desktop uses.
+    input_gain: f32,
     /// The last mixed frame's loudness, so `voice_status` can answer without
     /// waiting for the next push.
     last_level: f32,
@@ -102,6 +105,9 @@ impl RemoteVoice {
             // encoder would reject every one of them as half a frame.
             encoder: OpusEncoder::new(ts_audio::VOICE_CHANNELS)?,
             policy: TransmitPolicy::new(mode, activation),
+            // Unity until the worker applies the stored preference, which it
+            // does in the same breath as building this.
+            input_gain: 1.0,
             last_level: 0.0,
             last_peak: 0.0,
             last_transmitting: false,
@@ -109,9 +115,14 @@ impl RemoteVoice {
     }
 
     /// Gates and encodes one mixed frame; `None` means the gate is closed.
+    ///
+    /// Takes the frame mutably because the microphone gain is applied to it —
+    /// after the gate, never before, so the level the sensitivity threshold is
+    /// compared against stays the browser's own. See the desktop's
+    /// `VoiceEngine::poll` for the same argument.
     pub(crate) fn encode_frame(
         &mut self,
-        mixed: &[f32],
+        mixed: &mut [f32],
     ) -> Result<Option<VoicePacket>, AudioError> {
         // The order matters and mirrors `VoiceEngine::measure`: the level is
         // recorded *before* the policy runs, or the meter lies in the modes
@@ -123,6 +134,7 @@ impl RemoteVoice {
         if !transmitting {
             return Ok(None);
         }
+        ts_audio::apply_gain(mixed, self.input_gain);
         let mut packet = self.encoder.encode(mixed)?;
         // The first frame after silence is flagged, so the far end can tell
         // "they started talking again" from "packets were lost".
@@ -154,6 +166,26 @@ impl RemoteVoice {
     /// `VoiceError::NotConnected`, which the worker reported to every browser.
     pub(crate) fn set_output_muted(&mut self, muted: bool) {
         self.policy.set_output_muted(muted);
+    }
+
+    /// Marks the browser's client away or back, which closes the transmit gate.
+    ///
+    /// The same reason deafening closes it: the server refuses voice from an
+    /// away client, so every frame the browser sent while away was a frame
+    /// nobody hears — each one answered with `VoiceError::NotConnected` and
+    /// broadcast to every connection.
+    pub(crate) fn set_away(&mut self, away: bool) {
+        self.policy.set_away(away);
+    }
+
+    /// Sets the microphone gain in decibels, the way the desktop does.
+    ///
+    /// It comes from the same settings file, so a browser and a desktop
+    /// talking through one core hear each other's voice the same way — and a
+    /// user who set their gain on the desktop is not quietly quiet in the
+    /// browser.
+    pub(crate) fn set_input_gain_db(&mut self, db: f32) {
+        self.input_gain = ts_audio::gain_from_db(ts_audio::clamp_gain_db(db));
     }
 
     pub(crate) fn set_settings(&mut self, settings: VoiceActivationSettings) {

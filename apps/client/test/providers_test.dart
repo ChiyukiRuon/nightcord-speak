@@ -48,6 +48,14 @@ class _RecordingTransport implements ClientTransport {
   void disconnect(int session) => calls.add('disconnect:$session');
 
   @override
+  void setAway(int session, {required bool away, String? message}) =>
+      calls.add('away:${away ? "yes" : "no"}:${message ?? ""}');
+
+  @override
+  void updateSettings(Settings settings) =>
+      calls.add('updateSettings:${settings.presence.awayMessage}');
+
+  @override
   void dispose() => calls.add('dispose');
 
   @override
@@ -182,6 +190,98 @@ void main() {
       'setInputMuted:true',
       'setOutputMuted:true',
     ]);
+  });
+
+  test('the away toggle never carries a message, stored or not', () async {
+    // The button is the silent way out: it marks us away and says nothing,
+    // whatever the settings happen to remember. Only the dialog announces a
+    // reason — so the saved message is not "what going away says", it is what
+    // the dialog starts from.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [
+        clientTransportProvider.overrideWithValue(transport),
+        settingsProvider.overrideWith(
+          () => _FixedSettings(
+            const Settings(presence: PresenceSettings(awayMessage: '在开会')),
+          ),
+        ),
+      ],
+    );
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    transport._events.add(const DomainEvent(
+      session: 7,
+      event: ConnectionStateChangedEvent(ConnectionState.connected),
+    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: OwnClientIdentifiedEvent(clientId: 1, channelId: 1),
+      ),
+    );
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ClientJoinedEvent(
+          Client(id: 1, name: '我', channelId: 1, isSelf: true),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    final sessions = container.read(sessionsProvider.notifier);
+    sessions.toggleAway(7);
+    expect(transport.calls, contains('away:yes:'));
+
+    // Now away, as the core's own snapshot would have told us, and the next
+    // press has to bring us back *without* the message.
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ClientUpdatedEvent(
+          Client(
+            id: 1,
+            name: '我',
+            channelId: 1,
+            isSelf: true,
+            flags: ClientFlags(away: true),
+            awayMessage: '在开会',
+          ),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    sessions.toggleAway(7);
+    expect(transport.calls.last, 'away:no:');
+  });
+
+  test('setting an away message writes it down before going away', () async {
+    // The message is worth remembering only if it is stored, and the store is
+    // the settings file — the same one the settings dialog writes.
+    final transport = _RecordingTransport();
+    final container = ProviderContainer.test(
+      overrides: [
+        clientTransportProvider.overrideWithValue(transport),
+        settingsProvider.overrideWith(() => _FixedSettings(const Settings())),
+      ],
+    );
+    final subscription = container.listen(sessionsProvider, (_, _) {});
+    addTearDown(subscription.close);
+
+    transport._events.add(const DomainEvent(
+      session: 7,
+      event: ConnectionStateChangedEvent(ConnectionState.connected),
+    ));
+    await pumpEventQueue();
+
+    container.read(sessionsProvider.notifier).goAwayWith(7, '午饭时间');
+
+    expect(transport.calls, contains('updateSettings:午饭时间'));
+    expect(transport.calls.last, 'away:yes:午饭时间');
+    expect(container.read(settingsProvider)?.presence.awayMessage, '午饭时间');
   });
 
   test('connecting opens the voice engine', () async {

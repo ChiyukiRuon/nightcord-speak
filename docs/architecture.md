@@ -135,6 +135,7 @@ pub struct Backend {
     connection:  Box<dyn Connection>,
     channels:    Box<dyn ChannelOperations>,
     clients:     Box<dyn ClientOperations>,
+    presence:    Box<dyn Presence>,
     messaging:   Box<dyn Messaging>,
     voice:       Box<dyn Voice>,
     permissions: Box<dyn PermissionsReport>,

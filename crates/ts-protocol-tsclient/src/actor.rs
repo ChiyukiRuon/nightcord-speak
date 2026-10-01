@@ -181,6 +181,11 @@ pub(crate) enum Command {
     SendVoice { packet: VoicePacket, reply: Reply },
     /// Tell the server whether we are muted.
     SetVoiceState { state: VoiceState, reply: Reply },
+    /// Tell the server whether we are away, and with what to say about it.
+    SetAway {
+        message: Option<String>,
+        reply: Reply,
+    },
     /// Poke another client.
     Poke {
         client_id: ClientId,
@@ -223,6 +228,7 @@ impl Command {
             | Self::MoveClient { reply, .. }
             | Self::SendVoice { reply, .. }
             | Self::SetVoiceState { reply, .. }
+            | Self::SetAway { reply, .. }
             | Self::Poke { reply, .. }
             | Self::Kick { reply, .. }
             | Self::Ban { reply, .. }
@@ -266,6 +272,17 @@ impl std::fmt::Debug for Command {
             Self::SetVoiceState { state, .. } => f
                 .debug_struct("SetVoiceState")
                 .field("state", state)
+                .finish(),
+            // That there *is* a message, never the message: it is text the
+            // user typed, and the same rule that keeps chat out of the trace
+            // applies to it.
+            Self::SetAway { message, .. } => f
+                .debug_struct("SetAway")
+                .field("away", &message.is_some())
+                .field(
+                    "has_message",
+                    &message.as_ref().is_some_and(|m| !m.is_empty()),
+                )
                 .finish(),
             Self::Kick {
                 client_id, scope, ..
@@ -1479,6 +1496,34 @@ fn handle_command(
                 book.client_update()
                     .set_input_muted(state.input_muted)
                     .set_output_muted(state.output_muted)
+            };
+            settle(part.send_with_result(connection), reply, pending);
+        }
+
+        Command::SetAway { message, reply } => {
+            // Announced to the server rather than kept locally: the mark and
+            // the message are what other people's clients draw, which is the
+            // whole point of going away.
+            //
+            // The library applies it to its own book as the command leaves
+            // (`update_on_outgoing_command`), so the snapshot that follows
+            // already reports it — the UI does not have to guess, and does not
+            // have to wait for the server to echo anything back.
+            tracing::debug!(
+                away = message.is_some(),
+                has_message = message.as_ref().is_some_and(|text| !text.is_empty()),
+                "announcing our presence to the server"
+            );
+            let part = {
+                let Ok(book) = connection.get_state() else {
+                    let _ = reply.send(Err(not_connected()));
+                    return;
+                };
+                // `None` clears the mark; `Some("")` is "away, nothing to
+                // say". Rearranging a front-end's two arguments into these is
+                // `ts-session`'s job — by the time a command reaches here the
+                // protocol's shape is all that is left.
+                book.client_update().set_away(message.as_deref())
             };
             settle(part.send_with_result(connection), reply, pending);
         }

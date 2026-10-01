@@ -196,6 +196,18 @@ class RustClient implements ClientTransport {
     ),
   );
 
+  /// Marks us away, or back at the keyboard.
+  ///
+  /// `message` is what to say about it, and the core ignores it when [away] is
+  /// false. An empty message is still an away message — "away, nothing to say"
+  /// is a state of its own on the server — which is why [away] is an argument
+  /// of its own rather than "no message means here".
+  @override
+  void setAway(int session, {required bool away, String? message}) => _withText(
+    message ?? '',
+    (text) => _bindings.setAway(_handle, session, away, text),
+  );
+
   /// Asks for the audio devices for `"input"` or `"output"`.
   ///
   /// The answer arrives as a `audio_devices` [CommandResult] whose `data` holds

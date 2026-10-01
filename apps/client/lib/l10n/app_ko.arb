@@ -59,6 +59,9 @@
   "settingsNotifySystem": "창이 앞에 없을 때 시스템 알림 표시",
   "settingsSensitivity": "감도",
   "settingsSensitivityHint": "값이 높을수록 주변 소음에 덜 반응하고, 더 큰 소리로 말해야 합니다.",
+  "settingsMicGain": "마이크 증폭",
+  "settingsMicGainHint": "상대방에게 들리는 음량입니다. 맨 아래까지 내리면 무음이 됩니다.",
+  "settingsMicGainSilent": "무음",
   "settingsVolume": "출력 음량",
   "settingsVolumeHint": "모든 멤버에게 적용됩니다. 개별 멤버의 음량은 채널 목록에서 따로 조정할 수 있습니다.",
   "settingsNoLogDirectory": "이 플랫폼에는 쓸 수 있는 로그 폴더가 없습니다.",
@@ -163,6 +166,11 @@
   "voiceMuteMic": "마이크 음소거",
   "voiceUndeafen": "스피커 켜기",
   "voiceDeafen": "스피커 끄기",
+  "voiceAway": "자리 비움 설정",
+  "voiceBackOnline": "돌아오기",
+  "awayMessageTitle": "자리 비움 메시지",
+  "awayMessageLabel": "남길 말",
+  "awayMessageNote": "서버의 모든 사용자에게 표시되며, 다음에 자리 비움 버튼을 누를 때도 이 내용을 사용합니다.",
 
   "serverSessionEnded": "세션이 종료되었습니다",
 

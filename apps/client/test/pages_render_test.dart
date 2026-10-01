@@ -38,6 +38,7 @@ import 'package:nightcord_client/models/voice_status.dart';
 import 'package:nightcord_client/providers/providers.dart';
 import 'package:nightcord_client/state/notifications.dart';
 import 'package:nightcord_client/state/server_view.dart';
+import 'package:nightcord_client/util/gain.dart';
 
 /// A transport that answers nothing.
 ///
@@ -83,6 +84,20 @@ class _SilentTransport implements ClientTransport {
   void setClientVolume(int session, int clientId, double volume) =>
       calls.add('volume:$clientId:${volume.toStringAsFixed(2)}');
 
+  /// Recorded for the same reason as the member menu: an away toggle that sent
+  /// the wrong message, or "back" when it meant "away", would look right on
+  /// screen and be wrong on the server.
+  @override
+  void setAway(int session, {required bool away, String? message}) =>
+      calls.add('away:${away ? "yes" : "no"}:${message ?? ""}');
+
+  /// Recorded so a test can tell "the slider moved" from "the core was told":
+  /// the local state changes either way, and only the second one survives a
+  /// restart.
+  @override
+  void updateSettings(Settings settings) =>
+      calls.add('updateSettings:${settings.audio.inputGainDb}');
+
   /// The address book as the core last reported it.
   ///
   /// Kept here rather than only recorded: saving the connected server sends a
@@ -118,8 +133,12 @@ class _FixedActive extends ActiveSessionNotifier {
 }
 
 class _FixedSettings extends SettingsNotifier {
+  _FixedSettings([this.settings = const Settings()]);
+
+  final Settings settings;
+
   @override
-  Settings? build() => const Settings();
+  Settings? build() => settings;
 }
 
 class _FixedDevices extends AudioDevicesNotifier {
@@ -245,12 +264,13 @@ ProviderContainer _container({
   ServerView? view,
   bool notices = false,
   bool bookmarks = false,
+  Settings settings = const Settings(),
   _SilentTransport? transport,
 }) => ProviderContainer.test(
       overrides: [
         clientTransportProvider.overrideWithValue(transport ?? _SilentTransport()),
         activeSessionProvider.overrideWith(() => _FixedActive()),
-        settingsProvider.overrideWith(() => _FixedSettings()),
+        settingsProvider.overrideWith(() => _FixedSettings(settings)),
         audioDevicesProvider.overrideWith(() => _FixedDevices()),
         voiceStatusProvider.overrideWith(() => _FixedVoiceStatus()),
         if (view != null) sessionsProvider.overrideWith(() => _FixedSessions({1: view})),
@@ -351,9 +371,9 @@ void main() {
 
     // By icon rather than by tooltip: the tooltip is translated, the glyph is
     // not.
-    expect(find.byIcon(Icons.link_off), findsOneWidget);
+    expect(find.byIcon(Icons.logout), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.link_off));
+    await tester.tap(find.byIcon(Icons.logout));
     await tester.pumpAndSettle();
 
     expect(find.byType(AlertDialog), findsOneWidget);
@@ -378,7 +398,7 @@ void main() {
     await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.link_off));
+    await tester.tap(find.byIcon(Icons.logout));
     await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)),
@@ -387,6 +407,280 @@ void main() {
 
     expect(transport.calls, contains('disconnect:1'));
     expect(container.read(sessionsProvider), isEmpty);
+  });
+
+  testWidgets('the away button goes away without a word', (tester) async {
+    // A stored message does not change what the button does: it is the silent
+    // way out, and the reason only goes out when someone types one into the
+    // dialog. Sending the stored one here would put words in the user's mouth
+    // every evening.
+    final transport = _SilentTransport();
+    final container = _container(
+      view: _view(),
+      settings: const Settings(presence: PresenceSettings(awayMessage: '在开会')),
+      transport: transport,
+    );
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.snooze_outlined));
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('away:yes:'));
+  });
+
+  testWidgets('an away client shows the filled glyph and comes back on a tap', (tester) async {
+    final transport = _SilentTransport();
+    final view = _view();
+    // Ourselves, away: the same event path a `notifyclientupdated` takes.
+    view.apply(
+      const ClientUpdatedEvent(
+        Client(
+          id: 1,
+          name: 'TsukinoAyaka',
+          channelId: 1,
+          isSelf: true,
+          flags: ClientFlags(away: true),
+          awayMessage: '在开会',
+        ),
+      ),
+    );
+    final container = _container(
+      view: view,
+      settings: const Settings(presence: PresenceSettings(awayMessage: '在开会')),
+      transport: transport,
+    );
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // Scoped to the bar: the member list draws the same glyph for the away
+    // client it is already showing, and an unqualified finder matches both.
+    final bar = find.byType(VoiceBar);
+    final filled = find.descendant(of: bar, matching: find.byIcon(Icons.snooze));
+    expect(filled, findsOneWidget, reason: 'away should not look the same as here');
+    expect(find.descendant(of: bar, matching: find.byIcon(Icons.snooze_outlined)), findsNothing);
+
+    await tester.tap(filled);
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('away:no:'));
+  });
+
+  testWidgets('right-clicking the away button asks for a message and remembers it', (tester) async {
+    // The one gesture that is not discoverable by looking, so it gets a test:
+    // what it must do is prefill the remembered message, go away saying the new
+    // one, and write it down.
+    final transport = _SilentTransport();
+    final container = _container(
+      view: _view(),
+      settings: const Settings(presence: PresenceSettings(awayMessage: '在开会')),
+      transport: transport,
+    );
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.snooze_outlined), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    // Scoped to the dialog: the page behind it has text fields of its own
+    // (the chat composer), and an unqualified finder matches those too.
+    final field = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    expect(
+      tester.widget<TextField>(field).controller?.text,
+      '在开会',
+      reason: 'the field should start from the remembered message',
+    );
+
+    await tester.enterText(field, '午饭时间');
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('away:yes:午饭时间'));
+    expect(container.read(settingsProvider)?.presence.awayMessage, '午饭时间');
+  });
+
+  testWidgets('the away button does nothing without a session', (tester) async {
+    // Same rule as the mute buttons: a control with nothing behind it must not
+    // queue a command the core would refuse, and the tap must not look like it
+    // worked.
+    final transport = _SilentTransport();
+    final container = _container(view: ServerView(session: 1), transport: transport);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // Asserted on the button, not just on the calls: the store refuses the
+    // command either way, so an enabled button that silently did nothing would
+    // pass a calls-only check while looking perfectly clickable.
+    final button = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byIcon(Icons.snooze_outlined),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(button.onPressed, isNull);
+
+    await tester.tap(find.byIcon(Icons.snooze_outlined), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, isEmpty);
+  });
+
+  testWidgets('a long press opens the same dialog, for fingers', (tester) async {
+    // The same door as the right-click, because a touch screen has no second
+    // button — and because an `IconButton` inside a `GestureDetector` is
+    // exactly the case where a gesture can be swallowed by the wrong
+    // recogniser without anyone noticing.
+    final container = _container(view: _view());
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byIcon(Icons.snooze_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('resting on the microphone shows the gain, and moving away hides it', (tester) async {
+    // The first hover test in this file, and the reason the flyout is worth
+    // one: an `OverlayPortal` panel is invisible to every other kind of test —
+    // it is not in the page's subtree, and only a pointer that really moves
+    // will open it.
+    final container = _container(view: _view());
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // The panel holds a reading and a slider and no words of its own — the
+    // button above it is what says what it adjusts — so the reading is what
+    // this looks for.
+    expect(find.text('0 dB'), findsNothing);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+
+    await mouse.moveTo(tester.getCenter(find.byIcon(Icons.mic)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 dB'), findsOneWidget, reason: 'unity until it is moved');
+
+    // Leaving closes it — after the grace period that lets the pointer cross
+    // from the button into the panel.
+    await mouse.moveTo(const Offset(60, 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 dB'), findsNothing);
+  });
+
+  testWidgets('dragging the flyout writes the gain the settings keep', (tester) async {
+    final transport = _SilentTransport();
+    final container = _container(view: _view(), transport: transport);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.byIcon(Icons.mic)));
+    await tester.pumpAndSettle();
+
+    // The panel's slider, not the page's: there is only one on screen here,
+    // because the settings dialog is closed.
+    //
+    // Downwards, because it is drawn vertically — and a `Slider` follows the
+    // pointer rather than accumulating the drag, so what matters is where the
+    // drag *ends*: the middle of the panel is a long way above the silent
+    // floor, which is where the bottom of the travel is.
+    await tester.drag(find.byType(Slider), const Offset(0, 16));
+    await tester.pumpAndSettle();
+
+    final written = container.read(settingsProvider)!.audio.inputGainDb;
+    expect(written, lessThan(0.0), reason: 'dragging down should attenuate');
+    expect(written, greaterThan(gainMinAudibleDb), reason: 'and not jump to silence');
+
+    // All the way down really is silence — the reason the curve spends its
+    // travel on the audible range instead of on the whole decibel range.
+    await tester.drag(find.byType(Slider), const Offset(0, 200));
+    await tester.pumpAndSettle();
+
+    expect(container.read(settingsProvider)!.audio.inputGainDb, gainSilenceDb);
+
+    // What the core is told is the same value the UI now shows.
+    expect(transport.calls.where((call) => call.startsWith('updateSettings')), isNotEmpty);
+  });
+
+  testWidgets('the settings dialog carries the same slider', (tester) async {
+    // Two controls, one value: the dialog's slider has to be the microphone
+    // gain's, and it has to write decibels — a copy that wrote a fraction would
+    // look right and set the gain to nothing.
+    final container = _container(
+      view: _view(),
+      settings: const Settings(audio: AudioSettings(inputGainDb: 6.0)),
+    );
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+
+    expect(find.text('麦克风增益'), findsOneWidget);
+    expect(find.text('+6 dB'), findsOneWidget, reason: 'the stored value is what is drawn');
+
+    final slider = find.descendant(
+      of: find.ancestor(of: find.text('麦克风增益'), matching: find.byType(Column)).first,
+      matching: find.byType(Slider),
+    );
+    // The dialog scrolls, and in the test's window this one starts below the
+    // fold — a drag at its centre would land on whatever is drawn there.
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+
+    await tester.drag(slider, const Offset(-50, 0));
+    await tester.pumpAndSettle();
+
+    expect(container.read(settingsProvider)!.audio.inputGainDb, lessThan(6.0));
+    // The playback volume next door is untouched by any of this.
+    expect(container.read(settingsProvider)!.audio.outputVolume, 1.0);
+  });
+
+  testWidgets('an away client shows the message others set', (tester) async {
+    // The message is the point of the state: a badge alone says someone is
+    // quiet, not when they will be back.
+    final view = _view();
+    view.apply(
+      const ClientUpdatedEvent(
+        Client(
+          id: 3,
+          name: '远处的人',
+          channelId: 1,
+          flags: ClientFlags(away: true),
+          awayMessage: '吃饭去了',
+        ),
+      ),
+    );
+    final container = _container(view: view);
+
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    // The message rides on the name as a second span, so the whole line is what
+    // `find.text` sees. Asserting the exact string is the point: an away client
+    // whose message is only in a tooltip is a client where nobody reads it.
+    expect(find.text('远处的人 (吃饭去了)'), findsOneWidget);
   });
 
   testWidgets('the name in the voice bar is lifted off its own line box', (tester) async {

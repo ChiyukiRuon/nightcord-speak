@@ -28,6 +28,6 @@ pub use config::ConnectionConfig;
 pub use dialect::Dialect;
 pub use traits::{
     AudioSink, Backend, ChannelOperations, ClientOperations, Connection, Messaging, NoVoice,
-    PermissionsReport, Voice,
+    PermissionsReport, Presence, Voice,
 };
 pub use voice::{Codec, VoicePacket};

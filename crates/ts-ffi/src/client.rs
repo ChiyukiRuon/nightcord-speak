@@ -22,7 +22,7 @@ use tokio::task::JoinHandle;
 use ts_audio::{FRAME_MS, VoiceEngine};
 use ts_core::Client as CoreClient;
 use ts_events::ClientEvent;
-use ts_model::{ClientError, NetworkError, ProtocolError, SessionId, VoiceState};
+use ts_model::{ClientError, ConnectionState, NetworkError, ProtocolError, SessionId, VoiceState};
 
 use ts_wire::Command;
 use ts_wire::FfiEvent;
@@ -355,7 +355,23 @@ async fn run(
             },
 
             received = subscription.recv() => match received {
-                Ok(event) => events.push(FfiEvent::client(event.session, event.event)),
+                Ok(event) => {
+                    // A connection that has just come up is not away: the
+                    // server forgets the mark with the old connection, so an
+                    // engine that outlived a reconnect would otherwise keep
+                    // refusing to transmit for a state nobody is in any more —
+                    // and refuse it *silently*, which is the worse half.
+                    if matches!(
+                        event.event,
+                        ClientEvent::ConnectionStateChanged(ConnectionState::Connected)
+                    ) && let Some(active) = voice
+                        .as_mut()
+                        .filter(|active| active.session == event.session)
+                    {
+                        active.engine.set_away(false);
+                    }
+                    events.push(FfiEvent::client(event.session, event.event));
+                }
                 // Reported, not swallowed: a UI that silently misses
                 // `ChannelRemoved` keeps drawing a channel that is gone.
                 Err(RecvError::Lagged(missed)) => events.push(FfiEvent::lagged(missed)),
@@ -490,6 +506,29 @@ async fn handle(
         } => {
             let outcome =
                 with_session!(core, session, s => s.ban(client_id, duration, reason.as_deref()));
+            report(events, name, Some(session), outcome);
+        }
+
+        Command::SetAway {
+            session,
+            away,
+            message,
+        } => {
+            let outcome = with_session!(core, session, s => s.set_away(away, message.as_deref()));
+
+            // The engine has to hear about it too, and separately from the
+            // server: the server refuses voice from an away client, and a frame
+            // it refuses comes back as "not connected" — a wrong explanation
+            // for a state the user chose, repeated every time the microphone is
+            // triggered. Closing the engine's gate is how the deafen button
+            // already avoids the same dialog.
+            //
+            // Only for the session the engine is bound to: another session's
+            // away has nothing to do with what this microphone feeds.
+            if let Some(active) = voice.as_mut().filter(|active| active.session == session) {
+                active.engine.set_away(away);
+            }
+
             report(events, name, Some(session), outcome);
         }
 
@@ -745,6 +784,9 @@ async fn apply_settings(
     // Applied live, unlike the devices: it is an atomic store the device
     // callback reads every frame, so nothing has to be reopened.
     active.engine.set_output_volume(audio.output_volume);
+    // The microphone gain is live for the same reason — it is a plain field the
+    // encoder path reads, and the next frame uses it.
+    active.engine.set_input_gain_db(audio.input_gain_db);
 
     // Tell the server as well, so other clients can see the change rather than
     // inferring it from silence.
@@ -868,6 +910,9 @@ async fn start_voice(
     engine.set_input_muted(intent.input_muted);
     engine.set_output_muted(intent.output_muted);
     engine.set_mode(intent.mode);
+    // Unlike the mute, this is not intent that predates the engine: it comes
+    // from the settings, which are always readable.
+    engine.set_input_gain_db(audio.input_gain_db);
 
     // The speakers are wired straight to the session, so decoded audio never
     // crosses the ABI.
@@ -1064,6 +1109,26 @@ mod tests {
     /// Whether a command reported back in time.
     fn wait_for(client: &NightcordClient, command: &str, within: Duration) -> bool {
         wait_for_batch(client, command, within).is_some()
+    }
+
+    #[test]
+    fn going_away_answers_through_the_worker() {
+        // The session-scoped commands all have the same contract: a named
+        // result comes back even when there is nothing to act on, so the
+        // front-end's error pipe is exercised by a session that is not there.
+        let client = NightcordClient::new().expect("start the core");
+        client.send(Command::SetAway {
+            session: SessionId::new(99),
+            away: true,
+            message: Some("brb".into()),
+        });
+
+        let batch = wait_for_batch(&client, "set_away", Duration::from_secs(5))
+            .unwrap_or_else(|| panic!("`set_away` went unanswered"));
+        assert!(
+            batch.contains("no such session"),
+            "a missing session should be reported as one, got {batch}"
+        );
     }
 
     #[test]

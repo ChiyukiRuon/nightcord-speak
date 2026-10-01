@@ -241,6 +241,18 @@
   "@settingsSensitivityHint": {
     "description": "Explains what the sensitivity value means"
   },
+  "settingsMicGain": "Microphone gain",
+  "@settingsMicGain": {
+    "description": "Label above the slider that sets how loud others hear us"
+  },
+  "settingsMicGainHint": "How loud everyone else hears you. All the way down is silence.",
+  "@settingsMicGainHint": {
+    "description": "Explains the gain slider, including that its bottom position is silence"
+  },
+  "settingsMicGainSilent": "Silent",
+  "@settingsMicGainSilent": {
+    "description": "Replaces the decibel value when the gain slider sits at the bottom"
+  },
   "settingsVolume": "Output volume",
   "@settingsVolume": {
     "description": "Label above the master playback volume slider"
@@ -718,6 +730,26 @@
   "voiceDeafen": "Turn speakers off",
   "@voiceDeafen": {
     "description": "Tooltip of the speaker button while listening"
+  },
+  "voiceAway": "Set yourself away",
+  "@voiceAway": {
+    "description": "Tooltip of the away button while we are here"
+  },
+  "voiceBackOnline": "Come back online",
+  "@voiceBackOnline": {
+    "description": "Tooltip of the away button while we are away"
+  },
+  "awayMessageTitle": "Away message",
+  "@awayMessageTitle": {
+    "description": "Title of the dialog that sets what we say when we are away"
+  },
+  "awayMessageLabel": "What to say",
+  "@awayMessageLabel": {
+    "description": "Label of the one field in the away message dialog"
+  },
+  "awayMessageNote": "Everyone on the server sees this, and the away button will use it again next time.",
+  "@awayMessageNote": {
+    "description": "Says that the message is public, and that it is remembered"
   },
 
   "serverSessionEnded": "Session ended",

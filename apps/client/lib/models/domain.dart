@@ -222,6 +222,7 @@ class Client {
     required this.name,
     required this.channelId,
     this.flags = const ClientFlags(),
+    this.awayMessage,
     this.uniqueId,
     this.isSelf = false,
     this.clientType = ClientType.voice,
@@ -231,6 +232,13 @@ class Client {
   final String name;
   final int channelId;
   final ClientFlags flags;
+
+  /// What they said when they went away, if anything.
+  ///
+  /// Null both when they are not away and when they are away without a word;
+  /// whether they are away at all is [ClientFlags.away]. This is text another
+  /// person wrote — never put it in a log (§44).
+  final String? awayMessage;
 
   /// Stable per-user id. Survives reconnects, unlike [id].
   final String? uniqueId;
@@ -248,6 +256,7 @@ class Client {
     flags: ClientFlags.fromJson(
       (json['flags'] as Map?)?.cast<String, dynamic>() ?? const {},
     ),
+    awayMessage: json['away_message'] as String?,
     uniqueId: json['unique_id'] as String?,
     isSelf: json['is_self'] as bool? ?? false,
     clientType: ClientType.fromWire(json['client_type'] as String?),
@@ -259,6 +268,7 @@ class Client {
     name: name,
     channelId: channel,
     flags: flags,
+    awayMessage: awayMessage,
     uniqueId: uniqueId,
     isSelf: isSelf,
     clientType: clientType,

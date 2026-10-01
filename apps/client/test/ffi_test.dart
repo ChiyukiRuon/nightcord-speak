@@ -115,6 +115,7 @@ void main() {
         'kick': () => client.kick(99, 2, KickScope.server, null),
         'ban': () => client.ban(99, 2, BanDuration.seconds(60), 'because'),
         'voice_set_client_volume': () => client.setClientVolume(99, 2, 0.5),
+        'set_away': () => client.setAway(99, away: true, message: 'brb'),
       };
 
       for (final entry in calls.entries) {

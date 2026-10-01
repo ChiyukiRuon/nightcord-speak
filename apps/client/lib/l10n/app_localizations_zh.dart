@@ -186,6 +186,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSensitivityHint => '灵敏度越高，越不容易被环境噪音触发，但需要更大声说话才能触发。';
 
   @override
+  String get settingsMicGain => '麦克风增益';
+
+  @override
+  String get settingsMicGainHint => '其他人听到你的音量。拖到最底端为静音。';
+
+  @override
+  String get settingsMicGainSilent => '静音';
+
+  @override
   String get settingsVolume => '输出音量';
 
   @override
@@ -510,6 +519,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceDeafen => '关闭扬声器';
 
   @override
+  String get voiceAway => '设为离开';
+
+  @override
+  String get voiceBackOnline => '回到在线';
+
+  @override
+  String get awayMessageTitle => '离开消息';
+
+  @override
+  String get awayMessageLabel => '要说的话';
+
+  @override
+  String get awayMessageNote => '服务器上的其他人都会看到这条消息；下次点离开按钮还会用它。';
+
+  @override
   String get serverSessionEnded => '会话已结束';
 
   @override
@@ -818,6 +842,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settingsSensitivityHint => '靈敏度越高，越不容易被環境噪音觸發，但需要更大聲說話才能觸發。';
+
+  @override
+  String get settingsMicGain => '麥克風增益';
+
+  @override
+  String get settingsMicGainHint => '其他人聽到你的音量。拖到最底端為靜音。';
+
+  @override
+  String get settingsMicGainSilent => '靜音';
 
   @override
   String get settingsVolume => '輸出音量';
@@ -1142,6 +1175,21 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get voiceDeafen => '關閉喇叭';
+
+  @override
+  String get voiceAway => '設為離開';
+
+  @override
+  String get voiceBackOnline => '回到線上';
+
+  @override
+  String get awayMessageTitle => '離開訊息';
+
+  @override
+  String get awayMessageLabel => '要說的話';
+
+  @override
+  String get awayMessageNote => '伺服器上的其他人都會看到這則訊息；下次點離開按鈕還會用它。';
 
   @override
   String get serverSessionEnded => '工作階段已結束';

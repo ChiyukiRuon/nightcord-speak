@@ -89,7 +89,8 @@ apps/client/lib/design/          # AGENTS.md「三层 UI」的层 1，六端共�
 │   └── design_tokens.dart       # ThemeExtension：widget 唯一该读的那层
 └── components/                  # 有第二个使用者的公共件
     ├── app_avatar.dart  app_badge.dart  app_banner.dart
-    ├── app_logo.dart  app_section_title.dart  app_unread_dot.dart
+    ├── app_logo.dart  app_section_title.dart  app_text_prompt.dart
+    └── app_unread_dot.dart
 ```
 
 ### 品牌标记是画出来的，不是加载进来的

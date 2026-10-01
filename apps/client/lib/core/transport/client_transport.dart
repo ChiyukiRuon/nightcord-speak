@@ -62,6 +62,14 @@ abstract interface class ClientTransport {
   /// Bans another client.
   void ban(int session, int clientId, BanDuration duration, String? reason);
 
+  /// Marks us away, or back at the keyboard.
+  ///
+  /// `away` is the switch and `message` is what to say about it. Both are
+  /// needed because the server tells apart three states, not two: away with a
+  /// message, away without one, and here. A single nullable message would have
+  /// made "away, nothing to say" indistinguishable from "back".
+  void setAway(int session, {required bool away, String? message});
+
   /// Scales one client's audio within the mix.
   ///
   /// Local to this client: nothing is sent to the server, and what everyone

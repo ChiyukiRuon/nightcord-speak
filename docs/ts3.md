@@ -297,3 +297,46 @@ OutCommand::new(Direction::C2S, Flags::empty(), PacketType::Command, "servergetv
 所以前端拿到的是一句能行动的话，而不是「操作失败」。前端的菜单也会按
 `Permissions::can_kick` / `can_ban` 灰掉条目，但**服务器始终是权威**——那份快照可能
 已经过期，所以被灰掉的条目仍然解释了原因，而被允许却失败的操作会带着缺失的权限号回来。
+
+---
+
+## 11. 离开状态（away）
+
+「离开」不是本地状态，它**发给服务器**：别人在成员列表里看到离开标记和一句消息。
+线路上是一条 `clientupdate`，带 `client_away` 与 `client_away_message` 两个属性——
+生成代码里 `OutClientUpdatePart::set_away(Option<&str>)` 早就存在，actor 设
+`input_muted` 用的是同一个 builder。
+
+前台说的是三态，协议说的是两态，**`ts-session` 是唯一折叠它的地方**：
+
+| `Command::SetAway` | 协议 | 含义 |
+| --- | --- | --- |
+| `away: false` | `None` | 在线，清掉标记 |
+| `away: true`，无消息 | `Some("")` | 离开，没什么要说的 |
+| `away: true`，有消息 | `Some(m)` | 离开，并说一句 |
+
+「离开但没话说」和「在线」是两回事，`ts-session` 有一条测试专门盯着它们不许塌成一个。
+
+**两件不需要自己做的事**：
+
+- **不需要乐观更新**。库在命令**发出**时就把状态写回自己的 book
+  （`update_on_outgoing_command`），而 actor 是「任何 book 事件就重拍快照」
+  （`actor.rs` 里那条注释），所以按钮的亮灭直接读 `ownClient.flags.away` 就是准的。
+  这与静音按钮不同：那个的本地副本是为了别的目的，见 `providers.dart`。
+- **模型里不需要第二个真相**。book 只有 `AwayMessage: Option<String>`，
+  「是否离开」就是 `is_some()`；`ClientFlags.away` 由它派生，消息本身放在
+  `Client.away_message` 里。空串在 `convert.rs` 就塌成 `None`——那是「离开了，
+  没话说」，没有可显示的东西。
+
+**离开会停掉本地的发送闸门**：库把 away 当成 mute——`can_send_audio()` 在
+`away_message.is_some()` 时为 false（`vendor/tsclientlib/tsclientlib/src/lib.rs:1211`），
+所以离开了就发不出语音。这与「人不在」的语义一致，是**有意保留**的。
+
+代价是**必须自己把闸门关上**，否则就是第一次实现的样子：本地门限照常放行，帧被编出来、
+被库拒绝，FFI 把它当成失败报给界面——「未连接」。一个关于连接的、错误的、且用户按了
+按钮就会重复出现的错误。现在 `ts-audio` 的 `TransmitPolicy` 里 away 与闭麦并列，
+`SetAway` 在两处宿主都顺手把闸门关上（FFI 与网关各一行）。
+
+**跨重连要清掉这个标志**：away 是连接状态，服务器在新连接上不记得它，而引擎会活过
+重连（麦克风不会重开）。所以两处宿主都在看到 `ConnectionStateChanged(Connected)` 时
+把引擎的 away 清掉——**否则会静默地永远不发**，那比报错更糟。

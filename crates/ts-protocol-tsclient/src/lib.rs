@@ -52,7 +52,7 @@ use ts_model::{
 };
 use ts_protocol::{
     Backend, ChannelOperations, ClientOperations, Connection, ConnectionConfig, Dialect, Messaging,
-    PermissionsReport, Voice, VoicePacket,
+    PermissionsReport, Presence, Voice, VoicePacket,
 };
 
 use actor::{Command, Context};
@@ -428,6 +428,14 @@ impl ClientOperations for TsClient {
 }
 
 #[async_trait]
+impl Presence for TsClient {
+    async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError> {
+        let message = message.map(str::to_string);
+        self.call(|reply| Command::SetAway { message, reply }).await
+    }
+}
+
+#[async_trait]
 impl Messaging for TsClient {
     async fn send_text(&mut self, target: MessageTarget, text: &str) -> Result<(), ClientError> {
         let text = text.to_string();
@@ -510,6 +518,7 @@ pub fn backend(
 
     Backend::new(
         kind,
+        Box::new(client.clone()),
         Box::new(client.clone()),
         Box::new(client.clone()),
         Box::new(client.clone()),

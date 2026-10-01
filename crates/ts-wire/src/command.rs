@@ -137,6 +137,21 @@ pub enum Command {
         reason: Option<String>,
     },
 
+    /// Mark ourselves away, or back at the keyboard.
+    ///
+    /// `away` and `message` are two fields rather than one optional string
+    /// because the three states are all real: away with something to say, away
+    /// with nothing to say (`away: true`, no message), and here. The collapse
+    /// into the protocol's single optional message happens in `ts-session`.
+    SetAway {
+        /// Which session to act on.
+        session: SessionId,
+        /// Whether we are away.
+        away: bool,
+        /// What to say about it, if anything.
+        message: Option<String>,
+    },
+
     /// Enumerate the machine's audio devices.
     ///
     /// Renamed to match [`Command::name`]: the request tag and the name
@@ -257,6 +272,7 @@ impl Command {
             Self::Poke { .. } => "poke",
             Self::Kick { .. } => "kick",
             Self::Ban { .. } => "ban",
+            Self::SetAway { .. } => "set_away",
             Self::ListDevices { .. } => "audio_devices",
             Self::VoiceStatus => "voice_status",
             Self::VoiceTestOutput => "voice_test_output",
@@ -401,6 +417,11 @@ mod tests {
                 client_id: ClientId::new(2),
                 volume: 0.5,
             },
+            Command::SetAway {
+                session: SessionId::new(1),
+                away: true,
+                message: Some("back later".into()),
+            },
         ] {
             let json = serde_json::to_value(&command).unwrap();
             assert_eq!(
@@ -442,6 +463,45 @@ mod tests {
                 "{json} did not survive the trip"
             );
         }
+    }
+
+    #[test]
+    fn the_three_presence_states_survive_a_round_trip() {
+        // Away-with-a-message, away-with-nothing-to-say, and here are three
+        // different things; a front-end that flattened two of them would look
+        // correct on the wire and put the wrong status on the server.
+        let states = [
+            Command::SetAway {
+                session: SessionId::new(2),
+                away: true,
+                message: Some("in a meeting".into()),
+            },
+            Command::SetAway {
+                session: SessionId::new(2),
+                away: true,
+                message: None,
+            },
+            Command::SetAway {
+                session: SessionId::new(2),
+                away: false,
+                message: None,
+            },
+        ];
+
+        let mut seen = Vec::new();
+        for command in states {
+            let json = serde_json::to_string(&command).unwrap();
+            let back: Command = serde_json::from_str(&json).unwrap();
+            let value = serde_json::to_value(&back).unwrap();
+            assert_eq!(value, serde_json::to_value(&command).unwrap(), "{json}");
+            seen.push(value["payload"].to_string());
+        }
+        seen.dedup();
+        assert_eq!(
+            seen.len(),
+            3,
+            "two of the three states look alike: {seen:?}"
+        );
     }
 
     #[test]

@@ -44,7 +44,8 @@
     "output_device": null,
     "mode": "voice_activation",
     "activation": { "sensitivity": 0.05, "attack_ms": 60, "release_ms": 400 },
-    "output_volume": 1.0
+    "output_volume": 1.0,
+    "input_gain_db": 0.0
   },
   "connection": {
     "nickname": "Nightcord User",
@@ -63,6 +64,9 @@
     "mute":         { "key": 458768, "ctrl": true, "shift": true, "alt": false, "meta": false },
     "deafen":       { "key": 458759, "ctrl": true, "shift": true, "alt": false, "meta": false },
     "push_to_talk": { "key": 458771, "ctrl": true, "shift": true, "alt": false, "meta": false }
+  },
+  "presence": {
+    "away_message": ""
   },
   "ui": {
     "language": null,
@@ -86,8 +90,31 @@
 「跟随系统」是一个要显式选的值（`"system"`），因为在系统深色时用 Black、浅色时用
 White 是一对主题而不是一种模式。三套主题见 [`docs/ui.md`](ui.md)。
 
+`presence.away_message` 是底栏那个「离开」按钮替我们说的话，空串（默认）表示
+**离开了、没什么要说的**——那是协议里一个真实的状态，不是缺失值。core 存它但从不读它：
+读它的是前端的离开按钮，消息随 `clientupdate` 发给服务器，别人在成员列表里看得到。
+放在设置文件里而不是会话内存里，是因为同一句话通常每天都要用一次；
+见 [`docs/ts3.md`](ts3.md) §10 的 away 一段。
+
 `input_device` / `output_device` 是 cpal 的 `"<host>:<device>"`，`null` 表示系统默认。
 想知道该填什么，`cargo run -p ts-audio --example list_devices`。
+
+### `input_gain_db`
+
+**麦克风增益**，单位分贝：别人听到我们多大声。`0.0` 是 unity（原样的麦克风），
+`-200` 是静音——不是一个很小的数，是「拖到头就是要没声」。范围 `-200..=10`，
+两端由 `ts_audio` 的 `SILENCE_DB` / `MAX_GAIN_DB` 定，Dart 侧同名常量对齐。
+
+**它和下面的 `output_volume` 是两个不同的控制、两套单位**，这是刻意的：
+那个是「我听到别人多大声」，这个是「别人听到我多大声」。
+
+**默认值这里恰好可以是裸 `#[serde(default)]`**——`f32::default()` 是 `0.0`，而 0 dB
+就是 unity，所以写在有这个字段之前的文件读回来正是它原本的行为。这与
+`output_volume` 的情况相反（那里 0.0 会载入成静音，所以必须写默认函数）。
+新键与旧的 `output_volume` 也不同名，老文件不会被误读成 dB。
+
+滑杆的行程不在这里，在前端：`apps/client/lib/util/gain.dart` 把可听段
+（`-60…+10 dB`）铺满整条滑杆，只有最底端表示静音。刻意如此的原因写在那个文件里。
 
 ### `output_volume`
 

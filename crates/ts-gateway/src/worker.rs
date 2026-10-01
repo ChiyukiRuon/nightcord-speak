@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 use ts_audio::FRAME_MS;
 use ts_core::Client as CoreClient;
 use ts_events::{ClientEvent, SessionEvent};
-use ts_model::{ClientError, NetworkError, SessionId, VoiceState};
+use ts_model::{ClientError, ConnectionState, NetworkError, SessionId, VoiceState};
 use ts_protocol::VoicePacket;
 use ts_wire::{Command, FfiEvent};
 
@@ -152,6 +152,19 @@ impl Worker {
 
                 event = subscription.recv() => match event {
                     Ok(SessionEvent { session, event }) => {
+                        // A connection that has just come up is not away: the
+                        // server forgets the mark with the old connection, so a
+                        // voice path that outlived a reconnect would otherwise
+                        // keep the browser silent for a state nobody is in —
+                        // and keep it silent without saying so.
+                        if matches!(
+                            event,
+                            ClientEvent::ConnectionStateChanged(ConnectionState::Connected)
+                        ) && let Some(voice) =
+                            self.voice.as_mut().filter(|voice| voice.session == session)
+                        {
+                            voice.set_away(false);
+                        }
                         self.send(FfiEvent::client(session, event));
                     }
                     Err(RecvError::Lagged(missed)) => {
@@ -203,7 +216,7 @@ impl Worker {
             return;
         }
 
-        let encoded = voice.encode_frame(&self.mixed);
+        let encoded = voice.encode_frame(&mut self.mixed);
         match encoded {
             Ok(Some(packet)) => {
                 let bytes = packet.payload.len();
@@ -353,6 +366,28 @@ impl Worker {
                 self.report(name, Some(session), outcome);
             }
 
+            Command::SetAway {
+                session,
+                away,
+                message,
+            } => {
+                let session = *session;
+                let away = *away;
+                let outcome = with_session!(
+                    self.core, session,
+                    s => s.set_away(away, message.as_deref())
+                );
+
+                // The browser's microphone stops with the mark, for the same
+                // reason the desktop's does: the server refuses voice from an
+                // away client, and the refusal is an error nobody can act on.
+                if let Some(voice) = self.voice.as_mut().filter(|voice| voice.session == session) {
+                    voice.set_away(away);
+                }
+
+                self.report(name, Some(session), outcome);
+            }
+
             Command::VoiceSetClientVolume {
                 session,
                 client_id,
@@ -446,6 +481,7 @@ impl Worker {
                         if let Some(voice) = self.voice.as_mut() {
                             voice.set_mode(settings.audio.mode);
                             voice.set_settings(settings.audio.activation);
+                            voice.set_input_gain_db(settings.audio.input_gain_db);
                         }
                         self.send(FfiEvent::ok(name, None));
                     }
@@ -526,6 +562,9 @@ impl Worker {
         self.voice_intent.output_muted = false;
         self.output_muted.store(false, Ordering::Relaxed);
         voice.set_input_muted(false);
+        // The microphone gain is a preference rather than a moment, so it comes
+        // from the settings and survives the fresh start.
+        voice.set_input_gain_db(audio.input_gain_db);
         self.voice = Some(voice);
 
         // The sink is wired straight to the session, exactly like the

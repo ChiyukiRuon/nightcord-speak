@@ -24,6 +24,7 @@ import '../../models/settings.dart';
 import '../../models/shortcuts.dart';
 import '../../models/voice_status.dart';
 import '../../providers/providers.dart';
+import '../../util/gain.dart';
 import '../../util/reveal.dart';
 import '../shortcuts/chord_field.dart';
 
@@ -79,6 +80,10 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
 
   /// The volume slider's position while a drag is in progress.
   double? _draggingVolume;
+
+  /// The gain slider's position while a drag is in progress, in decibels —
+  /// kept out of the stored settings for the same reason as the others.
+  double? _draggingGain;
 
   @override
   void initState() {
@@ -221,6 +226,17 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               _LevelMeter(
                 status: ref.watch(voiceStatusProvider),
                 threshold: settings.audio.activation.sensitivity,
+              ),
+              SizedBox(height: tokens.space3),
+              // Above the playback volume because it is about us rather than
+              // about the room: what everyone else hears, then what we hear.
+              _GainSlider(
+                value: _draggingGain ?? settings.audio.inputGainDb,
+                onChanged: (value) => setState(() => _draggingGain = value),
+                onChangeEnd: (value) {
+                  setState(() => _draggingGain = null);
+                  _audio(settings, settings.audio.copyWith(inputGainDb: value));
+                },
               ),
               SizedBox(height: tokens.space3),
               _VolumeSlider(
@@ -769,6 +785,60 @@ class _SensitivitySlider extends StatelessWidget {
         ),
         Text(
           l10n.settingsSensitivityHint,
+          style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+/// How loud everyone else hears us.
+///
+/// Its own slider rather than a second reading of the one below it: the two are
+/// different controls on different ends of the pipeline, and the microphone
+/// gain is the one a voice bar flyout also draws.
+class _GainSlider extends StatelessWidget {
+  const _GainSlider({
+    required this.value,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  /// The stored gain, in decibels.
+  final double value;
+
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              l10n.settingsMicGain,
+              style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+            ),
+            const Spacer(),
+            Text(
+              formatGainDb(value, silentLabel: l10n.settingsMicGainSilent),
+              style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+            ),
+          ],
+        ),
+        Slider(
+          value: gainDbToSlider(value).clamp(0.0, 1.0),
+          onChanged: (position) => onChanged(gainSliderToDb(position)),
+          onChangeEnd: (position) => onChangeEnd(gainSliderToDb(position)),
+        ),
+        Text(
+          l10n.settingsMicGainHint,
           style: text.bodySmall?.copyWith(color: tokens.textTertiary),
         ),
       ],

@@ -3,11 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design/components/app_text_prompt.dart';
 import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../settings/settings_dialog.dart';
+import 'mic_gain_flyout.dart';
 
 /// How far the glyphs sit below the middle of their own line box, in logical
 /// pixels.
@@ -54,6 +56,10 @@ class VoiceBar extends ConsumerWidget {
     final voice = view?.voice ?? const VoiceState();
     final name = view?.ownClient?.name ?? l10n.connectionStateDisconnected;
     final online = view?.isConnected ?? false;
+    // Read from the server's own answer rather than kept beside it: the core's
+    // book changes the moment our command leaves, so this is already right by
+    // the time the event arrives — see `SessionsNotifier.setAway`.
+    final away = view?.ownClient?.flags.away ?? false;
 
     return Container(
       height: voiceBarHeight,
@@ -99,7 +105,10 @@ class VoiceBar extends ConsumerWidget {
                 // go with it. That is more than a stray click should cost, even
                 // beside a button this deliberately placed.
                 _VoiceButton(
-                  icon: Icons.link_off,
+                  // A door with an arrow out of it: the same 「leaving」 a
+                  // sign-in screen draws, rather than a broken chain, which
+                  // reads as "this link is broken" — a fault, not a choice.
+                  icon: Icons.logout,
                   tooltip: l10n.voiceDisconnect,
                   // Nothing to disconnect from while the core is still
                   // retrying, and the banner already offers it for that case.
@@ -109,15 +118,41 @@ class VoiceBar extends ConsumerWidget {
               ],
             ),
           ),
+          // Away sits to the left of the microphone because it is about us
+          // rather than about sound: it says whether we are here at all. The
+          // glyph is the one the member list already draws for an away client,
+          // so the button and the badge read as the same fact.
           _VoiceButton(
-            icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
-            tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
-            active: voice.inputMuted,
-            colour: tokens.error,
+            // An alarm clock with a Z on its face — the closest the Material
+            // set comes to the ZZZ of falling asleep, and the reason the away
+            // button no longer looks like a clock you could set.
+            icon: away ? Icons.snooze : Icons.snooze_outlined,
+            tooltip: away ? l10n.voiceBackOnline : l10n.voiceAway,
+            active: away,
+            colour: tokens.idle,
             enabled: online,
-            // The shortcut system calls the same method, so there is one
-            // definition of what muting does.
-            onPressed: () => ref.read(sessionsProvider.notifier).toggleInputMuted(session),
+            onPressed: () => ref.read(sessionsProvider.notifier).toggleAway(session),
+            // The message is set once and then reused, so it lives behind a
+            // secondary gesture rather than in a control of its own: a
+            // permanent button for it would spend a slot in a 288px bar on
+            // something nobody presses twice.
+            onSecondaryTap: () => _editAwayMessage(context, ref),
+            onLongPress: () => _editAwayMessage(context, ref),
+          ),
+          // The microphone keeps its click (mute) and gains a hover panel on
+          // top: how loud we are is the microphone's business, and the button
+          // is where a hand already is when someone wants to change it.
+          MicGainFlyout(
+            child: _VoiceButton(
+              icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
+              tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
+              active: voice.inputMuted,
+              colour: tokens.error,
+              enabled: online,
+              // The shortcut system calls the same method, so there is one
+              // definition of what muting does.
+              onPressed: () => ref.read(sessionsProvider.notifier).toggleInputMuted(session),
+            ),
           ),
           _VoiceButton(
             icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
@@ -181,6 +216,32 @@ class VoiceBar extends ConsumerWidget {
 
     if (confirmed ?? false) sessions.disconnect(session);
   }
+
+  /// Asks for the away message, remembers it, and goes away saying it.
+  ///
+  /// Dismissing changes nothing — neither the status nor the remembered text —
+  /// which is why an empty field is a different answer from a cancel.
+  Future<void> _editAwayMessage(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+
+    // Both read before the await, not after: the answer arrives an arbitrary
+    // number of frames later, and `ref` belongs to a widget that may be gone
+    // by then.
+    final sessions = ref.read(sessionsProvider.notifier);
+    final saved = ref.read(settingsProvider)?.presence.awayMessage ?? '';
+
+    final message = await showTextPrompt(
+      context,
+      title: l10n.awayMessageTitle,
+      label: l10n.awayMessageLabel,
+      confirm: l10n.saveButton,
+      initial: saved,
+      note: l10n.awayMessageNote,
+    );
+    if (message == null) return;
+
+    sessions.goAwayWith(session, message.trim());
+  }
 }
 
 /// One round control in the voice bar.
@@ -192,6 +253,8 @@ class _VoiceButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.onSecondaryTap,
+    this.onLongPress,
     this.active = false,
     this.colour,
     this.enabled = true,
@@ -200,6 +263,13 @@ class _VoiceButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
+
+  /// A second action behind the right mouse button, when the control has one.
+  final VoidCallback? onSecondaryTap;
+
+  /// The same second action for a finger, which has no right button.
+  final VoidCallback? onLongPress;
+
   final bool active;
   final Color? colour;
   final bool enabled;
@@ -213,10 +283,33 @@ class _VoiceButton extends StatelessWidget {
         ? (colour ?? tokens.primary)
         : tokens.textSecondary;
 
-    return IconButton(
-      onPressed: enabled ? onPressed : null,
-      tooltip: tooltip,
-      icon: Icon(icon, color: tint),
+    if (onSecondaryTap == null && onLongPress == null) {
+      return IconButton(
+        onPressed: enabled ? onPressed : null,
+        tooltip: tooltip,
+        icon: Icon(icon, color: tint),
+      );
+    }
+
+    // A button with a second action keeps the tooltip, but *outside* itself and
+    // *outside* the gesture detector. An `IconButton`'s tooltip is a `Tooltip`
+    // sitting below the button, and `Tooltip` claims a long press on touch
+    // platforms — which is exactly the gesture that has to open the away
+    // message, on exactly the platforms that have no right button. Nested the
+    // other way round, the inner detector is hit-tested first and wins.
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        // Wrapped rather than folded in: an `IconButton` has no secondary tap,
+        // so without this the away message would be reachable only on a machine
+        // with a right button.
+        onSecondaryTap: enabled ? onSecondaryTap : null,
+        onLongPress: enabled ? onLongPress : null,
+        child: IconButton(
+          onPressed: enabled ? onPressed : null,
+          icon: Icon(icon, color: tint),
+        ),
+      ),
     );
   }
 }

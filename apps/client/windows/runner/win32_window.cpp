@@ -18,6 +18,20 @@ namespace {
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
+/// The smallest window the layout can hold, in logical pixels.
+///
+/// Below this the chat header gives up: its fixed pieces, the leading icon,
+/// the channel name, the topic divider and the online count, stop fitting in
+/// the row they share, and Flutter draws the striped overflow band across the
+/// top of the client. The floor is the sidebar plus a chat panel wide enough
+/// for those pieces with room to spare, so a longer channel name or a fourth
+/// digit in the online count does not put us back here.
+///
+/// Logical rather than physical: the same number has to mean the same window on
+/// a 100% display and on a 150% one.
+constexpr int kMinWindowWidth = 960;
+constexpr int kMinWindowHeight = 640;
+
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
@@ -197,6 +211,25 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    case WM_GETMINMAXINFO: {
+      // Windows asks before every resize *and* before the window is created,
+      // which is why this is checked here rather than in `Create`.
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const double scale = FlutterDesktopGetDpiForHWND(hwnd) / 96.0;
+
+      // The frame is not ours to size: asking the system how much border and
+      // title bar `WS_OVERLAPPEDWINDOW` adds means the *client* area is what
+      // the layout was designed against, rather than the minimum growing by a
+      // title bar's worth of fudge.
+      RECT frame = {0, 0, Scale(kMinWindowWidth, scale),
+                    Scale(kMinWindowHeight, scale)};
+      AdjustWindowRectEx(&frame, WS_OVERLAPPEDWINDOW, FALSE, 0);
+
+      info->ptMinTrackSize.x = frame.right - frame.left;
+      info->ptMinTrackSize.y = frame.bottom - frame.top;
+      return 0;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {

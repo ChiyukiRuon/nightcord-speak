@@ -187,6 +187,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsSensitivityHint => '感度が高いほど周囲の騒音では反応しにくく、その分大きな声が必要。';
 
   @override
+  String get settingsMicGain => 'マイクの増幅';
+
+  @override
+  String get settingsMicGainHint => '相手に届く音量。一番下まで下げると無音になる。';
+
+  @override
+  String get settingsMicGainSilent => '無音';
+
+  @override
   String get settingsVolume => '出力音量';
 
   @override
@@ -509,6 +518,21 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get voiceDeafen => 'スピーカーをオフ';
+
+  @override
+  String get voiceAway => '離席中にする';
+
+  @override
+  String get voiceBackOnline => '戻る';
+
+  @override
+  String get awayMessageTitle => '離席メッセージ';
+
+  @override
+  String get awayMessageLabel => '伝える内容';
+
+  @override
+  String get awayMessageNote => 'サーバー上の全員に表示される。次に離席ボタンを押したときもこの内容を使う。';
 
   @override
   String get serverSessionEnded => 'セッション終了';

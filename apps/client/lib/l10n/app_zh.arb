@@ -60,6 +60,9 @@
   "settingsNotifySystem": "窗口不在前台时显示系统通知",
   "settingsSensitivity": "灵敏度",
   "settingsSensitivityHint": "灵敏度越高，越不容易被环境噪音触发，但需要更大声说话才能触发。",
+  "settingsMicGain": "麦克风增益",
+  "settingsMicGainHint": "其他人听到你的音量。拖到最底端为静音。",
+  "settingsMicGainSilent": "静音",
   "settingsVolume": "输出音量",
   "settingsVolumeHint": "调整所有成员的默认音量。你也可以在频道列表中单独调整某个成员的音量。",
   "settingsNoLogDirectory": "此平台没有可写的日志目录。",
@@ -164,6 +167,11 @@
   "voiceMuteMic": "静音麦克风",
   "voiceUndeafen": "打开扬声器",
   "voiceDeafen": "关闭扬声器",
+  "voiceAway": "设为离开",
+  "voiceBackOnline": "回到在线",
+  "awayMessageTitle": "离开消息",
+  "awayMessageLabel": "要说的话",
+  "awayMessageNote": "服务器上的其他人都会看到这条消息；下次点离开按钮还会用它。",
 
   "serverSessionEnded": "会话已结束",
 

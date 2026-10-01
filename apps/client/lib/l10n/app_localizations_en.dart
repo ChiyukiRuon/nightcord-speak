@@ -196,6 +196,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'The higher the sensitivity, the less room noise triggers it — and the louder you have to speak.';
 
   @override
+  String get settingsMicGain => 'Microphone gain';
+
+  @override
+  String get settingsMicGainHint =>
+      'How loud everyone else hears you. All the way down is silence.';
+
+  @override
+  String get settingsMicGainSilent => 'Silent';
+
+  @override
   String get settingsVolume => 'Output volume';
 
   @override
@@ -544,6 +554,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceDeafen => 'Turn speakers off';
+
+  @override
+  String get voiceAway => 'Set yourself away';
+
+  @override
+  String get voiceBackOnline => 'Come back online';
+
+  @override
+  String get awayMessageTitle => 'Away message';
+
+  @override
+  String get awayMessageLabel => 'What to say';
+
+  @override
+  String get awayMessageNote =>
+      'Everyone on the server sees this, and the away button will use it again next time.';
 
   @override
   String get serverSessionEnded => 'Session ended';

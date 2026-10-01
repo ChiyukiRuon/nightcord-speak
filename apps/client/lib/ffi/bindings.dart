@@ -128,6 +128,19 @@ typedef _BanDart = void Function(
   Pointer<Utf8> reason,
 );
 
+typedef _SetAwayC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Bool away,
+  Pointer<Utf8> message,
+);
+typedef _SetAwayDart = void Function(
+  Handle handle,
+  int session,
+  bool away,
+  Pointer<Utf8> message,
+);
+
 typedef _SetClientVolumeC = Void Function(
   Handle handle,
   Uint32 session,
@@ -231,6 +244,7 @@ class NightcordBindings {
       poke = library.lookupFunction<_PokeC, _PokeDart>('nightcord_poke'),
       kick = library.lookupFunction<_KickC, _KickDart>('nightcord_kick'),
       ban = library.lookupFunction<_BanC, _BanDart>('nightcord_ban'),
+      setAway = library.lookupFunction<_SetAwayC, _SetAwayDart>('nightcord_set_away'),
       setClientVolume = library.lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
         'nightcord_voice_set_client_volume',
       ),
@@ -338,6 +352,10 @@ class NightcordBindings {
 
   /// Bans another client; `duration` is serialised `BanDuration` JSON.
   final void Function(Handle, int, int, Pointer<Utf8>, Pointer<Utf8>) ban;
+
+  /// Marks us away or back; `message` is what to say, and is ignored when
+  /// `away` is false.
+  final void Function(Handle, int, bool, Pointer<Utf8>) setAway;
 
   /// Scales one client's audio within the mix.
   final void Function(Handle, int, int, double) setClientVolume;
