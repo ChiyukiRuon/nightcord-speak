@@ -564,6 +564,10 @@ impl Worker {
             "healthy": self.voice.is_some(),
             "received": received,
             "received_peak": received_peak,
+            // Null until voice starts: the gateway only ever runs the voice
+            // profile, because what a browser sends is mono (see ).
+            "codec": self.voice.as_ref().map(|voice| voice.codec()),
+            "bitrate_bps": self.voice.as_ref().map(|voice| voice.bitrate()),
         })
     }
 

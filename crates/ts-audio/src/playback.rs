@@ -48,6 +48,12 @@ pub struct Playback {
     format: PlaybackFormat,
     /// Cleared by the error callback when the device fails or is unplugged.
     running: Arc<AtomicBool>,
+    /// Per-frame gain the callback multiplies by, shared with it.
+    ///
+    /// An atomic rather than a parameter to the stream callback because the
+    /// callback is built once and must never block: writing a new gain has to be
+    /// a store, not a rebuild of the stream.
+    volume: Arc<AtomicU32>,
 }
 
 impl Playback {
@@ -59,6 +65,20 @@ impl Playback {
     /// [`AudioError::UnsupportedConfig`] when the device cannot run at 48 kHz,
     /// or [`AudioError::Backend`] for anything the host reports.
     pub fn open(device_id: Option<&str>) -> Result<Self, AudioError> {
+        Self::open_with_volume(device_id, 1.0)
+    }
+
+    /// Opens a device, playing at `volume` from the very first sample.
+    ///
+    /// The gain is handed to the callback rather than applied afterwards
+    /// because the alternative is audible: a stream that starts at unity and is
+    /// corrected a few milliseconds later plays the beginning of whatever was
+    /// queued too loudly.
+    ///
+    /// # Errors
+    ///
+    /// See [`Playback::open`].
+    pub fn open_with_volume(device_id: Option<&str>, volume: f32) -> Result<Self, AudioError> {
         let resolved = device::resolve(Direction::Output, device_id)?;
         let (config, sample_format) = pick_config(&resolved.device)?;
         let device = &resolved.device;
@@ -67,7 +87,7 @@ impl Playback {
         let device_rate = config.sample_rate;
 
         let (producer, consumer) = SampleRing::channel(RING_SAMPLES);
-        let volume = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
+        let volume = Arc::new(AtomicU32::new(clamp_gain(volume).to_bits()));
         let running = Arc::new(AtomicBool::new(true));
 
         let stream = match sample_format {
@@ -114,6 +134,7 @@ impl Playback {
             device: resolved,
             producer,
             running,
+            volume,
             format: PlaybackFormat {
                 device_channels,
                 device_rate,
@@ -128,6 +149,26 @@ impl Playback {
     /// remainder rather than retry in a loop.
     pub fn write(&self, samples: &[f32]) -> usize {
         self.producer.write(samples)
+    }
+
+    /// Sets the playback gain, `0.0..=1.0`.
+    ///
+    /// Takes effect on the next device callback — one relaxed store, so this is
+    /// safe to call from anywhere and never blocks or allocates the audio
+    /// thread.
+    ///
+    /// Not the same as muting: muting drops incoming audio before it is queued
+    /// (so unmuting does not replay a backlog) while this scales what is
+    /// already playing. A gain of zero is a faded-out stream, not a stopped one.
+    pub fn set_volume(&self, gain: f32) {
+        self.volume
+            .store(clamp_gain(gain).to_bits(), Ordering::Relaxed);
+    }
+
+    /// The gain the callback is currently applying.
+    #[must_use]
+    pub fn volume(&self) -> f32 {
+        f32::from_bits(self.volume.load(Ordering::Relaxed))
     }
 
     /// How many samples are queued but not yet played.
@@ -275,6 +316,20 @@ where
         .map_err(|error| AudioError::Backend {
             message: error.to_string(),
         })
+}
+
+/// Pulls a requested gain into the range the callback can use.
+///
+/// Anything outside `0.0..=1.0` is a bug or a hand-edited settings file, and
+/// both have the same useful answer: the nearest legal gain. Non-finite values
+/// become unity, because multiplying a buffer by `NaN` produces silence
+/// indistinguishable from a broken device.
+fn clamp_gain(gain: f32) -> f32 {
+    if gain.is_finite() {
+        gain.clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
 }
 
 /// Maps stereo interleaved `f32` into the device's buffer.

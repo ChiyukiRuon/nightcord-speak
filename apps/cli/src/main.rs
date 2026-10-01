@@ -134,14 +134,18 @@ impl Voice {
                 engine: None,
                 tone: Some(Tone {
                     hz,
-                    encoder: ts_audio::OpusEncoder::new().context("could not start Opus")?,
+                    encoder: ts_audio::OpusEncoder::new(ts_audio::VOICE_CHANNELS)
+                        .context("could not start Opus")?,
                     phase: 0.0,
                 }),
                 sent: 0,
             });
         }
 
-        let mut engine = ts_audio::VoiceEngine::new(VoiceActivationSettings::default())
+        // The CLI has no settings file, so it plays at unity — and, like every
+        // other front-end, encodes at the top of the range with nothing to
+        // configure.
+        let mut engine = ts_audio::VoiceEngine::new(VoiceActivationSettings::default(), 1.0)
             .context("could not start the audio engine")?;
         engine
             .open_devices(args.input_device.as_deref(), args.output_device.as_deref())

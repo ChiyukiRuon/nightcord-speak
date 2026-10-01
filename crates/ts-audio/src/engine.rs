@@ -23,7 +23,7 @@ use ts_protocol::{AudioSink, VoicePacket};
 
 use crate::capture::Capture;
 use crate::encoder::OpusEncoder;
-use crate::format::{FRAME_MS, PLAYBACK_SAMPLES, is_full_frame};
+use crate::format::{FRAME_MS, FRAME_SAMPLES, PLAYBACK_CHANNELS, PLAYBACK_SAMPLES, is_full_frame};
 use crate::playback::Playback;
 use crate::vad::{VoiceGate, peak, rms};
 
@@ -204,8 +204,13 @@ pub struct VoiceEngine {
     policy: TransmitPolicy,
     /// Shared for the same reason: the sink reads it on every frame.
     output_muted: Arc<AtomicBool>,
+    /// Playback gain, remembered so a device switch does not reset it.
+    output_volume: f32,
     /// Scratch for rendering one frame to stereo before queueing it.
     frame_stereo: Vec<f32>,
+    /// Scratch for downmixing a captured stereo frame, for the gate and the
+    /// meters. The encoder is fed the stereo frame itself.
+    frame_mono: Vec<f32>,
     /// The most recent frame's loudness, for a level meter.
     ///
     /// Stored on *every* frame, before the transmission policy is consulted —
@@ -260,11 +265,16 @@ const TEST_TONE_TAIL: std::time::Duration = std::time::Duration::from_millis(250
 /// The stream is kept alive for exactly as long as the tone needs and then
 /// dropped, which is what releases the device again.
 ///
+/// `volume` is the user's playback gain, so the tone arrives at the level they
+/// would hear anything else at — a check that answers "can I hear anything"
+/// while playing at a different volume from the call answers the wrong
+/// question.
+///
 /// # Errors
 ///
 /// Whatever opening the output device returns; see [`Playback::open`].
-pub fn play_test_tone(output: Option<&str>) -> Result<(), AudioError> {
-    let playback = Playback::open(output)?;
+pub fn play_test_tone(output: Option<&str>, volume: f32) -> Result<(), AudioError> {
+    let playback = Playback::open_with_volume(output, volume)?;
 
     let mut phase = 0.0;
     // The same length and amplitude as the engine's own test tone, so the two
@@ -372,23 +382,65 @@ impl VoiceEngine {
 
     /// Builds an engine with no devices open.
     ///
+    /// `output_volume` comes from the user's settings; the engine deliberately
+    /// does not read that store itself, so `ts-audio` keeps depending on
+    /// nothing but `ts-model`.
+    ///
+    /// The encoder is always the stereo profile at its top bitrate: capture is
+    /// stereo whatever the device offers, so there is nothing here to choose.
+    ///
     /// # Errors
     ///
     /// Returns [`AudioError::Backend`] if libopus refuses to initialise, which
     /// means voice cannot work at all.
-    pub fn new(settings: VoiceActivationSettings) -> Result<Self, AudioError> {
+    pub fn new(settings: VoiceActivationSettings, output_volume: f32) -> Result<Self, AudioError> {
         Ok(Self {
             capture: None,
             playback: None,
-            encoder: OpusEncoder::new()?,
+            encoder: OpusEncoder::new(PLAYBACK_CHANNELS)?,
             policy: TransmitPolicy::new(VoiceActivationMode::default(), settings),
             output_muted: Arc::new(AtomicBool::new(false)),
+            output_volume: clamp_volume(output_volume),
             frame_stereo: vec![0.0; PLAYBACK_SAMPLES],
+            frame_mono: vec![0.0; FRAME_SAMPLES],
             last_level: 0.0,
             last_peak: 0.0,
             input_device: None,
             output_device: None,
         })
+    }
+
+    /// The bitrate the encoder is running at, for `voice_status`.
+    #[must_use]
+    pub const fn bitrate(&self) -> i32 {
+        self.encoder.bitrate()
+    }
+
+    /// The codec byte this engine's packets carry, for `voice_status`.
+    ///
+    /// Always the stereo profile: capture is stereo and the encoder is built to
+    /// match it.
+    #[must_use]
+    pub const fn packet_codec(&self) -> ts_protocol::Codec {
+        self.encoder.packet_codec()
+    }
+
+    /// The playback gain in force.
+    #[must_use]
+    pub const fn output_volume(&self) -> f32 {
+        self.output_volume
+    }
+
+    /// Sets the playback gain, `0.0..=1.0`.
+    ///
+    /// Heard on the next device callback. Stored as well as forwarded, so that
+    /// replacing the output device — which builds a new stream — comes back at
+    /// the level the user chose rather than at unity.
+    pub fn set_output_volume(&mut self, volume: f32) {
+        self.output_volume = clamp_volume(volume);
+        if let Some(playback) = &self.playback {
+            playback.set_volume(self.output_volume);
+        }
     }
 
     /// Opens a microphone and speakers.
@@ -417,7 +469,7 @@ impl VoiceEngine {
             }
         };
 
-        match Playback::open(output) {
+        match Playback::open_with_volume(output, self.output_volume) {
             Ok(playback) => {
                 self.output_device = Some(OpenDevice::from(playback.device()));
                 self.playback = Some(Arc::new(playback));
@@ -532,7 +584,7 @@ impl VoiceEngine {
     ///
     /// Returns the device error, leaving the previous device in place.
     pub fn set_output_device(&mut self, id: Option<&str>) -> Result<(), AudioError> {
-        let playback = Playback::open(id)?;
+        let playback = Playback::open_with_volume(id, self.output_volume)?;
         self.playback = Some(Arc::new(playback));
         Ok(())
     }
@@ -583,28 +635,45 @@ impl VoiceEngine {
         let mut first_error = None;
 
         for frame in frames {
-            if !is_full_frame(frame.len()) {
+            if !is_full_frame(frame.len(), PLAYBACK_CHANNELS) {
                 // The assembler only emits whole frames, so this cannot happen
                 // — but sending a short frame would corrupt the stream, so it
                 // is dropped rather than trusted.
-                tracing::warn!(samples = frame.len(), "dropping a short capture frame");
+                tracing::warn!(
+                    samples = frame.len(),
+                    "dropping a capture frame that is not one whole frame"
+                );
                 continue;
             }
 
-            if !self.measure(&frame) {
-                continue;
+            // Moved out of `self` for the length of the iteration rather than
+            // borrowed: `measure` needs the engine mutably, and the buffer it
+            // would be borrowing is engine state. `mem::take` moves the
+            // allocation rather than copying samples, and it goes back below.
+            let mut mono = std::mem::take(&mut self.frame_mono);
+
+            // The gate and the meters read a downmix, never the interleaved
+            // frame. Not for quality — the encoder is handed the whole stereo
+            // frame — but because an RMS over interleaved samples of a
+            // hard-panned signal is as loud as one over a centred signal of
+            // twice the amplitude, and the sensitivity slider would then mean
+            // different things for different material.
+            downmix(&frame, &mut mono);
+
+            if self.measure(&mono) {
+                match self.encoder.encode(&frame) {
+                    Ok(mut packet) => {
+                        packet.is_dtx_resume = self.policy.is_resume();
+                        packets.push(packet);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "could not encode a voice frame");
+                        first_error.get_or_insert(error);
+                    }
+                }
             }
 
-            match self.encoder.encode(&frame) {
-                Ok(mut packet) => {
-                    packet.is_dtx_resume = self.policy.is_resume();
-                    packets.push(packet);
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "could not encode a voice frame");
-                    first_error.get_or_insert(error);
-                }
-            }
+            self.frame_mono = mono;
         }
 
         match first_error {
@@ -643,8 +712,10 @@ impl VoiceEngine {
     /// answer, and the reason a user opens the settings dialog in the first
     /// place. Straight to playback, so it is heard and never transmitted.
     ///
-    /// Quiet on purpose: the playback gain is fixed at 1.0, and a test tone
-    /// that startles someone tells them nothing that turning it down would not.
+    /// Quiet on purpose: the tone is generated at a low amplitude, and a test
+    /// tone that startles someone tells them nothing that turning it down would
+    /// not. It still rides the user's playback gain, so what they hear is the
+    /// level the call will be at.
     pub fn play_test_tone(&mut self) {
         let mut phase = 0.0;
         // A third of a second: long enough to recognise as a tone rather than
@@ -677,6 +748,9 @@ impl VoiceEngine {
     }
 
     /// Forgets encoder and gate state, as after a reconnect.
+    ///
+    /// The encoder profile and the output volume survive: a reconnect is not a
+    /// reason to forget what the user chose.
     pub fn reset(&mut self) {
         self.encoder.reset();
         self.policy.reset();
@@ -689,12 +763,46 @@ impl VoiceEngine {
     }
 }
 
+/// Averages an interleaved stereo frame into `out`, which must be half its
+/// length.
+///
+/// Averaging rather than summing, so a signal already present on both channels
+/// keeps its level instead of clipping — the same rule capture used to apply to
+/// the device's own channels before it started emitting stereo.
+///
+/// A short `out` is filled as far as it goes rather than panicking: this runs on
+/// the path a microphone feeds, and silence from a wrong-sized buffer beats a
+/// crashed audio thread.
+fn downmix(interleaved: &[f32], out: &mut [f32]) {
+    for (index, slot) in out.iter_mut().enumerate() {
+        let left = interleaved.get(index * 2).copied().unwrap_or(0.0);
+        let right = interleaved.get(index * 2 + 1).copied().unwrap_or(0.0);
+        *slot = (left + right) * 0.5;
+    }
+}
+
+/// Pulls a requested playback gain into the range [`Playback`] can use.
+///
+/// Mirrors `playback::clamp_gain`, which is private to that module; this copy
+/// exists so the engine can remember a sane value before any device is open.
+/// Non-finite values become unity rather than silence.
+fn clamp_volume(volume: f32) -> f32 {
+    if volume.is_finite() {
+        volume.clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
+}
+
 impl std::fmt::Debug for VoiceEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VoiceEngine")
             .field("input", &self.input_available())
             .field("output", &self.output_available())
             .field("state", &self.state())
+            .field("codec", &self.encoder.packet_codec())
+            .field("bitrate", &self.encoder.bitrate())
+            .field("volume", &self.output_volume)
             .finish_non_exhaustive()
     }
 }
@@ -713,6 +821,16 @@ mod tests {
 
     fn policy(mode: VoiceActivationMode) -> TransmitPolicy {
         TransmitPolicy::new(mode, settings())
+    }
+
+    /// An engine on the default profile and at unity gain, which is what every
+    /// test that is not about profiles or volume wants.
+    fn engine_with(activation: VoiceActivationSettings) -> VoiceEngine {
+        VoiceEngine::new(activation, 1.0).expect("build engine")
+    }
+
+    fn engine_with_defaults() -> VoiceEngine {
+        engine_with(VoiceActivationSettings::default())
     }
 
     const LOUD: f32 = 0.5;
@@ -950,7 +1068,7 @@ mod tests {
             VoiceActivationMode::Continuous,
             VoiceActivationMode::Muted,
         ] {
-            let mut engine = VoiceEngine::new(VoiceActivationSettings::default()).unwrap();
+            let mut engine = engine_with_defaults();
             engine.set_mode(mode);
             assert_eq!(engine.input_level(), 0.0, "{mode:?} starts silent");
 
@@ -973,7 +1091,7 @@ mod tests {
         // Muted capture keeps running — `should_transmit` says no, so nothing is
         // sent — and that is exactly what makes "start voice while muted" a
         // microphone test.
-        let mut engine = VoiceEngine::new(VoiceActivationSettings::default()).unwrap();
+        let mut engine = engine_with_defaults();
         engine.set_input_muted(true);
 
         let quiet = vec![0.02_f32; crate::format::FRAME_SAMPLES];
@@ -988,7 +1106,7 @@ mod tests {
 
     #[test]
     fn an_engine_with_no_devices_still_reports_its_state() {
-        let engine = VoiceEngine::new(settings()).expect("build engine");
+        let engine = engine_with(settings());
 
         assert!(!engine.input_available());
         assert!(!engine.output_available());
@@ -999,14 +1117,14 @@ mod tests {
 
     #[test]
     fn polling_without_a_microphone_yields_nothing() {
-        let mut engine = VoiceEngine::new(settings()).expect("build engine");
+        let mut engine = engine_with(settings());
         assert!(engine.poll().expect("poll").is_empty());
     }
 
     #[test]
     fn playing_without_speakers_is_harmless() {
         // A user with no working output must still be able to connect.
-        let mut engine = VoiceEngine::new(settings()).expect("build engine");
+        let mut engine = engine_with(settings());
         engine.play(&[0.5; PLAYBACK_SAMPLES]);
         engine.play_silence();
         assert_eq!(engine.buffered_samples(), 0);
@@ -1014,7 +1132,7 @@ mod tests {
 
     #[test]
     fn a_muted_output_discards_audio_instead_of_queueing_it() {
-        let mut engine = VoiceEngine::new(settings()).expect("build engine");
+        let mut engine = engine_with(settings());
         engine.set_output_muted(true);
         engine.play(&[0.5; PLAYBACK_SAMPLES]);
 
@@ -1024,7 +1142,7 @@ mod tests {
 
     #[test]
     fn voice_state_reflects_the_controls() {
-        let mut engine = VoiceEngine::new(settings()).expect("build engine");
+        let mut engine = engine_with(settings());
 
         engine.set_mode(VoiceActivationMode::PushToTalk);
         engine.set_input_muted(true);
@@ -1042,9 +1160,82 @@ mod tests {
     fn opening_a_missing_device_does_not_panic() {
         // Both device paths report rather than abort, so a machine with no
         // audio hardware still connects and reads chat.
-        let mut engine = VoiceEngine::new(settings()).expect("build engine");
+        let mut engine = engine_with(settings());
         let _ = engine.open_devices(Some("no such microphone"), Some("no such speakers"));
         let _ = engine.set_input_device(Some("still not a device"));
         let _ = engine.set_output_device(Some("nor this"));
+    }
+
+    #[test]
+    fn the_engine_encodes_the_stereo_profile_at_the_top_of_its_range() {
+        // There is no profile to choose: capture is stereo, so the engine sends
+        // stereo, and the bitrate is the ceiling of the published range.
+        let engine = engine_with_defaults();
+        assert_eq!(engine.packet_codec(), ts_protocol::Codec::OpusMusic);
+        assert_eq!(engine.bitrate(), 79_200);
+    }
+
+    #[test]
+    fn the_output_volume_is_clamped_to_the_usable_range() {
+        // Hand-edited settings files produce every one of these.
+        let mut engine = engine_with_defaults();
+        assert_eq!(engine.output_volume(), 1.0, "unity until told otherwise");
+
+        engine.set_output_volume(0.4);
+        assert!((engine.output_volume() - 0.4).abs() < f32::EPSILON);
+
+        engine.set_output_volume(-1.0);
+        assert_eq!(engine.output_volume(), 0.0);
+
+        engine.set_output_volume(7.0);
+        assert_eq!(engine.output_volume(), 1.0);
+
+        // NaN would turn every sample into silence indistinguishable from a
+        // broken device, so it falls back to unity rather than propagating.
+        engine.set_output_volume(f32::NAN);
+        assert_eq!(engine.output_volume(), 1.0);
+    }
+
+    #[test]
+    fn an_engine_that_cannot_open_an_encoder_still_reports_itself() {
+        // Nothing here needs a device, and nothing here can fail once the
+        // encoder exists — which is the point of building one with no choices
+        // to get wrong.
+        let engine = engine_with_defaults();
+        assert_eq!(engine.bitrate(), crate::encoder::max_bitrate(2));
+        assert!(!engine.input_available());
+        assert!(!engine.output_available());
+    }
+
+    #[test]
+    fn a_downmix_halves_a_signal_present_on_both_channels() {
+        // The level the gate sees must not double when the same audio arrives
+        // on two channels — that would open the gate at half the sensitivity
+        // the slider claims.
+        let interleaved = [0.5_f32, 0.5, -0.25, -0.25];
+        let mut out = [0.0_f32; 2];
+        downmix(&interleaved, &mut out);
+        assert!((out[0] - 0.5).abs() < 1e-6, "got {}", out[0]);
+        assert!((out[1] + 0.25).abs() < 1e-6, "got {}", out[1]);
+    }
+
+    #[test]
+    fn a_downmix_of_opposite_channels_is_silence() {
+        let interleaved = [1.0_f32, -1.0];
+        let mut out = [1.0_f32; 1];
+        downmix(&interleaved, &mut out);
+        assert!(out[0].abs() < 1e-6, "got {}", out[0]);
+    }
+
+    #[test]
+    fn a_short_downmix_buffer_is_filled_without_panicking() {
+        // This runs on the thread a microphone feeds. A wrong-sized buffer has
+        // to produce silence, not a panic that takes the audio thread with it.
+        let interleaved = [0.5_f32, 0.5, 0.5, 0.5];
+        let mut out = [7.0_f32; 3];
+        downmix(&interleaved, &mut out);
+        assert!((out[0] - 0.5).abs() < 1e-6);
+        assert!((out[1] - 0.5).abs() < 1e-6);
+        assert_eq!(out[2], 0.0, "past the end of the input is silence");
     }
 }

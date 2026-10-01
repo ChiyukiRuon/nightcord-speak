@@ -463,6 +463,10 @@ async fn handle(
                     "peak": active.engine.input_peak(),
                     "transmitting": active.engine.state().transmitting,
                     "healthy": active.engine.devices_healthy(),
+                    // Reported so a front-end can say what is being sent
+                    // without keeping its own copy of the numbers.
+                    "codec": active.engine.packet_codec(),
+                    "bitrate_bps": active.engine.bitrate(),
                 });
                 events.push(FfiEvent::with_data(name, Some(active.session), data));
             }
@@ -478,6 +482,8 @@ async fn handle(
                     "peak": 0.0,
                     "transmitting": false,
                     "healthy": false,
+                    "codec": serde_json::Value::Null,
+                    "bitrate_bps": serde_json::Value::Null,
                 }),
             )),
         },
@@ -495,7 +501,9 @@ async fn handle(
             // button stayed grey until a microphone had been opened for some
             // other reason — when all a tone needs is the output device.
             None => {
-                match ts_audio::play_test_tone(core.settings().audio.output_device.as_deref()) {
+                let audio = &core.settings().audio;
+                match ts_audio::play_test_tone(audio.output_device.as_deref(), audio.output_volume)
+                {
                     Ok(()) => events.push(FfiEvent::ok(name, None)),
                     Err(error) => {
                         events.push(FfiEvent::failed(name, None, ClientError::Audio(error)));
@@ -668,6 +676,9 @@ async fn apply_settings(
 
     active.engine.set_mode(audio.mode);
     active.engine.set_settings(audio.activation);
+    // Applied live, unlike the devices: it is an atomic store the device
+    // callback reads every frame, so nothing has to be reopened.
+    active.engine.set_output_volume(audio.output_volume);
 
     // Tell the server as well, so other clients can see the change rather than
     // inferring it from silence.
@@ -758,7 +769,7 @@ async fn start_voice(
         return;
     };
 
-    let mut engine = match VoiceEngine::new(audio.activation) {
+    let mut engine = match VoiceEngine::new(audio.activation, audio.output_volume) {
         Ok(engine) => engine,
         Err(error) => {
             events.push(FfiEvent::failed(

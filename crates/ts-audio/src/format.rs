@@ -1,10 +1,18 @@
 //! The one place the audio format is defined.
 //!
-//! TeamSpeak voice is Opus at 48 kHz, mono, in 20 ms frames. The decoder that
-//! `tsclientlib` runs produces *stereo* interleaved `f32`, because a single
-//! client's stream can end up on both channels — so the encode side and the
-//! playback side disagree on channel count on purpose, and everything that
-//! crosses between them has to go through these constants.
+//! Everything here is Opus at 48 kHz in 20 ms frames. The channel counts differ
+//! by direction, and on purpose:
+//!
+//! | Path | Channels | Why |
+//! | --- | --- | --- |
+//! | Send, voice profile | 1 | TeamSpeak's "Opus Voice" is mono. |
+//! | Send, music profile | 2 | TeamSpeak's "Opus Music" is stereo. |
+//! | Capture | 2 | Always, so switching profiles does not reopen the device. |
+//! | Playback | 2 | `tsclientlib` decodes to stereo. |
+//!
+//! Capture being stereo even for the mono voice profile costs one downmix per
+//! frame and buys the thing that matters: the microphone is opened once per call
+//! rather than once per profile change.
 
 /// Sample rate the voice codec runs at, in Hz.
 pub const SAMPLE_RATE: u32 = 48_000;
@@ -17,10 +25,15 @@ pub const FRAME_MS: u32 = 20;
 /// Samples in one mono frame — 960 at 48 kHz.
 pub const FRAME_SAMPLES: usize = (SAMPLE_RATE as usize / 1000) * FRAME_MS as usize;
 
-/// Channels on the wire. TeamSpeak voice is mono.
+/// Channels in the mono voice profile — what [`crate::format::PCM_BYTES_PER_SECOND`]
+/// is computed from, and what `ts-audio`'s own tests name.
 pub const VOICE_CHANNELS: u16 = 1;
 
-/// Channels the mixer produces. `tsclientlib` decodes to stereo.
+/// Channels on both sides of the engine that are not the mono voice profile:
+/// what capture always produces, and what the mixer always emits.
+///
+/// The name comes from the playback side, which had it first; capture joined it
+/// when the stereo music profile needed a second channel to exist at all.
 pub const PLAYBACK_CHANNELS: u16 = 2;
 
 /// Samples in one stereo playback buffer — 1920.
@@ -32,13 +45,19 @@ pub const MAX_OPUS_PACKET: usize = 1275;
 /// Bytes per second of raw PCM at this format, for buffer sizing.
 pub const PCM_BYTES_PER_SECOND: u32 = SAMPLE_RATE * VOICE_CHANNELS as u32 * 4;
 
+/// Samples in one frame of `channels` interleaved channels.
+#[must_use]
+pub const fn frame_samples(channels: u16) -> usize {
+    FRAME_SAMPLES * channels as usize
+}
+
 /// Whether `samples` is a frame the encoder will accept.
 ///
 /// TeamSpeak always sends 20 ms, so anything else is a bug upstream of here
 /// rather than something to resample around.
 #[must_use]
-pub const fn is_full_frame(samples: usize) -> bool {
-    samples == FRAME_SAMPLES
+pub const fn is_full_frame(samples: usize, channels: u16) -> bool {
+    samples == frame_samples(channels)
 }
 
 /// Converts a duration to a whole number of frames, rounding up.
@@ -82,12 +101,23 @@ mod tests {
 
     #[test]
     fn only_full_frames_are_accepted() {
-        assert!(is_full_frame(960));
-        assert!(!is_full_frame(959));
+        assert!(is_full_frame(960, VOICE_CHANNELS));
+        assert!(!is_full_frame(959, VOICE_CHANNELS));
         assert!(
-            !is_full_frame(1920),
-            "1920 is a playback buffer, not a mono frame"
+            !is_full_frame(1920, VOICE_CHANNELS),
+            "1920 is a stereo frame, not a mono one"
         );
-        assert!(!is_full_frame(0));
+        assert!(!is_full_frame(0, VOICE_CHANNELS));
+
+        // The same length that is wrong for mono is right for stereo, which is
+        // the whole reason this takes a channel count.
+        assert!(is_full_frame(1920, PLAYBACK_CHANNELS));
+        assert!(!is_full_frame(960, PLAYBACK_CHANNELS));
+    }
+
+    #[test]
+    fn a_frame_scales_with_its_channel_count() {
+        assert_eq!(frame_samples(1), 960);
+        assert_eq!(frame_samples(2), PLAYBACK_SAMPLES);
     }
 }

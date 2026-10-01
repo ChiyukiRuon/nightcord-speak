@@ -98,7 +98,9 @@ impl RemoteVoice {
     ) -> Result<Self, AudioError> {
         Ok(Self {
             session,
-            encoder: OpusEncoder::new()?,
+            // Mono: a browser's worklet sends 960 samples per frame, and a stereo
+            // encoder would reject every one of them as half a frame.
+            encoder: OpusEncoder::new(ts_audio::VOICE_CHANNELS)?,
             policy: TransmitPolicy::new(mode, activation),
             last_level: 0.0,
             last_peak: 0.0,
@@ -161,6 +163,20 @@ impl RemoteVoice {
     /// The meter readings, as `voice_status` reports them.
     pub(crate) fn levels(&self) -> (f32, f32, bool) {
         (self.last_level, self.last_peak, self.last_transmitting)
+    }
+
+    /// Which profile this end is encoding with, for `voice_status`.
+    ///
+    /// Always the voice profile: what arrives from a browser is 960 mono
+    /// samples per frame, and the stereo profile would reject every frame as
+    /// half a frame long.
+    pub(crate) fn codec(&self) -> ts_protocol::Codec {
+        self.encoder.packet_codec()
+    }
+
+    /// The bitrate that profile amounts to, for `voice_status`.
+    pub(crate) fn bitrate(&self) -> i32 {
+        self.encoder.bitrate()
     }
 }
 

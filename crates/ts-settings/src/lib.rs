@@ -245,8 +245,10 @@ const fn default_true() -> bool {
 /// How audio is captured and played.
 ///
 /// Every field's default is the one that was in force before settings existed,
-/// so a missing section changes nothing.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+/// so a missing section changes nothing. There is deliberately no codec or
+/// quality field: the encoder runs at the top of its range and has nothing to
+/// choose — see `ts_audio::encoder`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AudioSettings {
     /// Capture device id, in the form `cpal` renders (`"<host>:<device>"`).
     ///
@@ -268,6 +270,35 @@ pub struct AudioSettings {
     /// constants behind it (§29).
     #[serde(default)]
     pub activation: VoiceActivationSettings,
+
+    /// Playback gain, `0.0..=1.0`.
+    ///
+    /// Not `#[serde(default)]`: `f32::default()` is `0.0`, which would load
+    /// every file written before this field existed as *silence*.
+    #[serde(default = "default_output_volume")]
+    pub output_volume: f32,
+}
+
+// Hand-written rather than derived: a derived `Default` would give
+// `output_volume = 0.0`, disagreeing with the serde default above. The two must
+// match, because `Settings::default()` is what a missing *file* produces while
+// serde's defaults are what a missing *field* produces, and a test compares
+// them.
+impl Default for AudioSettings {
+    fn default() -> Self {
+        Self {
+            input_device: None,
+            output_device: None,
+            mode: VoiceActivationMode::default(),
+            activation: VoiceActivationSettings::default(),
+            output_volume: default_output_volume(),
+        }
+    }
+}
+
+/// Every build before volume existed played at unity.
+const fn default_output_volume() -> f32 {
+    1.0
 }
 
 /// How connections to servers are made.
@@ -500,6 +531,7 @@ mod tests {
                     attack_ms: 45,
                     release_ms: 250,
                 },
+                output_volume: 0.6,
             },
             connection: ConnectionSettings {
                 nickname: "Alice".into(),
@@ -574,6 +606,42 @@ mod tests {
         assert_eq!(loaded.connection.profile, "default");
         assert_eq!(loaded.connection.max_reconnect_attempts, None);
         assert_eq!(loaded.audio, AudioSettings::default());
+    }
+
+    #[test]
+    fn an_audio_section_written_before_any_of_this_existed_gets_the_defaults() {
+        // The upgrade path: a real file from a build that still had a codec and
+        // a quality. Removing a field is safe because unknown keys are ignored,
+        // and this is what says so.
+        let dir = TempDir::new("audio-upgrade");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            br#"{"audio":{"input_device":"wasapi:Mic","mode":"push_to_talk",
+                 "codec":"music","voice_quality":9,"music_quality":10}}"#,
+        )
+        .unwrap();
+
+        let audio = store.load().unwrap().audio;
+        assert_eq!(audio.input_device.as_deref(), Some("wasapi:Mic"));
+        assert_eq!(audio.mode, VoiceActivationMode::PushToTalk);
+
+        // The one that would be a silent bug: `f32::default()` is 0.0, so a
+        // bare `#[serde(default)]` on the volume would load this file muted.
+        assert_eq!(audio.output_volume, 1.0);
+    }
+
+    #[test]
+    fn the_volume_survives_a_round_trip_as_a_fraction() {
+        let dir = TempDir::new("volume");
+        let store = dir.store();
+
+        let mut settings = Settings::default();
+        settings.audio.output_volume = 0.35;
+        store.save(&settings).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert!((loaded.audio.output_volume - 0.35).abs() < f32::EPSILON);
     }
 
     #[test]

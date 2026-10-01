@@ -18,7 +18,7 @@ use cpal::{SampleFormat, StreamConfig};
 use ts_model::AudioError;
 
 use crate::device::{self, Direction};
-use crate::format::{FRAME_SAMPLES, SAMPLE_RATE};
+use crate::format::{FRAME_SAMPLES, PLAYBACK_SAMPLES, SAMPLE_RATE};
 use crate::resampler::Resampler;
 
 /// How many finished frames may queue before capture starts dropping them.
@@ -81,7 +81,7 @@ impl Capture {
         let stream_config: StreamConfig = config.into();
 
         let (sender, frames) = sync_channel(FRAME_QUEUE);
-        let assembler = FrameAssembler::new(Resampler::new(device_rate), device_channels, sender);
+        let assembler = FrameAssembler::new(device_rate, device_channels, sender);
         let running = Arc::new(AtomicBool::new(true));
 
         // The sample type has to be chosen once here, because `cpal`'s stream
@@ -254,66 +254,148 @@ impl ToF32 for u16 {
     }
 }
 
-/// Turns a stream of device callbacks into exactly-sized frames.
+/// Turns a stream of device callbacks into exactly-sized stereo frames.
 ///
-/// Separated from the stream so the framing, downmixing and resampling can be
-/// tested without a microphone.
+/// Separated from the stream so the framing, channel mapping and resampling can
+/// be tested without a microphone.
+///
+/// **Output is always interleaved stereo**, whatever the device offers, because
+/// the profile the encoder is running can change mid-call (see `encoder.rs`) and
+/// reopening the device to follow it would mean dropping the microphone for as
+/// long as that takes. A mono device is duplicated into both channels; a device
+/// with more than two channels keeps the first two, because the alternative is a
+/// downmix rule for layouts nobody here can test.
 pub(crate) struct FrameAssembler {
-    resampler: Resampler,
-    channels: u16,
+    /// One per output channel.
+    ///
+    /// A [`Resampler`] carries the previous input sample across calls so that
+    /// consecutive callbacks join without a seam. Sharing one between the two
+    /// channels would put the left channel's history into the right channel's
+    /// first output sample of every callback — a click at the callback rate.
+    resamplers: [Resampler; 2],
+    /// What the device is giving us, which is not what we emit.
+    device_channels: u16,
     sender: SyncSender<Vec<f32>>,
-    /// Mono 48 kHz samples that do not yet fill a frame.
+    /// Device samples split per channel, reused between callbacks.
+    planar: [Vec<f32>; 2],
+    /// Resampled per-channel samples, reused between callbacks.
+    resampled: [Vec<f32>; 2],
+    /// Interleaved 48 kHz stereo that does not yet fill a frame.
     pending: Vec<f32>,
-    /// Scratch for the resampler's output, reused so the callback does not
-    /// allocate beyond the frames it emits.
-    resampled: Vec<f32>,
     /// Set once the first frame has been dropped, so the log line is emitted
     /// once rather than fifty times a second.
     warned_full: bool,
 }
 
 impl FrameAssembler {
-    pub(crate) fn new(resampler: Resampler, channels: u16, sender: SyncSender<Vec<f32>>) -> Self {
+    pub(crate) fn new(
+        device_rate: u32,
+        device_channels: u16,
+        sender: SyncSender<Vec<f32>>,
+    ) -> Self {
         Self {
-            resampler,
-            channels,
+            // Two instances rather than one with a channel count: a resampler's
+            // state is a single previous sample, which is exactly the per-
+            // channel state that must not be shared. `Resampler` is not `Clone`
+            // for the same reason, so they are built side by side from the rate.
+            resamplers: [Resampler::new(device_rate), Resampler::new(device_rate)],
+            device_channels,
             sender,
-            pending: Vec::with_capacity(FRAME_SAMPLES * 2),
-            resampled: Vec::with_capacity(FRAME_SAMPLES * 2),
+            planar: [
+                Vec::with_capacity(FRAME_SAMPLES),
+                Vec::with_capacity(FRAME_SAMPLES),
+            ],
+            resampled: [
+                Vec::with_capacity(FRAME_SAMPLES),
+                Vec::with_capacity(FRAME_SAMPLES),
+            ],
+            pending: Vec::with_capacity(PLAYBACK_SAMPLES * 2),
             warned_full: false,
         }
     }
 
     /// Accepts one device callback's worth of samples.
     pub(crate) fn push<T: ToF32 + Copy>(&mut self, data: &[T]) {
-        if data.is_empty() || self.channels == 0 {
+        if data.is_empty() || self.device_channels == 0 {
             return;
         }
 
-        self.resampled.clear();
+        self.split_into_planes(data);
+        self.resample_planes();
+        self.interleave_into_pending();
+        self.emit_full_frames();
+    }
 
-        if self.channels == 1 {
-            // Fast path: already mono, so convert straight into the resampler.
-            let mono: Vec<f32> = data.iter().map(|s| s.to_f32()).collect();
-            self.resampler.process(&mono, &mut self.resampled);
-        } else {
-            // Downmix by averaging, which is what a mono sum should be — summing
-            // without dividing would clip on correlated input.
-            let mono: Vec<f32> = data
-                .chunks_exact(self.channels as usize)
-                .map(|frame| frame.iter().map(|s| s.to_f32()).sum::<f32>() / frame.len() as f32)
-                .collect();
-            self.resampler.process(&mono, &mut self.resampled);
+    /// Copies the device's interleaved samples into one buffer per output
+    /// channel, reusing both buffers.
+    fn split_into_planes<T: ToF32 + Copy>(&mut self, data: &[T]) {
+        for plane in &mut self.planar {
+            plane.clear();
         }
 
-        self.pending.extend_from_slice(&self.resampled);
-        self.emit_full_frames();
+        // Destructured rather than indexed: `self.planar` cannot be borrowed
+        // mutably twice through the field, and the two planes are always
+        // written together.
+        let [left, right] = &mut self.planar;
+
+        if self.device_channels == 1 {
+            // A microphone with one capsule has nothing to split: both output
+            // channels get the same samples, so switching to the stereo profile
+            // sends a centred image rather than silence in one ear.
+            left.reserve(data.len());
+            right.reserve(data.len());
+            for sample in data {
+                let value = sample.to_f32();
+                left.push(value);
+                right.push(value);
+            }
+            return;
+        }
+
+        let stride = self.device_channels as usize;
+        let frames = data.len() / stride;
+        left.reserve(frames);
+        right.reserve(frames);
+        for frame in data.chunks_exact(stride) {
+            left.push(frame[0].to_f32());
+            right.push(frame[1].to_f32());
+            // Channels beyond the second are dropped rather than folded in.
+        }
+    }
+
+    /// Runs each channel through its own resampler.
+    fn resample_planes(&mut self) {
+        for channel in 0..2 {
+            // `process` appends to its output buffer, so the reused one has to
+            // be emptied first — otherwise every callback keeps the last
+            // callback's samples and the stream grows without bound.
+            let mut output = std::mem::take(&mut self.resampled[channel]);
+            output.clear();
+            self.resamplers[channel].process(&self.planar[channel], &mut output);
+            self.resampled[channel] = output;
+        }
+    }
+
+    /// Interleaves the two resampled planes into the pending buffer.
+    fn interleave_into_pending(&mut self) {
+        // The two resamplers see the same input length and the same rate, so
+        // their outputs are the same length — but the shorter one bounds the
+        // loop rather than an `assert` that would panic on the audio thread if
+        // that ever stopped being true.
+        let samples = self.resampled[0].len().min(self.resampled[1].len());
+        self.pending.reserve(samples * 2);
+        for index in 0..samples {
+            self.pending.push(self.resampled[0][index]);
+            self.pending.push(self.resampled[1][index]);
+        }
     }
 
     /// Sends every complete frame currently buffered.
     fn emit_full_frames(&mut self) {
-        while self.pending.len() >= FRAME_SAMPLES {
-            let frame: Vec<f32> = self.pending.drain(..FRAME_SAMPLES).collect();
+        while self.pending.len() >= PLAYBACK_SAMPLES {
+            // The one allocation in this path, and an owed one: `try_send`
+            // takes the frame by value, and the engine is on another thread.
+            let frame: Vec<f32> = self.pending.drain(..PLAYBACK_SAMPLES).collect();
 
             match self.sender.try_send(frame) {
                 Ok(()) => {}
@@ -332,7 +414,7 @@ impl FrameAssembler {
         }
 
         // Keep the warning armed so a later stall is reported again.
-        if self.pending.len() < FRAME_SAMPLES {
+        if self.pending.len() < PLAYBACK_SAMPLES {
             self.warned_full = false;
         }
     }
@@ -364,19 +446,26 @@ mod tests {
         channels: u16,
     ) -> (FrameAssembler, std::sync::mpsc::Receiver<Vec<f32>>) {
         let (sender, receiver) = sync_channel(FRAME_QUEUE);
-        (
-            FrameAssembler::new(Resampler::new(rate), channels, sender),
-            receiver,
-        )
+        (FrameAssembler::new(rate, channels, sender), receiver)
+    }
+
+    /// One device callback that fills exactly one output frame, as a mono
+    /// device would deliver it.
+    fn mono_frame(sample: f32) -> Vec<f32> {
+        vec![sample; FRAME_SAMPLES]
     }
 
     #[test]
     fn a_full_frame_of_mono_is_emitted_whole() {
         let (mut assembler, frames) = assembler(SAMPLE_RATE, 1);
-        assembler.push(&vec![0.5_f32; FRAME_SAMPLES]);
+        assembler.push(&mono_frame(0.5));
 
         let frame = frames.try_recv().expect("one frame");
-        assert_eq!(frame.len(), FRAME_SAMPLES);
+        assert_eq!(
+            frame.len(),
+            PLAYBACK_SAMPLES,
+            "capture emits stereo whatever the device gives it"
+        );
     }
 
     #[test]
@@ -400,7 +489,7 @@ mod tests {
 
         for _ in 0..3 {
             let frame = frames.try_recv().expect("frame");
-            assert_eq!(frame.len(), FRAME_SAMPLES);
+            assert_eq!(frame.len(), PLAYBACK_SAMPLES);
             assert!(frame.iter().all(|s| (s - 0.25).abs() < 1e-6));
         }
         assert!(frames.try_recv().is_err(), "exactly three frames were owed");
@@ -425,32 +514,49 @@ mod tests {
     }
 
     #[test]
-    fn stereo_is_downmixed_by_averaging() {
-        let (mut assembler, frames) = assembler(SAMPLE_RATE, 2);
-        // Left is +1, right is -1: the average is silence, not a doubled signal.
-        let interleaved: Vec<f32> = (0..FRAME_SAMPLES)
-            .flat_map(|_| [1.0_f32, -1.0_f32])
-            .collect();
-        assembler.push(&interleaved);
+    fn a_mono_device_is_duplicated_into_both_channels() {
+        // A single-capsule microphone has no stereo image to preserve, and
+        // putting its samples in one ear only would be worse than useless.
+        let (mut assembler, frames) = assembler(SAMPLE_RATE, 1);
+        assembler.push(&mono_frame(0.5));
 
         let frame = frames.try_recv().expect("one frame");
-        assert!(
-            frame.iter().all(|s| s.abs() < 1e-6),
-            "opposite channels should cancel, got {:?}",
-            &frame[..4]
-        );
+        for pair in frame.chunks_exact(2) {
+            assert!((pair[0] - 0.5).abs() < 1e-6, "left was {}", pair[0]);
+            assert!((pair[1] - 0.5).abs() < 1e-6, "right was {}", pair[1]);
+        }
     }
 
     #[test]
-    fn identical_stereo_channels_survive_the_downmix() {
+    fn stereo_channels_do_not_leak_into_each_other() {
+        // The regression this guards: one resampler shared by both channels
+        // would carry the left channel's last sample into the right channel's
+        // first output sample, putting a click at every callback boundary.
         let (mut assembler, frames) = assembler(SAMPLE_RATE, 2);
+        let interleaved: Vec<f32> = (0..FRAME_SAMPLES).flat_map(|_| [0.25_f32, -0.5]).collect();
+        assembler.push(&interleaved);
+
+        let frame = frames.try_recv().expect("one frame");
+        for pair in frame.chunks_exact(2) {
+            assert!((pair[0] - 0.25).abs() < 1e-6, "left was {}", pair[0]);
+            assert!((pair[1] + 0.5).abs() < 1e-6, "right was {}", pair[1]);
+        }
+    }
+
+    #[test]
+    fn a_surround_device_keeps_its_first_two_channels() {
+        // 5.1 as cpal interleaves it: FL, FR, FC, LFE, BL, BR.
+        let (mut assembler, frames) = assembler(SAMPLE_RATE, 6);
         let interleaved: Vec<f32> = (0..FRAME_SAMPLES)
-            .flat_map(|_| [0.5_f32, 0.5_f32])
+            .flat_map(|_| [0.1_f32, 0.2, 0.3, 0.4, 0.5, 0.6])
             .collect();
         assembler.push(&interleaved);
 
         let frame = frames.try_recv().expect("one frame");
-        assert!(frame.iter().all(|s| (s - 0.5).abs() < 1e-6));
+        for pair in frame.chunks_exact(2) {
+            assert!((pair[0] - 0.1).abs() < 1e-6);
+            assert!((pair[1] - 0.2).abs() < 1e-6);
+        }
     }
 
     #[test]
@@ -474,10 +580,38 @@ mod tests {
             produced += frame.len();
         }
 
+        // Counted per channel: the output is stereo, so one second of audio is
+        // twice the frame samples.
+        let expected = PLAYBACK_SAMPLES * 50;
         assert!(
-            produced.abs_diff(SAMPLE_RATE as usize) <= FRAME_SAMPLES,
-            "produced {produced} samples for one second, expected ~{SAMPLE_RATE}"
+            produced.abs_diff(expected) <= PLAYBACK_SAMPLES,
+            "produced {produced} samples for one second, expected ~{expected}"
         );
+    }
+
+    #[test]
+    fn resampling_keeps_the_two_channels_aligned() {
+        // Different constants on the two channels, so a resampler that swapped
+        // or interleaved them would show up immediately.
+        let (mut assembler, frames) = assembler(44_100, 2);
+        let mut produced = Vec::new();
+
+        for _ in 0..(44_100 / 441) {
+            let interleaved: Vec<f32> = (0..441).flat_map(|_| [0.25_f32, -0.5]).collect();
+            assembler.push(&interleaved);
+            while let Ok(frame) = frames.try_recv() {
+                produced.extend_from_slice(&frame);
+            }
+        }
+
+        assert!(
+            produced.len() > PLAYBACK_SAMPLES,
+            "not enough audio produced"
+        );
+        for pair in produced.chunks_exact(2) {
+            assert!((pair[0] - 0.25).abs() < 1e-4, "left drifted to {}", pair[0]);
+            assert!((pair[1] + 0.5).abs() < 1e-4, "right drifted to {}", pair[1]);
+        }
     }
 
     #[test]
@@ -500,10 +634,10 @@ mod tests {
         // The engine being behind must never stall the audio callback: a
         // blocked device callback is heard as a dropout.
         let (sender, _receiver) = sync_channel(1);
-        let mut assembler = FrameAssembler::new(Resampler::new(SAMPLE_RATE), 1, sender);
+        let mut assembler = FrameAssembler::new(SAMPLE_RATE, 1, sender);
 
         for _ in 0..5 {
-            assembler.push(&vec![0.5_f32; FRAME_SAMPLES]);
+            assembler.push(&mono_frame(0.5));
         }
         // Reaching here at all is the assertion; try_send never waits.
     }
@@ -511,12 +645,12 @@ mod tests {
     #[test]
     fn a_disconnected_engine_stops_buffering() {
         let (sender, receiver) = sync_channel(FRAME_QUEUE);
-        let mut assembler = FrameAssembler::new(Resampler::new(SAMPLE_RATE), 1, sender);
+        let mut assembler = FrameAssembler::new(SAMPLE_RATE, 1, sender);
         drop(receiver);
 
         assembler.push(&vec![0.5_f32; FRAME_SAMPLES * 4]);
         assert!(
-            assembler.pending.len() < FRAME_SAMPLES,
+            assembler.pending.len() < PLAYBACK_SAMPLES,
             "pending buffer kept growing"
         );
     }
