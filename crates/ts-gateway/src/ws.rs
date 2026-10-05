@@ -10,7 +10,7 @@
 //!   than answered carefully.
 //! - **Audio** (binary, a tag byte then PCM): see [`crate::voice`].
 //!
-//! Auth is the first client message and nothing else happens before it. A
+//! When configured, auth is the first client message. A
 //! browser cannot set headers on a WebSocket, and a token in the URL would
 //! leak into access logs and `Referer`s — the first message is the only place
 //! left, and it is a better one anyway.
@@ -48,17 +48,25 @@ pub(crate) const MAX_MESSAGE: usize = 64 * 1024;
 /// What a connection task needs from the gateway.
 pub(crate) struct ConnectionContext {
     pub(crate) config: Arc<GatewayConfig>,
-    pub(crate) outbound: tokio::sync::broadcast::Sender<Outbound>,
-    pub(crate) commands: tokio::sync::mpsc::UnboundedSender<GatewayCommand>,
+    pub(crate) devices: Arc<crate::devices::Devices>,
     pub(crate) next_connection: std::sync::atomic::AtomicU64,
 }
 
 /// The frames the *client* sends that are not commands.
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum ControlFrame {
     /// The token, as the first message.
-    Auth { token: String },
+    Auth {
+        token: String,
+        #[serde(default)]
+        device: Option<String>,
+    },
+    /// Device attachment is not gateway token authentication.
+    Attach {
+        #[serde(default)]
+        device: Option<String>,
+    },
 }
 
 /// Constant-time-enough token comparison.
@@ -114,7 +122,7 @@ pub(crate) async fn upgrade(
     tokio_tungstenite::accept_hdr_async_with_config(stream, callback, Some(config)).await
 }
 
-/// Serves one upgraded socket: hello, auth, then the read loop.
+/// Serves one upgraded socket: hello, optional auth, then the read loop.
 pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<ConnectionContext>) {
     let id = context.next_connection.fetch_add(1, Ordering::Relaxed);
     let (mut sink, mut stream) = socket.split();
@@ -122,62 +130,77 @@ pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<Conne
     let hello = serde_json::json!({
         "kind": "hello",
         "protocol": 1,
-        "auth": "required",
+        "device": "required",
+        "auth": if context.config.token.is_empty() { "none" } else { "required" },
     });
     if sink.send(Message::text(hello.to_string())).await.is_err() {
         return;
     }
 
-    // One shot at the token: a second try is a brute-force attempt, and the
-    // operator can restart the gateway with a fresh one if a client fumbled.
-    let auth = tokio::time::timeout(AUTH_DEADLINE, stream.next()).await;
-    let Ok(Some(Ok(Message::Text(text)))) = auth else {
-        let _ = sink
-            .send(Message::text(
-                serde_json::json!({"kind": "error", "message": "expected an auth message"})
-                    .to_string(),
-            ))
-            .await;
+    let first = tokio::time::timeout(AUTH_DEADLINE, stream.next()).await;
+    let Ok(Some(Ok(Message::Text(text)))) = first else {
         return;
     };
-
-    match serde_json::from_str::<ControlFrame>(&text) {
-        Ok(ControlFrame::Auth { token }) if token_matches(&context.config.token, &token) => {}
+    let requested = match serde_json::from_str::<ControlFrame>(&text) {
+        Ok(ControlFrame::Auth { token, device })
+            if context.config.token.is_empty() || token_matches(&context.config.token, &token) =>
+        {
+            device
+        }
+        Ok(ControlFrame::Attach { device }) if context.config.token.is_empty() => device,
         Ok(ControlFrame::Auth { .. }) => {
-            tracing::warn!(connection = id, "a connection presented the wrong token");
+            let _ = sink.send(Message::text(error_json("bad token"))).await;
+            return;
+        }
+        _ => {
             let _ = sink
-                .send(Message::text(
-                    serde_json::json!({"kind": "error", "message": "bad token"}).to_string(),
-                ))
+                .send(Message::text(error_json(
+                    "expected auth or device attach first",
+                )))
                 .await;
             return;
         }
-        Err(_) => {
-            // Not an auth frame at all — a command, most likely, sent before
-            // the token. Saying exactly that beats "bad token", which would
-            // send someone hunting for a token that is actually fine.
-            let _ = sink
-                .send(Message::text(
-                    serde_json::json!({
-                        "kind": "error",
-                        "message": "expected an auth message first",
-                    })
-                    .to_string(),
-                ))
-                .await;
+    };
+    let device = match context.devices.attach(requested.as_deref()).await {
+        Ok(device) => device,
+        Err(message) => {
+            let _ = sink.send(Message::text(error_json(message))).await;
             return;
         }
-    }
+    };
     tracing::info!(connection = id, "a browser connected");
 
-    let welcome = serde_json::json!({ "kind": "welcome", "protocol": 1 });
+    // Take presentation state and subscribe atomically on the worker. A
+    // browser refresh must not reconnect the same TS identity, and there must
+    // be no gap between the snapshot and subsequent live events.
+    let (reply, response) = tokio::sync::oneshot::channel();
+    if device
+        .context
+        .commands
+        .send(GatewayCommand::Attach(reply))
+        .is_err()
+    {
+        return;
+    }
+    let Ok(Ok((snapshot, mut outbound))) = tokio::time::timeout(AUTH_DEADLINE, response).await
+    else {
+        return;
+    };
+    let welcome =
+        serde_json::json!({ "kind": "welcome", "protocol": 1, "device": device.credential });
     if sink.send(Message::text(welcome.to_string())).await.is_err() {
         return;
     }
+    // One event per frame avoids a huge single frame on large servers.
+    for event in snapshot {
+        let Ok(json) = serde_json::to_string(&event) else {
+            return;
+        };
+        if sink.send(Message::text(json)).await.is_err() {
+            return;
+        }
+    }
 
-    // Subscribed only now: nothing may reach a socket that has not proven
-    // itself, and events before auth are not this connection's business.
-    let mut outbound = context.outbound.subscribe();
     let writer = tokio::spawn(async move {
         loop {
             match outbound.recv().await {
@@ -207,8 +230,8 @@ pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<Conne
 
     while let Some(Ok(message)) = stream.next().await {
         match message {
-            Message::Text(text) => handle_text(&text, id, &context),
-            Message::Binary(bytes) => handle_binary(bytes.as_ref(), id, &context),
+            Message::Text(text) => handle_text(&text, id, &device.context),
+            Message::Binary(bytes) => handle_binary(bytes.as_ref(), id, &device.context),
             Message::Close(_) => break,
             // Ping/pong and the rest are tungstenite's business.
             _ => {}
@@ -222,7 +245,7 @@ pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<Conne
 }
 
 /// Routes one text frame: a control frame, or a command.
-fn handle_text(text: &str, id: u64, context: &ConnectionContext) {
+fn handle_text(text: &str, id: u64, context: &crate::devices::DeviceContext) {
     let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) else {
         send_to(context, error_json("malformed JSON"));
         return;
@@ -250,6 +273,9 @@ fn handle_text(text: &str, id: u64, context: &ConnectionContext) {
     }
 
     match serde_json::from_value::<Command>(value) {
+        Ok(command) if command.is_shutdown() => {
+            send_to(context, error_json("shutdown is managed by the gateway"));
+        }
         Ok(command) => {
             if context
                 .commands
@@ -264,7 +290,7 @@ fn handle_text(text: &str, id: u64, context: &ConnectionContext) {
 }
 
 /// Routes one binary frame: captured audio.
-fn handle_binary(bytes: &[u8], id: u64, context: &ConnectionContext) {
+fn handle_binary(bytes: &[u8], id: u64, context: &crate::devices::DeviceContext) {
     match crate::voice::parse_input_frame(bytes) {
         Some(frame) => {
             let _ = context
@@ -283,7 +309,7 @@ fn handle_binary(bytes: &[u8], id: u64, context: &ConnectionContext) {
 /// Errors are broadcast like everything else: with no request ids (v1), an
 /// error caused by one tab is visible to all of them, and pretending
 /// otherwise would need the correlation the protocol does not have.
-fn send_to(context: &ConnectionContext, message: String) {
+fn send_to(context: &crate::devices::DeviceContext, message: String) {
     let _ = context.outbound.send(Outbound::Text(message));
 }
 

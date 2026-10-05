@@ -40,41 +40,27 @@ impl Drop for Killer {
 }
 
 #[test]
-fn a_generated_token_is_the_one_that_gets_printed() {
-    // Regression: `main` printed `args.token.unwrap_or("…")`, and the branch
-    // that prints at all is exactly the branch where `args.token` is `None`.
-    // So a gateway started without `--token` — the normal way — announced the
-    // literal `…` and the operator had no way to learn the token the gateway
-    // was actually enforcing. The one secret they have to carry to the
-    // browser was unreachable, and the browser could only answer "refused".
-    let dir = TempDir::new("token");
+fn the_default_gateway_starts_without_generating_or_printing_a_token() {
+    // The gateway used to force a random credential on every local launch.
+    // Optional authentication must not silently re-enable that behavior.
+    let dir = TempDir::new("no-token");
     let child = Command::new(env!("CARGO_BIN_EXE_nightcord-gateway"))
         .args(["--bind", "127.0.0.1:0", "--data-dir"])
         .arg(&dir.0)
+        .env_remove("NIGHTCORD_GATEWAY_TOKEN")
         .stdout(Stdio::piped())
         .spawn()
         .expect("the gateway binary runs");
     let mut child = Killer(child);
-
     let stdout = child.0.stdout.take().expect("stdout was piped");
-    let mut announced = None;
+    let mut listening = false;
     for line in BufReader::new(stdout).lines() {
         let line = line.expect("stdout is readable");
-        if let Some(token) = line.strip_prefix("token: ") {
-            announced = Some(token.to_string());
+        assert!(!line.starts_with("token:"), "default startup has no token");
+        listening |= line.starts_with("nightcord-gateway listening");
+        if line.starts_with("open http://") {
             break;
         }
     }
-
-    let token = announced.expect("a generated token is announced");
-    assert_ne!(token, "…", "a placeholder is not a token");
-    assert_eq!(
-        token.len(),
-        32,
-        "16 bytes of hex, as `generate_token` writes them: {token}"
-    );
-    assert!(
-        token.chars().all(|c| c.is_ascii_hexdigit()),
-        "hex digits only: {token}"
-    );
+    assert!(listening, "startup announces the bound address");
 }

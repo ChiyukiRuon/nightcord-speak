@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 /// Everything the caller decides: where to listen, who may speak, and where
 /// the client's stores live.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GatewayConfig {
     /// The addresses to listen on.
     ///
@@ -16,14 +16,8 @@ pub struct GatewayConfig {
     /// URLs a user might type.
     pub bind: Vec<SocketAddr>,
 
-    /// The shared secret every connection must present before it may do
-    /// anything.
-    ///
-    /// Required, not optional. Two reasons, both about the shape of the thing:
-    /// a browser cannot set headers on a WebSocket, so the token is sent as
-    /// the first message; and a page on the public internet can try to connect
-    /// to a loopback port — the token is what stops a random page from driving
-    /// someone's client (the WebSocket flavour of CSRF).
+    /// Optional shared secret. Empty disables token authentication; Origin
+    /// restrictions still apply before the socket upgrade.
     pub token: String,
 
     /// Origins the browser may connect from, matched exactly (`scheme://host`
@@ -35,33 +29,50 @@ pub struct GatewayConfig {
     /// always allowed; it is not a browser being borrowed by a page.
     pub allowed_origins: Vec<String>,
 
-    /// Which identity profile the gateway's client presents.
-    ///
-    /// Not `"default"`: TS3 refuses a second connection from the same identity
-    /// while the first is live, so a gateway running beside the desktop app
-    /// would fight it for the connection. `docs/gateway.md` explains.
+    /// Profile name within each device's isolated identity store.
     pub profile: String,
 
     /// Where the client's stores live. `None` uses the platform default — the
     /// same `%APPDATA%` directory the desktop app and CLI use; tests point it
     /// at a temporary directory.
     ///
-    /// One directory for all three stores, mirroring the CLI's flag: one that
-    /// relocated only half the state would be a trap.
+    /// Each device's identity, settings, bookmarks and credential live under
+    /// `devices/<public-id>/` within this directory.
     pub data_dir: Option<PathBuf>,
 
     /// A directory to serve the page from. `None` serves the embedded copy of
-    /// `web/index.html` — the same file a Cloudflare Pages deployment uploads.
+    /// `web/index.html`. This is a diagnostic page; Pages hosts Flutter's build.
     pub web_root: Option<PathBuf>,
 }
 
+impl std::fmt::Debug for GatewayConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Configuration may be inspected during diagnosis; never expose a key.
+        f.debug_struct("GatewayConfig")
+            .field("bind", &self.bind)
+            .field(
+                "token",
+                &if self.token.is_empty() {
+                    "<unset>"
+                } else {
+                    "<set>"
+                },
+            )
+            .field("allowed_origins", &self.allowed_origins)
+            .field("profile", &self.profile)
+            .field("data_dir", &self.data_dir)
+            .field("web_root", &self.web_root)
+            .finish()
+    }
+}
+
 impl GatewayConfig {
-    /// A configuration for `bind` with a fresh random token.
+    /// A configuration for `bind` with token authentication disabled.
     #[must_use]
     pub fn new(bind: Vec<SocketAddr>) -> Self {
         Self {
             bind,
-            token: generate_token(),
+            token: String::new(),
             allowed_origins: Vec::new(),
             profile: "web".to_string(),
             data_dir: None,
@@ -72,7 +83,7 @@ impl GatewayConfig {
     /// Whether a browser origin may connect.
     ///
     /// `None` (no `Origin` header) is allowed: only browsers send one, and the
-    /// token still has to be right.
+    /// configured token authentication still applies.
     #[must_use]
     pub fn origin_allowed(&self, origin: Option<&str>) -> bool {
         let Some(origin) = origin else { return true };
@@ -142,6 +153,18 @@ pub fn generate_token() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_never_exposes_token() {
+        // Diagnostic formatting previously included the entire shared secret.
+        let mut config = GatewayConfig::new(Vec::new());
+        config.token = "private-gateway-credential".into();
+        let debug = format!("{config:?}");
+        assert!(!debug.contains(&config.token));
+        assert!(debug.contains("<set>"));
+        config.token.clear();
+        assert!(format!("{config:?}").contains("<unset>"));
+    }
 
     fn config() -> GatewayConfig {
         let mut config = GatewayConfig::new(Vec::new());

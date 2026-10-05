@@ -51,9 +51,13 @@ impl Drop for TempDir {
 /// The [`TempDir`] comes back with it: it must outlive the gateway, or the
 /// stores would be deleted out from under a running test.
 async fn start(tag: &str) -> (SocketAddr, oneshot::Sender<()>, TempDir) {
+    start_with_token(tag, TOKEN).await
+}
+
+async fn start_with_token(tag: &str, token: &str) -> (SocketAddr, oneshot::Sender<()>, TempDir) {
     let dir = TempDir::new(tag);
     let mut config = GatewayConfig::new(vec!["127.0.0.1:0".parse().expect("a literal address")]);
-    config.token = TOKEN.to_string();
+    config.token = token.to_string();
     config.data_dir = Some(dir.0.clone());
 
     let bound = Gateway::new(config).bind().await.expect("bind the gateway");
@@ -69,23 +73,38 @@ async fn start(tag: &str) -> (SocketAddr, oneshot::Sender<()>, TempDir) {
 
 /// Connects, expects `hello`, sends the token, expects `welcome`.
 async fn connect_authed(addr: SocketAddr, token: &str) -> Client {
+    connect_device(addr, Some(token), None).await.0
+}
+
+async fn connect_device(
+    addr: SocketAddr,
+    token: Option<&str>,
+    device: Option<&str>,
+) -> (Client, String) {
     let (mut client, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
         .await
         .expect("the handshake");
-
     let hello = next_json(&mut client).await;
-    assert_eq!(hello["kind"], "hello", "{hello}");
-
+    assert_eq!(hello["kind"], "hello");
+    assert_eq!(hello["device"], "required");
+    let frame = if let Some(token) = token {
+        serde_json::json!({"kind":"auth", "token":token, "device":device})
+    } else {
+        serde_json::json!({"kind":"attach", "device":device})
+    };
     client
-        .send(Message::text(
-            serde_json::json!({ "kind": "auth", "token": token }).to_string(),
-        ))
+        .send(Message::text(frame.to_string()))
         .await
-        .expect("send the token");
-
-    let answer = next_json(&mut client).await;
-    assert_eq!(answer["kind"], "welcome", "{answer}");
-    client
+        .expect("attach device");
+    let welcome = next_json(&mut client).await;
+    assert_eq!(welcome["kind"], "welcome", "{welcome}");
+    (
+        client,
+        welcome["device"]
+            .as_str()
+            .expect("device credential")
+            .to_owned(),
+    )
 }
 
 /// The next text frame as JSON, skipping binary frames.
@@ -163,13 +182,13 @@ async fn settings_changes_survive_a_round_trip_through_the_gateway() {
 }
 
 #[tokio::test]
-async fn every_connection_sees_every_result() {
+async fn tabs_of_the_same_device_share_results() {
     // No request ids in v1; the documented consequence is that a result is
     // broadcast. This pins that behaviour deliberately rather than by
     // accident.
     let (addr, _shutdown, _dir) = start("fanout").await;
-    let mut first = connect_authed(addr, TOKEN).await;
-    let mut second = connect_authed(addr, TOKEN).await;
+    let (mut first, device) = connect_device(addr, Some(TOKEN), None).await;
+    let (mut second, _) = connect_device(addr, Some(TOKEN), Some(&device)).await;
 
     first
         .send(Message::text(r#"{"command":"settings"}"#))
@@ -307,4 +326,96 @@ async fn the_page_is_served_on_the_same_port() {
     assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
     assert!(response.contains("Nightcord Speak"), "the page is served");
     assert!(response.contains("/ws"), "and it knows where the socket is");
+}
+
+#[tokio::test]
+async fn an_unconfigured_gateway_accepts_commands_without_an_auth_frame() {
+    let (addr, shutdown, _dir) = start_with_token("no-token", "").await;
+    let (mut client, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .expect("handshake");
+    let hello = next_json(&mut client).await;
+    assert_eq!(hello["auth"], "none");
+    client
+        .send(Message::text(r#"{"kind":"attach"}"#))
+        .await
+        .unwrap();
+    assert_eq!(next_json(&mut client).await["kind"], "welcome");
+    client
+        .send(Message::text(r#"{"command":"settings"}"#))
+        .await
+        .expect("send command");
+    let result = next_json(&mut client).await;
+    assert_eq!(result["command"], "settings");
+    assert_eq!(result["outcome"]["status"], "ok");
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn different_devices_cannot_read_settings_or_receive_each_others_results() {
+    let (addr, shutdown, _dir) = start("isolated").await;
+    let (mut first, first_device) = connect_device(addr, Some(TOKEN), None).await;
+    let (mut second, second_device) = connect_device(addr, Some(TOKEN), None).await;
+    assert_ne!(first_device, second_device);
+    first
+        .send(Message::text(r#"{"command":"settings"}"#))
+        .await
+        .unwrap();
+    let mut settings = next_result(&mut first, "settings").await["data"].clone();
+    assert!(
+        timeout(Duration::from_millis(80), second.next())
+            .await
+            .is_err()
+    );
+    settings["connection"]["nickname"] = serde_json::json!("Only Device A");
+    first
+        .send(Message::text(
+            serde_json::json!({"command":"settings_update","payload":settings}).to_string(),
+        ))
+        .await
+        .unwrap();
+    next_result(&mut first, "settings_update").await;
+    second
+        .send(Message::text(r#"{"command":"settings"}"#))
+        .await
+        .unwrap();
+    assert_ne!(
+        next_result(&mut second, "settings").await["data"]["connection"]["nickname"],
+        "Only Device A"
+    );
+    first.close(None).await.unwrap();
+    let (mut resumed, same_device) = connect_device(addr, Some(TOKEN), Some(&first_device)).await;
+    assert_eq!(same_device, first_device);
+    resumed
+        .send(Message::text(r#"{"command":"settings"}"#))
+        .await
+        .unwrap();
+    assert_eq!(
+        next_result(&mut resumed, "settings").await["data"]["connection"]["nickname"],
+        "Only Device A"
+    );
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn knowing_a_device_id_without_its_secret_does_not_grant_access() {
+    let (addr, shutdown, _dir) = start("device-secret").await;
+    let (_, credential) = connect_device(addr, Some(TOKEN), None).await;
+    let (id, _) = credential.split_once('.').unwrap();
+    let forged = format!("{id}.{}", "0".repeat(32));
+    let (mut attacker, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    next_json(&mut attacker).await;
+    attacker
+        .send(Message::text(
+            serde_json::json!({"kind":"auth","token":TOKEN,"device":forged}).to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        next_json(&mut attacker).await["message"],
+        "invalid device credential"
+    );
+    let _ = shutdown.send(());
 }

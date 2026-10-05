@@ -1,4 +1,4 @@
-//! The gateway process: one core, one WebSocket, browser front-ends.
+//! The gateway process: isolated device cores behind one WebSocket endpoint.
 //!
 //! Everything interesting lives in `ts-gateway`; this file is argument
 //! parsing, logging, the shutdown signal, and an exit code — the same shape
@@ -22,16 +22,15 @@ struct Args {
     /// first on some systems, and a browser that tries one and fails is a
     /// confusing first experience.
     ///
-    /// Binding anything else exposes the client to the network: a holder of
-    /// the token can drive it, and Windows will ask about the firewall the
+    /// Binding anything else exposes the client to the network: allowed
+    /// visitors can drive it, and Windows will ask about the firewall the
     /// first time a remote host connects. Prefer a tunnel (`cloudflared`,
     /// a reverse proxy) over exposing the port directly — `docs/gateway.md`.
     #[arg(long = "bind", value_name = "ADDR")]
     bind: Vec<SocketAddr>,
 
-    /// The shared secret browsers must present. Generated and printed when
-    /// absent; `NIGHTCORD_GATEWAY_TOKEN` is also read, so a service manager
-    /// can keep it out of the command line.
+    /// Enable token authentication. Without this flag or environment variable,
+    /// browsers connect without a token. An empty value also disables it.
     #[arg(long, env = "NIGHTCORD_GATEWAY_TOKEN")]
     token: Option<String>,
 
@@ -85,7 +84,6 @@ fn run() -> Result<()> {
         args.bind.clone()
     };
 
-    let generated = args.token.is_none();
     let mut config = GatewayConfig::new(bind);
     if let Some(token) = &args.token {
         config.token = token.clone();
@@ -95,14 +93,6 @@ fn run() -> Result<()> {
     config.data_dir = args.data_dir;
     config.web_root = args.web_root;
 
-    // Read back out of the config rather than out of `args`: with no `--token`
-    // the config is the only place the generated one exists, and the line
-    // printed below is the only place it is ever shown. Taking it from `args`
-    // meant a run that let the gateway generate a token announced `…` — the
-    // operator was handed a placeholder for the one secret they have to carry
-    // to the browser.
-    let token = config.token.clone();
-
     let runtime = tokio::runtime::Runtime::new().context("could not start the runtime")?;
     runtime.block_on(async move {
         let bound = Gateway::new(config).bind().await?;
@@ -111,13 +101,7 @@ fn run() -> Result<()> {
             tracing::info!(%addr, "listening");
         }
 
-        // Printed to stdout as well as logged: the token is the one thing the
-        // person starting the gateway has to carry to the browser, and a log
-        // file is not where they are looking.
         println!("nightcord-gateway listening on {addrs:?}");
-        if generated {
-            println!("token: {token}");
-        }
         println!(
             "open http://{}/ for the debug page",
             first_http_addr(&addrs)

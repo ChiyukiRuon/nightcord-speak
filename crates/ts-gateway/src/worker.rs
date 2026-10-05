@@ -1,10 +1,10 @@
-//! The core worker: one per gateway, the same shape as the FFI's and the
+//! The core worker: one per browser device, the same shape as the FFI's and the
 //! CLI's.
 //!
 //! It owns the `ts_core::Client`, so `&mut self` and `async` never reach a
 //! connection task; commands arrive through a channel, and everything the
 //! front-end should see — domain events and command results — is serialised
-//! once and broadcast to every authenticated connection.
+//! once and broadcast only to connections belonging to this device.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,6 +42,12 @@ pub(crate) enum GatewayCommand {
 
     /// Stop the worker and disconnect everything.
     Shutdown,
+
+    /// The device has no browser connections; never leave its PTT gate held.
+    Idle,
+
+    /// Snapshot and subscription are taken together on the worker to avoid gaps.
+    Attach(tokio::sync::oneshot::Sender<(Vec<FfiEvent>, broadcast::Receiver<Outbound>)>),
 }
 
 /// The error for addressing a session that has gone away.
@@ -64,11 +70,12 @@ macro_rules! with_session {
 
 pub(crate) struct Worker {
     core: CoreClient,
+    snapshots: crate::snapshot::Snapshots,
     /// The identity profile every connection's `connect` is forced onto.
     ///
     /// A browser does not get to pick: TS3 refuses a second connection from
     /// the same identity, so a page free to choose could collide with the
-    /// desktop app — and one gateway is one identity by design.
+    /// desktop app — and each device has its own isolated identity store.
     profile: String,
     outbound: broadcast::Sender<Outbound>,
     commands: mpsc::UnboundedReceiver<GatewayCommand>,
@@ -106,6 +113,7 @@ impl Worker {
         };
         Self {
             core,
+            snapshots: crate::snapshot::Snapshots::default(),
             profile,
             outbound,
             commands,
@@ -147,6 +155,15 @@ impl Worker {
                         // late frame is worth less than the next one.
                         self.pending_audio.insert(from, frame);
                     }
+                    Some(GatewayCommand::Attach(reply)) => {
+                        let _ = reply.send((self.snapshots.events(), self.outbound.subscribe()));
+                    }
+                    Some(GatewayCommand::Idle) => {
+                        self.pending_audio.clear();
+                        if let Some(voice) = self.voice.as_mut() {
+                            voice.set_push_to_talk(false);
+                        }
+                    }
                     Some(GatewayCommand::Shutdown) | None => break,
                 },
 
@@ -165,6 +182,7 @@ impl Worker {
                         {
                             voice.set_away(false);
                         }
+                        self.snapshots.apply(session, &event);
                         self.send(FfiEvent::client(session, event));
                     }
                     Err(RecvError::Lagged(missed)) => {
@@ -629,10 +647,9 @@ impl Worker {
         };
         let session = voice.session;
         let _ = with_session!(self.core, session, s => s.set_voice_state(state));
-        self.send(FfiEvent::client(
-            session,
-            ClientEvent::VoiceStateChanged(state),
-        ));
+        let event = ClientEvent::VoiceStateChanged(state);
+        self.snapshots.apply(session, &event);
+        self.send(FfiEvent::client(session, event));
     }
 
     /// The `voice_status` payload.

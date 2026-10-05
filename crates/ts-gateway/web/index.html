@@ -224,11 +224,6 @@ function connectGateway() {
   socket.binaryType = 'arraybuffer';
   state.socket = socket;
 
-  socket.onopen = () => {
-    // Auth is the first message, always.
-    sessionStorage.setItem('token', $('token').value);
-    send({ kind: 'auth', token: $('token').value });
-  };
   socket.onmessage = (event) => {
     if (typeof event.data === 'string') {
       handleFrame(JSON.parse(event.data));
@@ -250,9 +245,23 @@ function connectGateway() {
 
 function handleFrame(frame) {
   switch (frame.kind) {
-    case 'hello':
-      setStatus('handshake done, sending token…');
+    case 'hello': {
+      const frameToSend = frame.auth !== 'none'
+        ? { kind: 'auth', token: $('token').value } : { kind: 'attach' };
+      if (frame.device === 'required') {
+        const key = `nightcord.device.${gatewayUrl}`;
+        let device = localStorage.getItem(key);
+        if (!device || !/^[0-9a-f]{32}\.[0-9a-f]{32}$/.test(device)) {
+          const bytes = crypto.getRandomValues(new Uint8Array(32));
+          const hex = start => Array.from(bytes.slice(start, start + 16), b => b.toString(16).padStart(2, '0')).join('');
+          device = `${hex(0)}.${hex(16)}`;
+          localStorage.setItem(key, device);
+        }
+        frameToSend.device = device;
+      }
+      if (frame.auth !== 'none' || frame.device === 'required') send(frameToSend);
       break;
+    }
     case 'welcome':
       state.authed = true;
       $('connect').disabled = false;

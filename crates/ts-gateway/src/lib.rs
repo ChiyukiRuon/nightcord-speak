@@ -1,24 +1,10 @@
-//! The WebSocket front-end: one core, N browser connections.
-//!
-//! The shape mirrors `ts-ffi`'s, with a socket where the C ABI was: a worker
-//! owns the `ts_core::Client`, connections send commands and receive a
-//! broadcast of events and results. What is shared with the desktop is the
-//! vocabulary ([`ts_wire`]) and the core, not a translation of either.
-//!
-//! Two things this crate deliberately is not:
-//!
-//! - **Not a hosted service.** One gateway is one TS identity on one machine,
-//!   the browser is a remote control for it. Multi-user hosting would be a
-//!   different product with different problems (identity per visitor,
-//!   server-side audio mixing, accounts); `docs/gateway.md` records the
-//!   boundary.
-//! - **Not a static file server.** It answers four URLs — the page, its
-//!   worklet, `/ws`, and 404 — because the embedded debug page has to come
-//!   from *somewhere* on the same origin. Deployments serve the page from
-//!   Cloudflare Pages and use the gateway for `/ws` only.
+//! The WebSocket front-end: one isolated core per browser device.
+//! Protocol implementations and command vocabulary are reused unchanged.
 
 mod config;
+mod devices;
 mod http;
+mod snapshot;
 mod voice;
 mod worker;
 mod ws;
@@ -28,14 +14,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, mpsc};
-use ts_core::Client as CoreClient;
-use ts_identity::IdentityStore;
-use ts_settings::{BookmarkStore, SettingsStore};
 
 pub use config::{GatewayConfig, generate_token};
+use devices::{Devices, RESTORE_WINDOW};
 use http::Route;
-use worker::{GatewayCommand, Worker};
 use ws::ConnectionContext;
 
 /// How many outbound messages may queue before a connection counts as lagged.
@@ -69,6 +51,10 @@ pub enum GatewayError {
     /// The client's stores could not be found or built.
     #[error("could not start the client core: {0}")]
     Core(#[from] ts_model::ClientError),
+
+    /// Device storage could not be prepared.
+    #[error("could not prepare gateway device storage")]
+    Storage(#[source] std::io::Error),
 }
 
 /// A gateway that has not bound its sockets yet.
@@ -136,25 +122,33 @@ impl BoundGateway {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), GatewayError> {
-        let core = self.build_core()?;
-
-        let (outbound, _) = broadcast::channel(OUTBOUND_CAPACITY);
-        let (commands, command_rx) = mpsc::unbounded_channel();
-        let worker = tokio::spawn(
-            Worker::new(
-                core,
-                self.config.profile.clone(),
-                outbound.clone(),
-                command_rx,
-            )
-            .run(),
+        let root = self
+            .config
+            .data_dir
+            .clone()
+            .or_else(ts_identity::app_data_root)
+            .ok_or(ts_model::ClientError::Identity(
+                ts_model::IdentityError::NoStorageRoot,
+            ))?
+            .join("devices");
+        let devices = Arc::new(
+            Devices::new(root, self.config.profile.clone()).map_err(GatewayError::Storage)?,
         );
-
         let context = Arc::new(ConnectionContext {
             config: self.config.clone(),
-            outbound,
-            commands: commands.clone(),
+            devices: devices.clone(),
             next_connection: AtomicU64::new(1),
+        });
+        let cleanup_devices = devices.clone();
+        let (stop_cleanup, mut cleanup_stopped) = tokio::sync::oneshot::channel();
+        let cleanup = tokio::spawn(async move {
+            let mut timer = tokio::time::interval(std::time::Duration::from_secs(5));
+            loop {
+                tokio::select! {
+                    _ = &mut cleanup_stopped => break,
+                    _ = timer.tick() => cleanup_devices.reap(RESTORE_WINDOW).await,
+                }
+            }
         });
 
         let mut accepts = Vec::with_capacity(self.listeners.len());
@@ -164,38 +158,14 @@ impl BoundGateway {
 
         shutdown.await;
 
-        let _ = commands.send(GatewayCommand::Shutdown);
-        // The worker disconnects every session on its way out, which is what
-        // keeps the server from holding a stale client for this identity.
-        let _ = worker.await;
         for accept in accepts {
             accept.abort();
         }
+        let _ = stop_cleanup.send(());
+        let _ = cleanup.await;
+        devices.shutdown().await;
         tracing::info!("the gateway stopped");
         Ok(())
-    }
-
-    /// Builds the client with the configured profile and stores.
-    fn build_core(&self) -> Result<CoreClient, GatewayError> {
-        let (identities, settings, bookmarks) = match &self.config.data_dir {
-            Some(dir) => (
-                IdentityStore::new(dir),
-                SettingsStore::new(dir),
-                BookmarkStore::new(dir),
-            ),
-            None => (
-                IdentityStore::platform_default().map_err(|_| {
-                    ts_model::ClientError::Identity(ts_model::IdentityError::NoStorageRoot)
-                })?,
-                SettingsStore::platform_default().map_err(|_| {
-                    ts_model::ClientError::Settings(ts_model::SettingsError::NoStorageRoot)
-                })?,
-                BookmarkStore::platform_default().map_err(|_| {
-                    ts_model::ClientError::Settings(ts_model::SettingsError::NoStorageRoot)
-                })?,
-            ),
-        };
-        Ok(CoreClient::new(identities, settings, bookmarks))
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "ts-gateway"
-description = "The WebSocket front-end: one core, N browser connections, the shared wire vocabulary."
+description = "The WebSocket front-end: isolated cores per browser device, the shared wire vocabulary."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
