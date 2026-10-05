@@ -35,7 +35,7 @@ macOS / Android / iOS。
 | 11 | TS3 与 TS6 协议实现互相隔离             |
 
 **非目标（§74，MVP 阶段不做）**：登录、云同步、头像、好友、社交系统、插件市场、
-屏幕共享、自定义 Profile Server、Web。
+屏幕共享、自定义 Profile Server。Web 原属 MVP 非目标，现已进入 Phase 7。
 
 ---
 
@@ -99,7 +99,7 @@ macOS / Android / iOS。
 | `ts-core`              | facade + 后端选择                     | 泄漏协议概念                    |
 | `ts-ffi`               | C ABI + JSON，句柄而非指针            | 阻塞 Dart UI 线程               |
 | `ts-wire`              | 命令与事件的 JSON 词汇（前端唯一一份） | 承载任何行为/传输              |
-| `ts-gateway`           | WebSocket 前端：一 core、N 浏览器连接  | 复制 core（与桌面共用同一套）    |
+| `ts-gateway`           | WebSocket 前端：每设备独立 core  | 复制 core（与桌面共用同一套）    |
 
 ### 前端架构：Flutter 六端一致（2026-09-30 定）
 
@@ -120,7 +120,7 @@ Windows 窄窗口都不该被操作系统粗暴分类）：
 | 族 | 平台 | Shell |
 | --- | --- | --- |
 | Desktop | Windows / macOS / Desktop Web | `DesktopShell`：侧栏 + 聊天 + 底部语音栏 |
-| Mobile | iOS / Android / Mobile Web | `MobileShell`：抽屉 / 底部导航 |
+| Mobile | iOS / Android / Mobile Web | `MobileShell`：频道树主页 / 聊天详情；设置分类 / 设置详情 |
 
 两族继续共享：Design System、业务组件、状态层、Models、l10n。
 
@@ -160,13 +160,13 @@ apps/client/lib/
 tools/web-debug/                        # 现调试页迁入：诊断/协议验证，不做产品 UI
 ```
 
-**路线**：① `ClientTransport` 抽象（进行中）→ ② `VoiceBackend` 抽象 → ③
+**路线**：① `ClientTransport` 抽象（已接入内嵌/远程）→ ② 浏览器 `VoiceBackend`（已实现）→ ③
 `flutter build web` + Cloudflare Pages → ④ 移动平台脚手架 + `MobileShell` → ⑤
 三条一致性要求逐项走查。
 
 **层 1 已经建起来了**（2026-09-30）：`lib/design/{tokens,theme,components}`，
-按 `docs/UI设计与配色规范.md` 与 `docs/UI字体规范.md` 落地。**布局那一层没动**
-——Server Rail、独立成员栏、`MobileShell` 都还在后面。见
+按 `docs/UI设计与配色规范.md` 与 `docs/UI字体规范.md` 落地。**截至 2026-09-30 布局那一层没动**
+——Server Rail、独立成员栏仍待做；`MobileShell` 已于 2026-10-05 落地。见
 [`docs/ui.md`](docs/ui.md)。
 
 ---
@@ -297,8 +297,8 @@ flutter build macos --debug                 # 会连着 cargo build -p ts-ffi �
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 400 个
-cd apps/client && flutter analyze && flutter test                  # 272 个
+cargo test  --workspace --all-features                             # 402 个
+cd apps/client && flutter analyze && flutter test                  # 293 个
 ```
 
 > `cargo fmt --all` **不能用**：它也会格式化 path 依赖，会把 `vendor/tsclientlib`
@@ -382,7 +382,7 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
 
 ## 5. 当前进度
 
-**最后更新：2026-10-01**
+**最后更新：2026-10-05**
 
 ### 5.1 里程碑
 
@@ -404,7 +404,7 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
 ⑤ TS3 Backend ✅     ⑥ TS3 Headless CLI ✅  ⑦ TS3 Voice ✅
 ⑧ Flutter FFI ✅     ⑨ Flutter UI ✅
 ⑩ TS6 Backend ✅     ⑪ Multi Session ✅
-⑫ Web Gateway 🚧     ⑬ Web Client ⏳        ⑭ 扩展功能 ⏳
+⑫ Web Gateway 🚧     ⑬ Web Client 🚧        ⑭ 扩展功能 ⏳
 ```
 
 **Phase 7 当前到哪**（详细设计见 [`docs/gateway.md`](docs/gateway.md)）：
@@ -413,18 +413,18 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
 - [x] `ts-gateway` + `nightcord-gateway` —— 鉴权、扇出、语音桥、内嵌调试页
 - [x] `ClientTransport` 接口 + `ConnectRequest` 搬进 `models/`
 - [x] 桌面侧的功能补齐（poke / kick / ban / 权限面板 / 编码档位 / 音量）——见 §5.3 末
-- [ ] `VoiceBackend` 抽象 → `flutter build web` → `MobileShell`（`AGENTS.md`「前端架构」的路线）
+- [x] 浏览器 `VoiceBackend`、`RemoteTransport`、Flutter Web 发布构建与自适应 Desktop / Mobile Shell
+- [ ] HTTPS/WSS 部署、手机浏览器真机语音验收；Android / iOS 原生脚手架仍未建立
 
-> **§5.3 / §5.4 尚未补上 Phase 7 的实测记录**——哪些是真跑过的、哪些只有单测，
-> 要由做那一轮的人填，不在这里替它下结论。
+> Phase 7 的本轮验证记录见 §5.3「Web 客户端第一阶段」，未验证项仍留在 §5.4。
 
 ### 5.2 规模
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **23,951 行**，16 crates + CLI + gateway |
-| Dart | **22,513 行**，78 文件（含 l10n 生成文件，约 3,000 行） |
-| 测试 | **400 Rust（macOS 上 399，差的是 SEH 那条）+ 272 Dart**，两个平台都全绿 |
+| Rust | **24,558 行**，16 crates + CLI + gateway（不含 vendor） |
+| Dart | **18,945 行**，`apps/client/lib/` 下 87 文件（含 l10n 生成文件，不含测试） |
+| 测试 | **406 Rust + 295 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。
@@ -441,7 +441,7 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
 | 频道树 / 用户列表 | ✅ 含 `(you)` 标记                                                      |
 | 聊天收发          | ✅ 服务器回显经事件路径到达                                             |
 | 语音              | ✅ **499↔499 帧，10.0 秒，双向零丢包**，峰值 0.316                      |
-| 换频道            | ⚠️ 命令往返与错误映射已验证；**成功换频道未验证**（服务器只有一个频道） |
+| 换频道            | ✅ 用户于 2026-10-05 确认频道切换已完成并测试无误 |
 
 **TS6**（`192.168.31.128:9988`，`TeamSpeak 6 Server 6.0.0-beta13.1`）
 
@@ -744,6 +744,87 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
 > 拿含它的构建测，测的是替代实现自己。这条对以后任何「我们加了 X 绕过 Y」的改动都成立。
 | 编解码往返 | ✅ 新增测试 `a_tone_survives_the_codec_at_its_own_level`（`ts-audio/src/encoder.rs`）：编码一个 0.5 幅度的正弦、再用 libopus 解码、断言电平回来。**两个平台都通过**。这是唯一一处让 `opus_encode_float` 与 `opus_decode_float` 互相验证的地方——`audiopus_sys` 是用当时机器上的 cmake 现场编 libopus 的，而一个「解码恒定为 ±1 LSB」的构建在其他任何测试里都看不出来 |
 
+**Web 客户端第一阶段（2026-10-05）**
+
+- Flutter 复用桌面的状态、频道、聊天、设置与设计系统。浏览器通过 `RemoteTransport` 连接同一套 Rust gateway/core，Native 继续使用 FFI；日志、崩溃、通知与快捷键通过条件导入隔离。
+- `AdaptiveShell` 按视口宽度判定：760 及以上使用桌面侧栏，以下使用移动逐级页面导航（用户于 2026-10-05 修订）：主页直接显示频道树，单击频道打开对应频道聊天，单击成员打开私聊；详情通过返回按钮或系统返回回到频道树。设置入口先显示分类列表，再进入具体设置，返回先退回分类。没有隐藏侧栏。本轮 Chromium 真实服务器冒烟验证已确认频道树 → 聊天 → 返回，以及设置分类 → 通知设置 → 返回分类。长按频道切换语音频道，成员长按菜单；移动端提供按住说话按钮并处理松开、取消与失焦。
+- 浏览器 Web Audio / AudioWorklet 采集麦克风并播放立体声，PCM 经 WebSocket 交给 Rust 编解码。麦克风权限被拒时可只收听；音频需用户手势启用。设备枚举与选择留在浏览器，总音量与静音同步；未按住 PTT、静音或离开时停止发送本地 PCM。
+- 网关维护领域事件快照，新标签页或刷新鉴权后恢复已有会话、频道、成员与状态；订阅和取快照在 worker 内原子完成。聊天历史不重放。修复了设置层提前订阅导致会话层丢失快照的问题，并有回归测试。
+- 手动输入的 Token 只在内存与 WebSocket 首帧中使用，不放 URL、浏览器存储或日志。Pages 环境变量注入的 Token 会打包进静态产物，见下方部署约定。每设备独立身份，同设备标签页共享；最后一个标签页关闭后保留 30 秒供刷新恢复，再清理会话。
+- 验证：Rust 402 测试、clippy、格式检查；Flutter analyze、292 测试与 `flutter build web --release` 全部通过。窄窗口、频道/成员单击进入聊天与返回、移动设置分类/详情返回、触屏 PTT 取消/失焦及传输边界有测试。Chromium 实测通过网关鉴权、真实 TS3 连接、1280×800 桌面 / 390×844 移动布局切换、刷新恢复同一会话，浏览器无错误。假麦克风捕获和注入立体声播放帧均通过（不等同于人耳或官方客户端的浏览器互通验收）。
+
+本地运行（两个终端）：
+
+```powershell
+cargo run -p nightcord-gateway -- --data-dir run/gateway-web
+# 默认免 Token；需要鉴权时在服务端设置 NIGHTCORD_GATEWAY_TOKEN。
+cd apps/client
+flutter run -d chrome
+```
+
+自定义网关可在入口填写地址，或用 `?gw=wss://your-host/ws`（不要把 Token 放查询参数）。静态产物位于 `apps/client/build/web/`，CanvasKit 随构建打包。手机访问需 HTTPS 页面 + WSS 网关以取得麦克风；按部署域名配置网关允许的 Origin。尚未部署 Cloudflare Pages，也未验证真实手机 Safari/Chrome 的音频、后台行为和系统通知。浏览器快捷键仅页面内生效，本地日志目录与崩溃报告不适用。PCM-over-WebSocket 仍是第一阶段方案。
+
+**Cloudflare Pages 构建配置与自动连接（2026-10-05）**
+
+- `GatewayConfig.environment()` 读取 Dart 构建定义 `NIGHTCORD_GATEWAY_URL` 与 `NIGHTCORD_GATEWAY_TOKEN`，旧地址名 `NIGHTCORD_GATEWAY` 仍兼容。地址存在时页面自动连接；Token 可不配置。网关 hello.auth 声明 none 时直接接收 welcome；声明 required 时才发送 auth，未提供密钥则显示输入入口。自动连接失败显示可重试表单，不循环重试。
+- 浏览器静态应用不能读取部署机器运行时环境变量。`scripts/build-web.py` 将构建进程环境写到临时 JSON，通过 `--dart-define-from-file` 注入 Flutter，结束后删除临时文件；Token 不进入命令参数或脚本日志。改环境变量后必须重新构建部署。
+- 配置了 Token 时，`?gw=` 不能覆盖目标地址，避免链接把预置凭据发送给其他网关。**打包的 Token 对站点访问者可见**；Cloudflare 的变量/Secret 标记不能使客户端代码中的值保密。适用于已限制访客的自用部署；每设备独立身份，同设备标签页共享。
+- `scripts/build-pages.sh` 在缺少 Flutter 时拉取固定 3.47.5 SDK（可用 `FLUTTER_VERSION` 覆盖），下载字体后调用上述构建脚本。Web 构建不需要 Rust/Opus 工具链。`web/_headers` 令入口和应用脚本重新验证缓存，便于更新配置。
+
+Pages 控制台配置（生产/预览环境各自设置）：
+
+| 项目 | 值 |
+| --- | --- |
+| Framework preset | None |
+| Root directory | 仓库根目录（留空） |
+| Build command | `bash scripts/build-pages.sh` |
+| Build output directory | `apps/client/build/web` |
+| `NIGHTCORD_GATEWAY_URL` | `wss://你的网关域名/ws` |
+| `NIGHTCORD_GATEWAY_TOKEN` | 可选；免鉴权部署不用设置，启用时与 Rust 网关相同 |
+
+依据 [Pages 构建配置](https://developers.cloudflare.com/pages/configuration/build-configuration/)：环境变量提供给构建过程，根目录与产物目录独立配置。本项目只将静态 UI 放到 Pages；Rust 网关仍单独运行，由 HTTPS/WSS 反向代理提供访问，并用 `--allow-origin https://你的项目.pages.dev`（及自定义域名/预览域名）允许站点 Origin。构建脚本在 Pages 环境拒绝 `ws://` 配置。
+
+验证：Flutter analyze、292 个测试与环境变量注入的发布构建通过；Chromium 实测无填表自动鉴权、刷新自动鉴权、`?gw=` 不覆盖配置地址通过。构建脚本的 JSON 特殊字符编码、临时文件清理、Pages 强制 WSS 也已检查。尚未在 Pages Linux 构建节点上实际运行安装 SDK 分支。
+
+本地同样可以设置地址环境变量（Token 可选）后运行 `python scripts/build-web.py`。直接 `flutter run/build` 不会自动读取 shell 变量，需要显式 Dart define；推荐使用脚本构建。当前未实际发布 Pages。
+
+**网关鉴权改为可选（2026-10-05，用户决策）**
+
+- 默认 `GatewayConfig.token` 为空，CLI 不再自动生成/打印 Token。未设置服务端 `NIGHTCORD_GATEWAY_TOKEN` 或 `--token` 时免鉴权；配置非空值时启用 Token 校验。空字符串也表示关闭。
+- 握手保留协议版本 1：`hello.auth = none` 时浏览器发送设备 `attach` 后接收 `welcome`，不发 auth；`required` 时必须先鉴权，再接收快照与命令。网页默认不显示 Token 字段，服务器要求时才显示。网关内嵌调试页也按 hello 决定是否发 auth。
+- Pages 只需 `NIGHTCORD_GATEWAY_URL` 即可自动连接免鉴权网关，不需要在静态产物中放密钥；保留可选预置 Token 兼容自用部署。启用 Token 时，可仅在 Rust 服务端配置，网页连接后由使用者手工输入。
+- Origin 白名单、WSS、消息长度与命令边界照旧；是否要求凭据完全由服务端决定。免 Token 的访客仍须自动提交设备凭据，仅能操作该设备的会话。
+- **修订 `docs/gateway.md` 中 Token 必填、默认随机生成的旧设计**：本段与实际代码优先，该文保留原轮设计记录。原来的 Pages 构建说明中地址和 Token 都必须存在也已被本段替代。
+- 回归验证覆盖免 Token 的真实 WebSocket 命令往返，以及浏览器传输不发送 auth、URL 单独配置即可自动进入应用、受保护网关缺 Token 被拒；已启用模式的正确/错误 Token 测试继续保留。402 个 Rust 测试、292 个 Flutter 测试、clippy、格式与 analyze 通过；Web 发布构建和 Chromium 无 Token 自动连接/刷新实测通过。CLI 启动输出回归测试已改为默认不生成、不打印 Token。
+
+**Web 每设备独立身份（2026-10-05，用户决策）**
+
+- 取代 `docs/gateway.md` 的「一个网关一个共享身份」设计。每设备实例化同一套 Rust Core，隔离身份、设置、书签、会话、事件与语音；同设备标签页共享。没有复制 Core 或协议实现。
+- Web 设备边界是浏览器个人资料、站点 Origin 与网关地址。localStorage 保存随机设备编号与恢复凭据，兼容局域网 HTTP；刷新与再次访问复用。清除网站数据、无痕模式或换浏览器会产生新身份，不读取硬件指纹。TS 私钥始终只在服务端。
+- 数据位于 `<data-dir>/devices/<设备编号>/`，包含身份、设置、书签和 `access.key`。恢复须匹配随机密钥，知道公开编号不能接管；凭据不进日志、URL 或 Debug。旧共享身份文件保留，新设备创建新身份，服务器权限需按新身份分配。
+- protocol 1 新增 `hello.device = required`；免 Token 发送 `attach`，启用 Token 则在 `auth` 中同时携带设备凭据。Token 控制进入网关，设备凭据控制隔离与恢复；前端自动处理，无需用户输入。浏览器不能发送 `shutdown` 关闭网关。
+- 最后一个标签页关闭立即释放 PTT，保留 Core 30 秒供刷新，每 5 秒清理，所以约 30–35 秒自动断开 TS；身份与设置持久化。最多保留 64 个活跃设备 Core。清理完成前不重新启动同一身份，避免重复登录。
+- 回归覆盖不同设备隔离、同设备共享与恢复、伪造凭据和非法编号拒绝，以及语音帧隔离。405 项 Rust 测试通过。Chromium 两个独立浏览器上下文同时连接真实 TS3，确认不同 client id 与 unique id；刷新 A 恢复原会话，B 保持独立。Flutter analyze、295 项测试和 Web release 构建通过。
+- 未停止用户运行中的旧网关。最初根目录 exe 被 Windows 占用，验证构建放在 `run/device-target/debug/nightcord-gateway.exe`；旧进程退出后已成功重新构建 `target/debug/nightcord-gateway.exe`。使用新行为须重新启动网关，同时重启或重新部署 Web 客户端。Rust clippy 全工作区、格式检查与 5 项启动脚本测试通过。
+
+- 用户要求代为启动后，已后台启动网关 `0.0.0.0:8787` 与发布版 Web 静态服务 `0.0.0.0:5173`；保持原 Token，构建时自动注入局域网网关地址及 Token。Chromium 手机视口访问 `http://192.168.31.95:5173` 已确认自动鉴权成功。进程号与日志保存在忽略的 `run/live-*` 文件，未弹出终端窗口。
+
+**手机白屏调查与启动提示（2026-10-05）**
+
+- 用户报告手机访问白屏，尚未提供访问地址、手机系统和浏览器；**实际站点的根因未定位，不能认为已经修复该手机问题**。
+- 确认了独立缺口：旧 `index.html` 在 Flutter 首帧之前没有加载状态，bootstrap/CanvasKit 初始化失败只进控制台，用户看到空白。新增不依赖 Flutter 的启动提示、resources/renderer/app 阶段、失败重载入口及 30 秒等待提示；首帧移除提示，不展示原始错误/敏感数据。
+- `flutter_bootstrap.js` 显式等待引擎初始化与 runApp 并捕获失败；Pages 对 startup/audio/worklet 脚本补充缓存重新验证。需要重新构建和部署才能在用户访问的站点生效，本轮未部署。
+- 本地发布构建通过。Chromium 与 WebKit 26.5（iPhone viewport 模拟）启动通过；模拟阻断 CanvasKit wasm 时，两种引擎均显示 renderer 失败提示。**WebKit 模拟不是 iPhone 真机验收**，且实际页面的网络/缓存/浏览器版本仍待检查。
+- 新增 5 个独立 Node 回归测试：脚本加载失败、渲染拒绝与敏感内容隔离、慢加载提示、首帧移除提示、bootstrap 引擎失败。运行 `node --test apps/client/test/web_startup_test.cjs`，全部通过。
+
+**局域网手机启动补充（2026-10-05）**
+
+- 用户确认手机通过电脑局域网地址访问；桌面启动命令为 `flutter run -d chrome --web-port 5173`，网关通过环境 Token 启动现成二进制。不能再把页面问题解释为手机输入 localhost。
+- 在本机 LAN HTTP 分别验证：发布版 Chromium/WebKit 启动正常；Flutter 调试版 Chromium 正常，但 WebKit 报 `new window.AudioContext()` 构造失败，堆栈位于 `dart_sdk.js` 的 DDC runtime polyfill，发生在项目代码加载前。SDK 源码 `private/ddc_runtime/runtime.dart` 确有未经能力检查构造 AudioContext 的分支。**这是本地 WebKit 模拟复现，不足以断言用户安卓 Chrome 也是同一错误**；用户手机真实堆栈仍缺。
+- 手机联调使用发布模式 web-server：`flutter run -d web-server --release --web-hostname 0.0.0.0 --web-port 5173`，手机打开电脑局域网 IP 的 5173。不修改 SDK 或伪造浏览器音频 API。已在 5174 独立测试同一发布模式命令，Chromium/WebKit 在真实 LAN HTTP Origin 都通过启动；测试服务已结束。293 个 Flutter 测试及 analyze 通过。
+- 另有独立连接问题：默认 gateway 只绑定回环，网页原默认 ws://localhost 会指向手机。已修复未配置地址时使用页面 hostname + 8787，显式配置的地址与 Token 目的地不改写，并有回归测试。网关 LAN 访问需要重启时添加 `--bind 0.0.0.0:8787 --allow-origin http://电脑IP:5173`；当前用户运行的网关没有被修改或停止。
+- LAN HTTP 可测页面与命令，麦克风仍要求 HTTPS 安全上下文；正式 Pages 部署继续使用 HTTPS + WSS。
+
 ### 5.4 未验证
 
 - ~~macOS 的通知、`⌘,`、快捷键~~ ——**用户实测全部通过**（见 §5.3）。
@@ -751,9 +832,7 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
   麦克风、收发语音都正常。构建节点（Mac mini，无输入设备）上听不到声音，是那台机器的
   硬件现状，不是平台限制；[`docs/macos.md`](docs/macos.md) §5.1 记了怎么一眼看出机器
   有没有输入设备。**麦克风那个 TCC 对话框长什么样仍未记录**。
-- **音质**：单测只验证了帧长、码率常量、codec 字节。**立体声档的实际听感**，以及
-  **官方客户端能否解出 Opus Music 档**，全部待实机。后者是真风险：别的客户端若只
-  认单声道，我们发的立体声会被降混。
+- ~~官方客户端语音互通~~ ——用户于 2026-10-05 确认已完成并测试无误。不同真实立体声源的听感比较尚未记录；本次确认不等同于浏览器端语音验收。
 - **音量**：总音量与单人音量的即时性、以及总音量跨进程重启后是否还在，待实机。
 - **poke / kick / ban**：命令链与权限门控有单测，**没有对真实服务器发过一次**。
 - ~~窗口最小尺寸~~ ——**用户实测确认挡住了**（macOS 侧；Windows 的 `WM_GETMINMAXINFO` 用的是同一个数，机制不同）。150% 缩放那一条仍未单独试过。
@@ -767,8 +846,8 @@ cd apps/client && flutter analyze && flutter test                  # 272 个
   与那句话；改一条消息重启应用后是否还在；再点回在线标记是否消失。
   另外有一条**已知副作用**（有意保留）：库把 away 当成 mute，离开期间发不出语音
   ——见 [`docs/ts3.md`](docs/ts3.md) §11。
-- TS3 成功换频道（测试服务器只有一个频道）。
-- Android / iOS / Web：完全未动。
+- ~~频道切换、退出清理~~ ——用户于 2026-10-05 确认均已完成并测试无误。
+- Android / iOS 原生脚手架尚未建立。Web 已实现，尚需 iOS Safari / Android Chrome 真机与人耳语音验收；HTTPS/WSS 部署尚未进行。
 - **重连循环没有跑通过一次真实掉线**。原计划用本机 TCP 中继制造掉线，但在这台机器上
   做不到：`nightcord-cli.exe` 连不上任何本机监听（3ms 内被 RST；同一时刻、同一次调用里
   一个普通 Rust 探针却能连上），而放在项目目录之外的二进制又连不出去。这是环境的
@@ -875,8 +954,8 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
   于是每次列待办都会冒出来一次——**它不是欠账，是不做**，所以从欠账里摘出来了。
   两个平台都用系统标题栏。
 - [x] ~~设置的左右布局~~ —— 弹窗改成了页面（左栏导航 + 右侧一节），见 §5.3 第六轮与
-      [`docs/ui.md`](docs/ui.md)。**这是布局那一层的第一块**，其余照旧未动。
-- [ ] **§19 的侧栏宽度**：现状 288，规范给 240–280（代码里有注释）。
+      [`docs/ui.md`](docs/ui.md)。**这是布局那一层的第一块**；2026-10-05 已继续加入 Desktop/Mobile 自适应 Shell。
+- [x] **§19 的侧栏宽度**：2026-10-05 调整为 280，窄窗口改用频道树主页与详情导航。
 - [ ] **§34 的动效**只用到一处（聊天滚到底），其余时长与曲线备好未用。
 - [ ] **§36 的完整无障碍走查**：目前只做到「颜色不是唯一信号」。
 - [x] ~~繁中 / 日 / 韩字体~~ —— 已加（`docs/localization.md` §7 记了三处一起改的规则，
@@ -887,7 +966,7 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 - [ ] 网关没有 TLS，也没有每访客身份与会话归属；多标签页同权是写明的 v1 行为
 - [ ] 语音是 PCM over WebSocket（第一阶段），最终要换成浏览器侧编解码
 - [ ] 调试页（`crates/ts-gateway/web/`）要按目标目录迁进 `tools/web-debug/`，
-      产品 UI 是 Flutter Web，尚未开始
+      产品 UI 已实现为 Flutter Web；调试页迁移仍待做
 
 ### macOS（见 [`docs/macos.md`](docs/macos.md)）
 
@@ -899,23 +978,22 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 - [x] ~~设置文件的迁移~~ ——macOS 默认值从 Ctrl 改成 ⌘ 之后存量的那份 `settings.json`
       里还是 Ctrl。**用户已自行删掉该文件**，没有写迁移（见 §5.4 的理由）
 - [ ] 连真实 TS3 / TS6（服务器地址见 §5.3）——**语音部分用户已在 MacBook 上验过**，
-      剩下的是微信道 / 频道切换、通知与弹窗的文案这些非语音项
+      频道切换也已由用户于 2026-10-05 确认；剩下的是通知与弹窗文案的走查
 
 ### 其他
 
-- [ ] TS3 成功换频道的验证（需要多频道服务器）
+- [x] TS3 成功换频道的验证 ——用户于 2026-10-05 确认通过
 - [x] ~~别人换频道被当成下线~~ —— 根因是我们从没 `channelsubscribeall`，见 §6 ⑧
 - [x] ~~关掉软件不主动断开~~ —— 见 §6 ⑨
-- [ ] **第九条的实测**：关窗再开，服务器上不应该残留上一次的会话。日志里应有
-      `closed every session on the way out`
+- [x] **第九条的实测**：退出清理已由用户于 2026-10-05 确认通过
 - [ ] 订阅全部频道在大服务器上的代价：频道多时会收到更多推送。官方客户端也这么做，
       但没量过；真出问题就在 `subscribe_to_every_channel` 那里收窄
 - [x] ~~连接页保存行的单击被押后约 300ms~~ —— 已改为行内自计时（`Timer`，非时间戳，
       理由见 `docs/client.md`）。第一版用 `Stopwatch` 量真实时间，被测试抓出不可测。
 - [x] ~~`Session::poke()`~~ —— 连同 kick / ban 一起补完，见 §5.3
 - [x] ~~kick / ban~~
-- [ ] 音质人耳确认：本轮加了档位，但**没有任何一档被耳朵听过**，也没有对真实服务器
-      发过一次 poke / kick / ban
+- [x] 官方客户端语音互通 ——用户于 2026-10-05 确认通过
+- [ ] 不同真实立体声源的听感比较；poke / kick / ban 的真实服务器验证
 - [x] ~~未连接时够不到设置~~ —— `SettingsDialog.session` 改 `int?`，连接页加按钮
 - [x] ~~可重试错误的 SnackBar 底色~~ —— **早已修好**（`app_shell.dart` 用
       `tokens.infoBg` / `tokens.errorBg`），待办是过期的，本轮清理
@@ -932,7 +1010,7 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 
 ### 明确不做（§74）
 
-登录、云同步、头像、好友、社交、插件市场、屏幕共享、Web。
+登录、云同步、头像、好友、社交、插件市场、屏幕共享。Web 已按 Phase 7 开始实现。
 
 > TS6 的 `stream` 命令族属于**屏幕共享**，因此是 §72（Phase 8），
 > 不是 M0.4 的欠账。见 [`docs/ts6.md`](docs/ts6.md)。
@@ -959,7 +1037,8 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 | `docs/shortcuts.md`        | 快捷键：为什么系统级、物理键与 HID 码的代价、旧 PTT 的卡住 bug |
 | `docs/localization.md`     | 本地化：工具与文件、语言如何决定、无 context 组句、什么不本地化、加语言/加文案 |
 | `docs/crash.md`            | 崩溃上报：三类信号、标记语义、为什么不解析符号、Dart 侧的关窗路径、边界与触发法 |
-| `docs/gateway.md`          | Web 网关：为什么不是托管服务、三层协议、安全边界、身份档、语音分阶段 |
+| `docs/gateway.md`          | Web 网关：设备 Core 隔离、握手、安全边界、语音分阶段 |
+| `docs/web-client.md`       | Web 使用：局域网、HTTPS/WSS、Pages、可选 Token 与设备身份 |
 | `docs/ui.md`               | 视觉层：设计系统住哪、规范没写全或互相打架的地方怎么裁的、字体为什么下载而不是提交 |
 | `docs/UI设计与配色规范.md` | UI 设计系统 **v2.0**：颜色 / 字体 / 间距 token 与组件规范（v2 换掉了 v1 的全套颜色） |
 | `docs/client.md`           | Flutter 客户端：多会话、三个 bug、开发用环境变量           |
@@ -1049,3 +1128,21 @@ Rust 与 Dart 侧不受影响（§4.1 说注释用英文，这条是同一个方
 
 遇到真正影响架构、且文档没写清的选择（TS6 架构、命名、依赖方案），
 停下来问，不要替用户决定。
+
+
+### 2026-10-05：临时 HTTPS 验证配置（未完成启用）
+
+- 用户授权使用 Quick Tunnel。已下载官方 cloudflared 2026.9.3 至忽略目录 `run/`，后台启动页面和网关两个隧道，进程及地址日志位于 `run/tunnel-*`。
+- 自动审批拒绝在网关启动参数中加入临时公网 Origin，仅返回 `blocked by policy`，未提供具体原因。未绕过；已恢复原局域网网关，并验证 LAN 页面自动鉴权成功。HTTPS/WSS、手机音频尚未完成验收。
+- 为用户准备 `run/enable-https.ps1`（未执行）：检查隧道及网关进程，生成新随机 Token、重新构建 Web、以 loopback 监听重启网关并配置精确 Origin，输出手机访问地址。凭据不输出。该脚本须用户手动运行；临时地址依赖当前隧道进程，重启会变化。
+
+- HTTPS 启用脚本修复：Windows PowerShell 5 在 `$ErrorActionPreference = Stop` 下将原生 stderr 重定向变成 `NativeCommandError`，Flutter 的正常 Wasm 提示会中止构建流程。改为 Start-Process 在进程边界分别写 stdout/stderr，并仅按 ExitCode 判断。`run/test-https-build.ps1` 直接提取实际构建函数做回归，确认 stderr 警告 + exit 0 成功、exit 7 正确保留失败码；脚本语法检查通过。仍由用户手动运行 HTTPS 启用脚本，未绕过公网 Origin 的审批拒绝。
+
+
+### 2026-10-05：Web 改动整理与提交
+
+- 按网关与 Web 客户端两组整理：网关实现可选 Token、设备 Core/数据/语音隔离与刷新快照；客户端实现远程传输、浏览器平台能力、Web 音频、自适应逐级导航、构建变量与启动错误提示。
+- docs/gateway.md 更新为当前设备隔离和可选 Token 约定，新增 docs/web-client.md 说明本机/LAN、Pages、Quick Tunnel、HTTPS/WSS 和浏览器身份边界。README 仅补产品使用入口，DEVELOPMENT 保持原样。
+- 审查补上 GatewayConfig Debug 的 Token 打码和回归测试。修正 Dart 格式化后暴露的测试样例大括号 lint。
+- 用户要求停止后，网关、静态服务、两个隧道均已停止，5173/8787 无监听。临时 run/ 脚本、下载工具、日志、真实身份与凭据不纳入提交；HTTPS/WSS 手机音频仍未完成验收，未部署 Pages。
+- 提交前门禁：格式、clippy 全工作区、406 项 Rust 测试、Flutter analyze、295 项 Flutter 测试、5 项启动脚本测试与无凭据预置的 Web release 构建全部通过。规模按当前源码重新统计，Dart 明确仅统计 lib/。
