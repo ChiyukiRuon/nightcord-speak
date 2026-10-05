@@ -40,6 +40,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.4.3
   ffi: ^2.2.0
+  # Browser APIs; already transitive, now used by the remote capability adapters.
+  web: ^1.1.1
   local_notifier: ^0.1.6
   hotkey_manager: ^0.2.3
   # `any` on purpose: the generated localization code imports this, and its

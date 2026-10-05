@@ -2,7 +2,7 @@
 
 import 'package:flutter/services.dart';
 
-import '../ffi/rust_client.dart';
+import '../core/platform/services.dart';
 
 /// Commands the runner sends in when a menu item is chosen.
 ///

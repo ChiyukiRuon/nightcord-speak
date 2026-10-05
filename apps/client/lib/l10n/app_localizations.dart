@@ -1290,6 +1290,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Push to talk'**
   String get shortcutPushToTalk;
+
+  /// No description provided for @gatewayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to your gateway'**
+  String get gatewayTitle;
+
+  /// No description provided for @gatewayDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your gateway address. A token is only needed if the gateway requires one.'**
+  String get gatewayDescription;
+
+  /// No description provided for @gatewayUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway address'**
+  String get gatewayUrlLabel;
+
+  /// No description provided for @gatewayTokenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Access token'**
+  String get gatewayTokenLabel;
+
+  /// No description provided for @gatewayConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to gateway'**
+  String get gatewayConnect;
+
+  /// No description provided for @gatewayInvalidUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a ws:// or wss:// address. HTTPS pages require wss://.'**
+  String get gatewayInvalidUrl;
+
+  /// No description provided for @gatewayTokenRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the gateway access token.'**
+  String get gatewayTokenRequired;
+
+  /// No description provided for @gatewayConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect. Check the address, token and gateway allowed origins.'**
+  String get gatewayConnectionFailed;
+
+  /// No description provided for @webEnableAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable audio'**
+  String get webEnableAudio;
+
+  /// No description provided for @webAudioHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow microphone access and enable audio to join the conversation.'**
+  String get webAudioHint;
+
+  /// No description provided for @navigationChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'Channels'**
+  String get navigationChannels;
+
+  /// No description provided for @voiceHoldToTalk.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to talk'**
+  String get voiceHoldToTalk;
 }
 
 class _AppLocalizationsDelegate

@@ -215,5 +215,17 @@
   "modeMuted": "음소거",
   "shortcutMute": "음소거",
   "shortcutDeafen": "스피커 끄기",
-  "shortcutPushToTalk": "누르고 말하기"
+  "shortcutPushToTalk": "누르고 말하기",
+  "gatewayTitle": "게이트웨이 연결",
+  "gatewayDescription": "게이트웨이 주소를 입력하세요. 토큰은 인증이 설정된 경우에만 필요합니다。",
+  "gatewayUrlLabel": "게이트웨이 주소",
+  "gatewayTokenLabel": "액세스 토큰",
+  "gatewayConnect": "게이트웨이 연결",
+  "gatewayInvalidUrl": "ws:// 또는 wss:// 주소를 입력하세요. HTTPS에는 wss://가 필요합니다.",
+  "gatewayTokenRequired": "액세스 토큰을 입력하세요.",
+  "gatewayConnectionFailed": "주소, 토큰 및 허용된 출처를 확인하세요.",
+  "webEnableAudio": "음성 활성화",
+  "webAudioHint": "마이크 접근을 허용하고 음성을 활성화하세요.",
+  "navigationChannels": "채널",
+  "voiceHoldToTalk": "누르고 말하기"
 }

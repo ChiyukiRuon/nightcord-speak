@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/transport/client_transport.dart';
 import '../design/tokens/app_palette.dart';
-import '../ffi/rust_client.dart';
+import '../core/transport/transport_factory.dart';
 import '../l10n/app_localizations.dart';
 import '../models/domain.dart';
 import '../models/events.dart';
@@ -22,24 +22,11 @@ import '../state/notifications.dart';
 import '../state/server_view.dart';
 import '../util/system_notifications.dart';
 
-/// The running Rust core, started once for the app.
-///
-/// Starting it can fail — the shared library may be missing from the build —
-/// and that is a hard failure rather than something to paper over, so it is
-/// allowed to throw. `main` catches it and shows the reason.
-final rustClientProvider = Provider<RustClient>((ref) {
-  final client = RustClient.start();
+/// The only protocol boundary used by state and features.
+final clientTransportProvider = Provider<ClientTransport>((ref) {
+  final client = createTransport();
   ref.onDispose(client.dispose);
   return client;
-});
-
-/// The one protocol boundary the rest of the app talks through.
-///
-/// Today it hands back the embedded (FFI) transport; when the web build
-/// arrives this is where a remote (WebSocket) transport will be chosen, and
-/// nothing above it changes. See `core/transport/client_transport.dart`.
-final clientTransportProvider = Provider<ClientTransport>((ref) {
-  return ref.watch(rustClientProvider);
 });
 
 /// Every envelope the core publishes.
@@ -48,12 +35,14 @@ final eventStreamProvider = StreamProvider<FfiEvent>((ref) {
 });
 
 /// One accumulated view per session.
-final sessionsProvider =
-    NotifierProvider<SessionsNotifier, Map<int, ServerView>>(SessionsNotifier.new);
+final sessionsProvider = NotifierProvider<SessionsNotifier, Map<int, ServerView>>(
+  SessionsNotifier.new,
+);
 
 /// Which session the UI is showing.
-final activeSessionProvider =
-    NotifierProvider<ActiveSessionNotifier, int?>(ActiveSessionNotifier.new);
+final activeSessionProvider = NotifierProvider<ActiveSessionNotifier, int?>(
+  ActiveSessionNotifier.new,
+);
 
 /// The view the UI should render, or null before anything is connected.
 final activeViewProvider = Provider<ServerView?>((ref) {
@@ -64,8 +53,7 @@ final activeViewProvider = Provider<ServerView?>((ref) {
 });
 
 /// The most recent failure worth telling the user about, if any.
-final lastErrorProvider =
-    NotifierProvider<LastErrorNotifier, ClientError?>(LastErrorNotifier.new);
+final lastErrorProvider = NotifierProvider<LastErrorNotifier, ClientError?>(LastErrorNotifier.new);
 
 /// Accumulates events into per-session views.
 class SessionsNotifier extends Notifier<Map<int, ServerView>> {
@@ -153,9 +141,9 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
       case LaggedEvent(:final missed):
         // The core dropped events, so what is on screen may be stale. Saying so
         // is the honest option; silently rendering a wrong tree is not.
-        ref.read(lastErrorProvider.notifier).report(
-          ClientError(kind: 'lagged', detail: {'missed': missed}),
-        );
+        ref
+            .read(lastErrorProvider.notifier)
+            .report(ClientError(kind: 'lagged', detail: {'missed': missed}));
 
       case UnknownFfiEvent():
         break;
@@ -178,9 +166,9 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
       return;
     }
 
-    ref.read(lastErrorProvider.notifier).report(
-      result.error ?? const ClientError(kind: 'command_failed'),
-    );
+    ref
+        .read(lastErrorProvider.notifier)
+        .report(result.error ?? const ClientError(kind: 'command_failed'));
   }
 
   /// Flips the microphone for [session].
@@ -316,29 +304,19 @@ final voiceStatusProvider = NotifierProvider<VoiceStatusNotifier, VoiceStatus?>(
   VoiceStatusNotifier.new,
 );
 
-final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(
-  BookmarksNotifier.new,
-);
+final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(BookmarksNotifier.new);
 
-final windowFocusProvider = NotifierProvider<WindowFocusNotifier, bool>(
-  WindowFocusNotifier.new,
-);
+final windowFocusProvider = NotifierProvider<WindowFocusNotifier, bool>(WindowFocusNotifier.new);
 
-final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(
-  NoticesNotifier.new,
-);
+final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(NoticesNotifier.new);
 
-final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
-  SettingsNotifier.new,
-);
+final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(SettingsNotifier.new);
 
 /// What the operating system says the user prefers.
 ///
 /// Behind a provider so that "what does the system think" can be answered by a
 /// test without a platform.
-final systemLocalesProvider = Provider<List<Locale>>(
-  (ref) => PlatformDispatcher.instance.locales,
-);
+final systemLocalesProvider = Provider<List<Locale>>((ref) => PlatformDispatcher.instance.locales);
 
 /// The language the UI renders in, always resolved to a supported locale.
 ///
@@ -429,8 +407,7 @@ final themeChoiceProvider = Provider<({AppPalette light, AppPalette dark})>((ref
   return (light: AppPalette.white, dark: AppPalette.black);
 });
 
-final audioDevicesProvider =
-    NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
+final audioDevicesProvider = NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
   AudioDevicesNotifier.new,
 );
 

@@ -951,5 +951,17 @@
   "shortcutPushToTalk": "Push to talk",
   "@shortcutPushToTalk": {
     "description": "Shortcut action: hold to transmit"
-  }
+  },
+  "gatewayTitle": "Connect to your gateway",
+  "gatewayDescription": "Enter your gateway address. A token is only needed if the gateway requires one.",
+  "gatewayUrlLabel": "Gateway address",
+  "gatewayTokenLabel": "Access token",
+  "gatewayConnect": "Connect to gateway",
+  "gatewayInvalidUrl": "Use a ws:// or wss:// address. HTTPS pages require wss://.",
+  "gatewayTokenRequired": "Enter the gateway access token.",
+  "gatewayConnectionFailed": "Could not connect. Check the address, token and gateway allowed origins.",
+  "webEnableAudio": "Enable audio",
+  "webAudioHint": "Allow microphone access and enable audio to join the conversation.",
+  "navigationChannels": "Channels",
+  "voiceHoldToTalk": "Hold to talk"
 }

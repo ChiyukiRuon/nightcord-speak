@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Nightcord Speak — TeamSpeak client">
+  <meta name="theme-color" content="#242034">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Nightcord Speak">
+  <title>Nightcord Speak</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+    #startup { position: fixed; inset: 0; display: grid; place-content: center;
+      padding: 24px; background: #242034; color: #eee9f5; font: 16px/1.6 system-ui, sans-serif; }
+    #startup h1 { font-size: 24px; margin: 0 0 12px; }
+    #startup p { max-width: 32em; margin: 0 0 16px; }
+    #startup button { justify-self: start; font: inherit; padding: 8px 20px; }
+  </style>
+</head>
+<body>
+  <div id="startup" role="status" aria-live="polite">
+    <h1>Nightcord Speak</h1>
+    <p id="startup-message">Loading application… / 正在加载应用…</p>
+    <button id="startup-retry" type="button" hidden>Reload / 重新加载</button>
+  </div>
+  <script src="startup.js"></script>
+  <script src="nightcord-audio.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

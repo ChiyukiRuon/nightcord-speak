@@ -24,10 +24,11 @@ import '../../state/server_view.dart';
 /// The left column of the window.
 class ChannelSidebar extends ConsumerStatefulWidget {
   /// Renders `view`.
-  const ChannelSidebar({required this.view, super.key});
+  const ChannelSidebar({required this.view, this.onOpenChat, super.key});
 
   /// The server to draw.
   final ServerView view;
+  final VoidCallback? onOpenChat;
 
   @override
   ConsumerState<ChannelSidebar> createState() => _ChannelSidebarState();
@@ -73,10 +74,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
       // already happened, and 300 ms of it sliding out of nothing makes the
       // gesture feel unacknowledged.
       popUpAnimationStyle: AnimationStyle.noAnimation,
-      position: RelativeRect.fromRect(
-        position & Size.zero,
-        Offset.zero & overlay.size,
-      ),
+      position: RelativeRect.fromRect(position & Size.zero, Offset.zero & overlay.size),
       items: [
         PopupMenuItem(
           value: _MemberAction.poke,
@@ -171,21 +169,15 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
     final result = await showDialog<_ModerationRequest>(
       context: context,
       builder: (context) => _ModerationDialog(
-        title: scope == KickScope.server
-            ? l10n.memberKickServer
-            : l10n.memberKickChannel,
+        title: scope == KickScope.server ? l10n.memberKickServer : l10n.memberKickChannel,
         subject: member.name,
         reasonLabel: l10n.memberReason,
-        confirm: scope == KickScope.server
-            ? l10n.memberKickServer
-            : l10n.memberKickChannel,
+        confirm: scope == KickScope.server ? l10n.memberKickServer : l10n.memberKickChannel,
       ),
     );
     if (result == null || !mounted) return;
 
-    ref
-        .read(clientTransportProvider)
-        .kick(_view.session, member.id, scope, result.reason);
+    ref.read(clientTransportProvider).kick(_view.session, member.id, scope, result.reason);
   }
 
   /// Bans, with a duration that defaults to permanent.
@@ -203,9 +195,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
     );
     if (result == null || !mounted) return;
 
-    ref
-        .read(clientTransportProvider)
-        .ban(_view.session, member.id, result.duration, result.reason);
+    ref.read(clientTransportProvider).ban(_view.session, member.id, result.duration, result.reason);
   }
 
   /// Adjusts one person's playback gain.
@@ -263,6 +253,14 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
           selected: row.channel.id == _view.ownChannelId,
           unread: _view.channelHasUnread(row.channel.id),
           onJoin: () => _openChannel(row.channel),
+          onOpen: widget.onOpenChat == null
+              ? null
+              : () {
+                  ref
+                      .read(sessionsProvider.notifier)
+                      .openConversation(_view.session, ConversationKey.channel(row.channel.id));
+                  widget.onOpenChat!();
+                },
           onToggle: row.hasChildren ? () => _toggle(row.channel.id) : null,
         ),
       );
@@ -273,6 +271,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
         rows.add(
           _MemberRow(
             member: member,
+            singleTap: widget.onOpenChat != null,
             depth: row.depth + 1,
             speaking: _view.speaking.contains(member.id),
             // Someone else's name is the way into a private conversation with
@@ -280,12 +279,12 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
             // arrives with nowhere to read it.
             onOpen: member.isSelf
                 ? null
-                : () => ref
-                      .read(sessionsProvider.notifier)
-                      .openConversation(
-                        _view.session,
-                        ConversationKey.client(member.id),
-                      ),
+                : () {
+                    ref
+                        .read(sessionsProvider.notifier)
+                        .openConversation(_view.session, ConversationKey.client(member.id));
+                    widget.onOpenChat?.call();
+                  },
             unread: _view.unread.contains(ConversationKey.client(member.id)),
             onMenu: (position) => _openMemberMenu(member, position),
           ),
@@ -298,7 +297,10 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
 
   /// Moves us into a channel.
   void _openChannel(Channel channel) {
-    if (channel.id == _view.ownChannelId) return; // already there
+    if (channel.id == _view.ownChannelId) {
+      Scaffold.maybeOf(context)?.closeDrawer();
+      return;
+    }
     if (!_view.permissions.canJoinChannel) {
       // A Dart-side kind with no payload; `l10n/errors.dart` turns it into the
       // sentence, so no language is baked in here.
@@ -306,6 +308,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
       return;
     }
     ref.read(clientTransportProvider).joinChannel(_view.session, channel.id);
+    Scaffold.maybeOf(context)?.closeDrawer();
   }
 }
 
@@ -330,12 +333,7 @@ class _ServerHeader extends ConsumerWidget {
         onTap: () => _showSwitcher(context, ref, sessions),
         hoverColor: tokens.surface1,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            tokens.space4,
-            tokens.space3,
-            tokens.space3,
-            tokens.space3,
-          ),
+          padding: EdgeInsets.fromLTRB(tokens.space4, tokens.space3, tokens.space3, tokens.space3),
           child: Row(
             children: [
               // §16's large size; the mark takes the theme's primary itself.
@@ -358,11 +356,7 @@ class _ServerHeader extends ConsumerWidget {
 
   /// Lists every session, so several servers can be connected at once and
   /// switched between without disconnecting any of them (§24).
-  void _showSwitcher(
-    BuildContext context,
-    WidgetRef ref,
-    Map<int, ServerView> sessions,
-  ) {
+  void _showSwitcher(BuildContext context, WidgetRef ref, Map<int, ServerView> sessions) {
     final saved = ref.read(bookmarksProvider)?.bookmarks ?? const <Bookmark>[];
     final settings = ref.read(settingsProvider) ?? const Settings();
 
@@ -373,9 +367,7 @@ class _ServerHeader extends ConsumerWidget {
     final server = view.server;
     final isSavedAt = server == null
         ? null
-        : saved.indexWhere(
-            (b) => b.address == server.address && b.protocol == server.protocol,
-          );
+        : saved.indexWhere((b) => b.address == server.address && b.protocol == server.protocol);
     final isSaved = isSavedAt != null && isSavedAt >= 0;
 
     showModalBottomSheet<void>(
@@ -424,15 +416,11 @@ class _ServerHeader extends ConsumerWidget {
                 for (var index = 0; index < saved.length; index++)
                   ListTile(
                     leading: Icon(Icons.bookmark_outline, color: tokens.textSecondary),
-                    title: Text(
-                      saved[index].displayName,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    title: Text(saved[index].displayName, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       saved[index].address,
-                      style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                        color: tokens.textTertiary,
-                      ),
+                      style: Theme.of(sheetContext).textTheme.bodySmall
+                          ?.copyWith(color: tokens.textTertiary),
                     ),
                     // Connects straight away here, unlike the connect screen:
                     // this sheet is for "open another one", and the details of a
@@ -458,20 +446,15 @@ class _ServerHeader extends ConsumerWidget {
                             ref
                                 .read(bookmarksProvider.notifier)
                                 .update(
-                                  (ref.read(bookmarksProvider) ?? const BookmarkList())
-                                      .removeAt(index),
+                                  (ref.read(bookmarksProvider) ?? const BookmarkList()).removeAt(
+                                    index,
+                                  ),
                                 );
                         }
                       },
                       itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: _SavedAction.edit,
-                          child: Text(l10n.sidebarEditSaved),
-                        ),
-                        PopupMenuItem(
-                          value: _SavedAction.delete,
-                          child: Text(l10n.connectDelete),
-                        ),
+                        PopupMenuItem(value: _SavedAction.edit, child: Text(l10n.sidebarEditSaved)),
+                        PopupMenuItem(value: _SavedAction.delete, child: Text(l10n.connectDelete)),
                       ],
                     ),
                   ),
@@ -502,9 +485,7 @@ class _ServerHeader extends ConsumerWidget {
                   isSaved ? Icons.bookmark : Icons.bookmark_add_outlined,
                   color: tokens.textSecondary,
                 ),
-                title: Text(
-                  isSaved ? l10n.sidebarBookmarkRemove : l10n.sidebarBookmarkAdd,
-                ),
+                title: Text(isSaved ? l10n.sidebarBookmarkRemove : l10n.sidebarBookmarkAdd),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   final notifier = ref.read(bookmarksProvider.notifier);
@@ -563,16 +544,18 @@ class _ServerHeader extends ConsumerWidget {
     );
     if (edited == null) return;
 
-    ref.read(bookmarksProvider.notifier).add(
-      NewBookmark(
-        name: edited.name,
-        address: edited.address,
-        nickname: edited.nickname,
-        protocol: edited.protocol,
-        serverPassword: edited.serverPassword,
-        replaces: bookmark.address,
-      ),
-    );
+    ref
+        .read(bookmarksProvider.notifier)
+        .add(
+          NewBookmark(
+            name: edited.name,
+            address: edited.address,
+            nickname: edited.nickname,
+            protocol: edited.protocol,
+            serverPassword: edited.serverPassword,
+            replaces: bookmark.address,
+          ),
+        );
   }
 
   static String _stateLabel(AppLocalizations l10n, ConnectionState state) => switch (state) {
@@ -595,6 +578,7 @@ class _ChannelRow extends StatefulWidget {
   const _ChannelRow({
     required this.row,
     required this.collapsed,
+    this.onOpen,
     required this.selected,
     required this.onJoin,
     this.onToggle,
@@ -603,6 +587,7 @@ class _ChannelRow extends StatefulWidget {
 
   final TreeRow row;
   final bool collapsed;
+  final VoidCallback? onOpen;
   final bool selected;
 
   /// Moves us into this channel, on a double click.
@@ -650,14 +635,13 @@ class _ChannelRowState extends State<_ChannelRow> {
           color: widget.selected ? tokens.surface1 : Colors.transparent,
           borderRadius: AppRadius.smAll,
           child: InkWell(
-            onDoubleTap: widget.onJoin,
+            onTap: widget.onOpen,
+            onDoubleTap: widget.onOpen == null ? widget.onJoin : null,
+            onLongPress: widget.onJoin,
             borderRadius: AppRadius.smAll,
             hoverColor: tokens.channelHoverBg,
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: tokens.space2,
-                vertical: tokens.space2,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: tokens.space2, vertical: tokens.space2),
               child: Row(
                 children: [
                   if (widget.onToggle != null)
@@ -672,11 +656,7 @@ class _ChannelRowState extends State<_ChannelRow> {
                   else
                     const SizedBox(width: 16),
                   SizedBox(width: tokens.space1),
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    size: 16,
-                    color: contentColour,
-                  ),
+                  Icon(Icons.chat_bubble_outline, size: 16, color: contentColour),
                   SizedBox(width: tokens.space2),
                   Expanded(
                     child: Text(
@@ -693,11 +673,7 @@ class _ChannelRowState extends State<_ChannelRow> {
                   if (row.channel.hasPassword)
                     Padding(
                       padding: EdgeInsets.only(left: tokens.space1),
-                      child: Icon(
-                        Icons.lock_outline,
-                        size: 16,
-                        color: tokens.textTertiary,
-                      ),
+                      child: Icon(Icons.lock_outline, size: 16, color: tokens.textTertiary),
                     ),
                   if (widget.unread)
                     Padding(
@@ -718,6 +694,7 @@ class _ChannelRowState extends State<_ChannelRow> {
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
+    this.singleTap = false,
     required this.depth,
     this.speaking = false,
     this.onOpen,
@@ -726,6 +703,7 @@ class _MemberRow extends StatelessWidget {
   });
 
   final Client member;
+  final bool singleTap;
   final int depth;
 
   /// Whether this person is talking right now.
@@ -767,81 +745,79 @@ class _MemberRow extends StatelessWidget {
       color: Colors.transparent,
       borderRadius: AppRadius.smAll,
       child: InkWell(
-        onDoubleTap: onOpen,
-        onSecondaryTapDown: onMenu == null
+        onTap: singleTap ? onOpen : null,
+        onDoubleTap: singleTap ? null : onOpen,
+        onLongPress: onMenu == null
             ? null
-            : (details) => onMenu!(details.globalPosition),
+            : () {
+                final box = context.findRenderObject()! as RenderBox;
+                onMenu!(box.localToGlobal(box.size.center(Offset.zero)));
+              },
+        onSecondaryTapDown: onMenu == null ? null : (details) => onMenu!(details.globalPosition),
         borderRadius: AppRadius.smAll,
         hoverColor: tokens.channelHoverBg,
         child: Padding(
-        padding: EdgeInsets.only(
-          left: tokens.space6 + depth * tokens.space3,
-          right: tokens.space2,
-          top: tokens.space1 / 2,
-          bottom: tokens.space1 / 2,
-        ),
-        child: Row(
-          children: [
-            // §22's compact size.
-            Avatar(name: member.name, size: 28),
-            SizedBox(width: tokens.space2),
-            Expanded(
-              // The away message rides with the name rather than hiding in a
-              // tooltip: nobody hovers to find out why someone is quiet, and
-              // the message is the whole answer. One `Text.rich` rather than
-              // two widgets side by side, so the name keeps its room and the
-              // message takes what is left — the line ellipsizes once, at the
-              // end, instead of squeezing the name to half a row.
-              child: Text.rich(
-                TextSpan(
-                  text: member.name,
-                  children: [
-                    if (member.awayMessage case final message?)
-                      TextSpan(
-                        text: ' ($message)',
-                        style: text.bodySmall?.copyWith(color: tokens.textSecondary),
-                      ),
-                  ],
+          padding: EdgeInsets.only(
+            left: tokens.space6 + depth * tokens.space3,
+            right: tokens.space2,
+            top: tokens.space1 / 2,
+            bottom: tokens.space1 / 2,
+          ),
+          child: Row(
+            children: [
+              // §22's compact size.
+              Avatar(name: member.name, size: 28),
+              SizedBox(width: tokens.space2),
+              Expanded(
+                // The away message rides with the name rather than hiding in a
+                // tooltip: nobody hovers to find out why someone is quiet, and
+                // the message is the whole answer. One `Text.rich` rather than
+                // two widgets side by side, so the name keeps its room and the
+                // message takes what is left — the line ellipsizes once, at the
+                // end, instead of squeezing the name to half a row.
+                child: Text.rich(
+                  TextSpan(
+                    text: member.name,
+                    children: [
+                      if (member.awayMessage case final message?)
+                        TextSpan(
+                          text: ' ($message)',
+                          style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                        ),
+                    ],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  style: (member.isSelf ? text.titleMedium : text.bodyMedium)?.copyWith(
+                    color: nameColour,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-                style: (member.isSelf ? text.titleMedium : text.bodyMedium)?.copyWith(
-                  color: nameColour,
+              ),
+              if (member.flags.away)
+                StateBadge(
+                  colour: tokens.idle,
+                  tooltip: l10n.memberAway,
+                  // The same glyph the voice bar's away button wears, so the
+                  // badge and the button read as one fact.
+                  icon: Icons.snooze,
                 ),
-              ),
-            ),
-            if (member.flags.away)
-              StateBadge(
-                colour: tokens.idle,
-                tooltip: l10n.memberAway,
-                // The same glyph the voice bar's away button wears, so the
-                // badge and the button read as one fact.
-                icon: Icons.snooze,
-              ),
-            if (member.flags.inputMuted)
-              StateBadge(
-                colour: tokens.error,
-                tooltip: l10n.memberMuted,
-                icon: Icons.mic_off,
-              ),
-            // Deafened is its own badge, not a quieter microphone: the two say
-            // different things about who can hear whom, and the official client
-            // draws them apart for the same reason.
-            if (member.flags.outputMuted)
-              StateBadge(
-                colour: tokens.error,
-                tooltip: l10n.memberDeafened,
-                icon: Icons.headset_off,
-              ),
-            if (member.flags.recording)
-              StateBadge(
-                colour: tokens.error,
-                tooltip: l10n.memberRecording,
-                icon: Icons.fiber_manual_record,
-              ),
-              if (unread) ...[
-                SizedBox(width: tokens.space2),
-                const UnreadDot(),
-              ],
+              if (member.flags.inputMuted)
+                StateBadge(colour: tokens.error, tooltip: l10n.memberMuted, icon: Icons.mic_off),
+              // Deafened is its own badge, not a quieter microphone: the two say
+              // different things about who can hear whom, and the official client
+              // draws them apart for the same reason.
+              if (member.flags.outputMuted)
+                StateBadge(
+                  colour: tokens.error,
+                  tooltip: l10n.memberDeafened,
+                  icon: Icons.headset_off,
+                ),
+              if (member.flags.recording)
+                StateBadge(
+                  colour: tokens.error,
+                  tooltip: l10n.memberRecording,
+                  icon: Icons.fiber_manual_record,
+                ),
+              if (unread) ...[SizedBox(width: tokens.space2), const UnreadDot()],
             ],
           ),
         ),
@@ -852,11 +828,7 @@ class _MemberRow extends StatelessWidget {
 
     // The menu is on the secondary button, so the row also has to say what a
     // right-click would open for anyone who cannot perform one.
-    return Semantics(
-      label: l10n.memberMenu(member.name),
-      onTap: onOpen,
-      child: row,
-    );
+    return Semantics(label: l10n.memberMenu(member.name), onTap: onOpen, child: row);
   }
 }
 
@@ -882,9 +854,7 @@ class _BookmarkDialogState extends State<_BookmarkDialog> {
   late final _name = TextEditingController(text: widget.bookmark.name);
   late final _address = TextEditingController(text: widget.bookmark.address);
   late final _nickname = TextEditingController(text: widget.bookmark.nickname ?? '');
-  late final _password = TextEditingController(
-    text: widget.bookmark.serverPassword ?? '',
-  );
+  late final _password = TextEditingController(text: widget.bookmark.serverPassword ?? '');
   late ProtocolKind _protocol = widget.bookmark.protocol;
 
   @override
@@ -955,17 +925,13 @@ class _BookmarkDialogState extends State<_BookmarkDialog> {
               ],
               selected: {_protocol},
               showSelectedIcon: false,
-              onSelectionChanged: (selection) =>
-                  setState(() => _protocol = selection.first),
+              onSelectionChanged: (selection) => setState(() => _protocol = selection.first),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
         FilledButton(
           onPressed: () {
             final edited = _collect();
@@ -1051,10 +1017,7 @@ class _PermissionsDialog extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
       ],
     );
   }
@@ -1120,10 +1083,7 @@ class _ChannelPickerDialogState extends State<_ChannelPickerDialog> {
         onChanged: (id) => setState(() => _chosen = id),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
         FilledButton(
           onPressed: _chosen == null ? null : () => Navigator.of(context).pop(_chosen),
           child: Text(widget.confirm),
@@ -1228,17 +1188,11 @@ class _ModerationDialogState extends State<_ModerationDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(
-            _ModerationRequest(
-              _reason.text.isEmpty ? null : _reason.text,
-              _duration,
-            ),
-          ),
+          onPressed: () =>
+              Navigator.of(context)
+                  .pop(_ModerationRequest(_reason.text.isEmpty ? null : _reason.text, _duration)),
           child: Text(widget.confirm),
         ),
       ],
@@ -1248,11 +1202,7 @@ class _ModerationDialogState extends State<_ModerationDialog> {
 
 /// Adjusts one person's playback gain.
 class _VolumeDialog extends StatefulWidget {
-  const _VolumeDialog({
-    required this.title,
-    required this.hint,
-    required this.initial,
-  });
+  const _VolumeDialog({required this.title, required this.hint, required this.initial});
 
   final String title;
   final String hint;
@@ -1293,22 +1243,12 @@ class _VolumeDialogState extends State<_VolumeDialog> {
               ),
             ],
           ),
-          Slider(
-            value: _value,
-            max: _max,
-            onChanged: (value) => setState(() => _value = value),
-          ),
-          Text(
-            widget.hint,
-            style: text.bodySmall?.copyWith(color: tokens.textTertiary),
-          ),
+          Slider(value: _value, max: _max, onChanged: (value) => setState(() => _value = value)),
+          Text(widget.hint, style: text.bodySmall?.copyWith(color: tokens.textTertiary)),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_value),
           child: Text(l10n.saveButton),

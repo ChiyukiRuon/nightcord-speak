@@ -707,4 +707,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shortcutPushToTalk => 'Push to talk';
+
+  @override
+  String get gatewayTitle => 'Connect to your gateway';
+
+  @override
+  String get gatewayDescription =>
+      'Enter your gateway address. A token is only needed if the gateway requires one.';
+
+  @override
+  String get gatewayUrlLabel => 'Gateway address';
+
+  @override
+  String get gatewayTokenLabel => 'Access token';
+
+  @override
+  String get gatewayConnect => 'Connect to gateway';
+
+  @override
+  String get gatewayInvalidUrl =>
+      'Use a ws:// or wss:// address. HTTPS pages require wss://.';
+
+  @override
+  String get gatewayTokenRequired => 'Enter the gateway access token.';
+
+  @override
+  String get gatewayConnectionFailed =>
+      'Could not connect. Check the address, token and gateway allowed origins.';
+
+  @override
+  String get webEnableAudio => 'Enable audio';
+
+  @override
+  String get webAudioHint =>
+      'Allow microphone access and enable audio to join the conversation.';
+
+  @override
+  String get navigationChannels => 'Channels';
+
+  @override
+  String get voiceHoldToTalk => 'Hold to talk';
 }

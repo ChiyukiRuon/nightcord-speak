@@ -10,7 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'design/theme/app_theme.dart';
 import 'design/tokens/app_palette.dart';
-import 'ffi/rust_client.dart';
+import 'core/platform/services.dart';
+import 'core/transport/client_transport.dart';
+import 'core/transport/transport_factory.dart';
+import 'features/gateway/gateway_gate.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
 import 'widgets/startup_failure.dart';
@@ -26,12 +29,12 @@ void main() {
   // The core is started before the first frame rather than lazily by a
   // provider, so a missing or mismatched shared library produces one clear
   // screen instead of an exception thrown from inside a build method.
-  RustClient? client;
+  ClientTransport? client;
   Object? failure;
   StackTrace? trace;
 
   try {
-    client = RustClient.start();
+    client = createTransport();
   } catch (error, stack) {
     failure = error;
     trace = stack;
@@ -58,7 +61,7 @@ void main() {
   runApp(
     ProviderScope(
       // The already-started client, so nothing starts a second one.
-      overrides: [rustClientProvider.overrideWithValue(client!)],
+      overrides: [clientTransportProvider.overrideWithValue(client!)],
       child: const NightcordApp(),
     ),
   );
@@ -101,6 +104,10 @@ class NightcordApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Subscribe before the gateway handshake. Settings also listens to the
+    // stream, so buffering until its first listener cannot protect a session
+    // snapshot that arrives before the connected shell mounts.
+    ref.watch(sessionsProvider);
     // Both resolved to concrete values in `providers.dart` — see there for why
     // neither is left to `MaterialApp`'s own resolution.
     final locale = ref.watch(localeProvider);
@@ -128,7 +135,7 @@ class NightcordApp extends ConsumerWidget {
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const AppShell(),
+      home: const GatewayGate(child: AppShell()),
     );
   }
 }

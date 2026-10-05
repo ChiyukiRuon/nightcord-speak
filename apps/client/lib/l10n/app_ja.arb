@@ -216,5 +216,17 @@
   "modeMuted": "ミュート",
   "shortcutMute": "ミュート",
   "shortcutDeafen": "スピーカーをオフ",
-  "shortcutPushToTalk": "プッシュトゥトーク"
+  "shortcutPushToTalk": "プッシュトゥトーク",
+  "gatewayTitle": "ゲートウェイに接続",
+  "gatewayDescription": "ゲートウェイのアドレスを入力してください。トークンは認証が有効な場合のみ必要です。",
+  "gatewayUrlLabel": "ゲートウェイアドレス",
+  "gatewayTokenLabel": "アクセストークン",
+  "gatewayConnect": "ゲートウェイに接続",
+  "gatewayInvalidUrl": "ws:// または wss:// を入力してください。HTTPS には wss:// が必要です。",
+  "gatewayTokenRequired": "トークンを入力してください。",
+  "gatewayConnectionFailed": "接続できません。アドレス、トークン、許可されたオリジンを確認してください。",
+  "webEnableAudio": "音声を有効にする",
+  "webAudioHint": "マイクへのアクセスを許可して音声を有効にしてください。",
+  "navigationChannels": "チャンネル",
+  "voiceHoldToTalk": "押して話す"
 }

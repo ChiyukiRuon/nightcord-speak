@@ -661,6 +661,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shortcutPushToTalk => '按键说话';
+
+  @override
+  String get gatewayTitle => '连接到你的网关';
+
+  @override
+  String get gatewayDescription => '输入网关地址即可连接，仅在网关启用鉴权时需要访问密钥。';
+
+  @override
+  String get gatewayUrlLabel => '网关地址';
+
+  @override
+  String get gatewayTokenLabel => '访问令牌';
+
+  @override
+  String get gatewayConnect => '连接网关';
+
+  @override
+  String get gatewayInvalidUrl => '请输入 ws:// 或 wss:// 地址；HTTPS 页面须使用 wss://。';
+
+  @override
+  String get gatewayTokenRequired => '请输入网关访问令牌。';
+
+  @override
+  String get gatewayConnectionFailed => '连接失败，请检查地址、令牌以及网关允许的页面来源。';
+
+  @override
+  String get webEnableAudio => '启用语音';
+
+  @override
+  String get webAudioHint => '请允许麦克风权限并启用语音，加入对话。';
+
+  @override
+  String get navigationChannels => '频道';
+
+  @override
+  String get voiceHoldToTalk => '按住说话';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1319,4 +1355,40 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get shortcutPushToTalk => '按鍵發話';
+
+  @override
+  String get gatewayTitle => '連線至你的閘道';
+
+  @override
+  String get gatewayDescription => '輸入閘道位址即可連線，僅在閘道啟用驗證時需要存取金鑰。';
+
+  @override
+  String get gatewayUrlLabel => '閘道位址';
+
+  @override
+  String get gatewayTokenLabel => '存取權杖';
+
+  @override
+  String get gatewayConnect => '連線閘道';
+
+  @override
+  String get gatewayInvalidUrl => '請輸入 ws:// 或 wss:// 位址；HTTPS 頁面須使用 wss://。';
+
+  @override
+  String get gatewayTokenRequired => '請輸入閘道存取權杖。';
+
+  @override
+  String get gatewayConnectionFailed => '連線失敗，請檢查位址、權杖及閘道允許的網頁來源。';
+
+  @override
+  String get webEnableAudio => '啟用語音';
+
+  @override
+  String get webAudioHint => '請允許麥克風權限並啟用語音，加入對話。';
+
+  @override
+  String get navigationChannels => '頻道';
+
+  @override
+  String get voiceHoldToTalk => '按住說話';
 }

@@ -1,0 +1,14 @@
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/flutter_bootstrap.js
+  Cache-Control: no-cache
+/main.dart.js
+  Cache-Control: no-cache
+/startup.js
+  Cache-Control: no-cache
+/nightcord-audio.js
+  Cache-Control: no-cache
+/pcm-worklet.js
+  Cache-Control: no-cache

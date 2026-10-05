@@ -669,4 +669,41 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get shortcutPushToTalk => '누르고 말하기';
+
+  @override
+  String get gatewayTitle => '게이트웨이 연결';
+
+  @override
+  String get gatewayDescription => '게이트웨이 주소를 입력하세요. 토큰은 인증이 설정된 경우에만 필요합니다。';
+
+  @override
+  String get gatewayUrlLabel => '게이트웨이 주소';
+
+  @override
+  String get gatewayTokenLabel => '액세스 토큰';
+
+  @override
+  String get gatewayConnect => '게이트웨이 연결';
+
+  @override
+  String get gatewayInvalidUrl =>
+      'ws:// 또는 wss:// 주소를 입력하세요. HTTPS에는 wss://가 필요합니다.';
+
+  @override
+  String get gatewayTokenRequired => '액세스 토큰을 입력하세요.';
+
+  @override
+  String get gatewayConnectionFailed => '주소, 토큰 및 허용된 출처를 확인하세요.';
+
+  @override
+  String get webEnableAudio => '음성 활성화';
+
+  @override
+  String get webAudioHint => '마이크 접근을 허용하고 음성을 활성화하세요.';
+
+  @override
+  String get navigationChannels => '채널';
+
+  @override
+  String get voiceHoldToTalk => '누르고 말하기';
 }

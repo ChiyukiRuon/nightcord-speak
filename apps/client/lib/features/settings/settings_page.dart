@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design/theme/app_theme.dart';
+import '../../layout/adaptive_shell.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
@@ -40,14 +41,7 @@ const double _navWidth = 240;
 const double _contentWidth = 640;
 
 /// The page's sections, in the order the navigation column lists them.
-enum _Section {
-  audio,
-  connection,
-  notifications,
-  shortcuts,
-  interface,
-  log,
-}
+enum _Section { audio, connection, notifications, shortcuts, interface, log }
 
 extension on _Section {
   /// What the section is called, in the navigation column and as the heading
@@ -97,9 +91,8 @@ class SettingsPage extends ConsumerStatefulWidget {
   /// this is also the app's first pushed route, and the second call site is
   /// where a route with different arguments would otherwise appear.
   static Future<void> open(BuildContext context, {int? session}) =>
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => SettingsPage(session: session)),
-      );
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => SettingsPage(session: session)));
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -124,28 +117,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final tokens = DesignTokens.of(context);
     final settings = ref.watch(settingsProvider);
 
     // A `Scaffold` of its own, not just a Row: errors are shown through
     // `ScaffoldMessenger`, which hands the bar to every registered `Scaffold` —
     // without one here, a failed settings write would put its SnackBar on the
     // shell's Scaffold *behind* this page and the user would see nothing.
-    return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AdaptiveShell(
+      navigationWidth: _navWidth,
+      mobileTitle: l10n.settingsTitle,
+      mobileDetailTitle: _section.label(l10n),
+      mobileNavigationBuilder: (open) => ListView(
         children: [
-          SizedBox(
-            width: _navWidth,
-            child: _SettingsNav(
-              selected: _section,
-              onSelect: (section) => setState(() => _section = section),
+          for (final section in _Section.values)
+            ListTile(
+              leading: Icon(section.icon),
+              title: Text(section.label(l10n)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                setState(() => _section = section);
+                open();
+              },
             ),
-          ),
-          VerticalDivider(width: 1, color: tokens.borderSubtle),
-          Expanded(child: _content(l10n, settings)),
         ],
       ),
+      mobileActions: [
+        IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+      navigation: _SettingsNav(
+        selected: _section,
+        onSelect: (section) => setState(() => _section = section),
+      ),
+      content: _content(l10n, settings),
     );
   }
 
@@ -184,9 +191,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               if (settings == null)
                 Text(
                   l10n.settingsLoading,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: tokens.textSecondary),
                 )
               else
                 _sectionBody(settings),
@@ -239,7 +245,10 @@ class _SettingsNav extends StatelessWidget {
                     section: section,
                     label: section.label(l10n),
                     selected: section == selected,
-                    onTap: () => onSelect(section),
+                    onTap: () {
+                      onSelect(section);
+                      Scaffold.maybeOf(context)?.closeDrawer();
+                    },
                   ),
               ],
             ),
@@ -278,12 +287,7 @@ class _NavHeader extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          tokens.space3,
-          tokens.space3,
-          tokens.space4,
-          tokens.space3,
-        ),
+        padding: EdgeInsets.fromLTRB(tokens.space3, tokens.space3, tokens.space4, tokens.space3),
         child: Row(
           children: [
             SizedBox(
@@ -343,18 +347,13 @@ class _NavItemState extends State<_NavItem> {
   Widget build(BuildContext context) {
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
-    final contentColour = widget.selected || _hovered
-        ? tokens.textPrimary
-        : tokens.textSecondary;
+    final contentColour = widget.selected || _hovered ? tokens.textPrimary : tokens.textSecondary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.space3,
-          vertical: tokens.space1,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: tokens.space3, vertical: tokens.space1),
         child: Material(
           color: widget.selected ? tokens.surface1 : Colors.transparent,
           borderRadius: AppRadius.smAll,
@@ -363,10 +362,7 @@ class _NavItemState extends State<_NavItem> {
             borderRadius: AppRadius.smAll,
             hoverColor: tokens.channelHoverBg,
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: tokens.space3,
-                vertical: tokens.space2,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: tokens.space3, vertical: tokens.space2),
               child: Row(
                 children: [
                   Icon(widget.section.icon, size: 20, color: contentColour),

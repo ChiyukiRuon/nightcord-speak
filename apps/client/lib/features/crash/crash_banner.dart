@@ -1,3 +1,4 @@
+import '../../core/platform/services.dart';
 // The strip across the top when the previous session did not exit cleanly.
 
 import 'package:flutter/material.dart';
@@ -80,14 +81,12 @@ class CrashBanner extends ConsumerWidget {
   /// buys nothing.
   void _generate(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final result = ref.read(rustClientProvider).buildCrashReport();
+    final result = buildCrashReport(ref.read(clientTransportProvider));
 
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(
-          result.path != null
-              ? l10n.crashReportWritten(result.path!)
-              : l10n.crashReportFailed,
+          result.path != null ? l10n.crashReportWritten(result.path!) : l10n.crashReportFailed,
         ),
         duration: const Duration(seconds: 10),
         action: result.path == null

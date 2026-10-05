@@ -216,5 +216,17 @@
   "modeMuted": "靜音",
   "shortcutMute": "靜音",
   "shortcutDeafen": "關閉喇叭",
-  "shortcutPushToTalk": "按鍵發話"
+  "shortcutPushToTalk": "按鍵發話",
+  "gatewayTitle": "連線至你的閘道",
+  "gatewayDescription": "輸入閘道位址即可連線，僅在閘道啟用驗證時需要存取金鑰。",
+  "gatewayUrlLabel": "閘道位址",
+  "gatewayTokenLabel": "存取權杖",
+  "gatewayConnect": "連線閘道",
+  "gatewayInvalidUrl": "請輸入 ws:// 或 wss:// 位址；HTTPS 頁面須使用 wss://。",
+  "gatewayTokenRequired": "請輸入閘道存取權杖。",
+  "gatewayConnectionFailed": "連線失敗，請檢查位址、權杖及閘道允許的網頁來源。",
+  "webEnableAudio": "啟用語音",
+  "webAudioHint": "請允許麥克風權限並啟用語音，加入對話。",
+  "navigationChannels": "頻道",
+  "voiceHoldToTalk": "按住說話"
 }

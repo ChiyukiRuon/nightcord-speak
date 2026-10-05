@@ -78,21 +78,14 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                   itemBuilder: (_, index) => _MessageTile(message: messages[index]),
                 ),
         ),
-        _Composer(
-          controller: _composer,
-          onSend: _send,
-          enabled: _canSend,
-          hint: _hint,
-        ),
+        _Composer(controller: _composer, onSend: _send, enabled: _canSend, hint: _hint),
       ],
     );
   }
 
   /// Whether a message can be sent right now.
   bool get _canSend =>
-      _view.isConnected &&
-      _view.ownChannelId != null &&
-      _view.permissions.canSendChannelMessage;
+      _view.isConnected && _view.ownChannelId != null && _view.permissions.canSendChannelMessage;
 
   /// What the input box says about itself.
   ///
@@ -182,10 +175,7 @@ class _ChatHeader extends ConsumerWidget {
     return Container(
       // §2.2: the band above the content is a secondary area.
       color: tokens.bgSidebar,
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.space5,
-        vertical: tokens.space3,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: tokens.space5, vertical: tokens.space3),
       child: Row(
         children: [
           // One fixed box for both, because the two were not the same height:
@@ -204,22 +194,20 @@ class _ChatHeader extends ConsumerWidget {
                     tooltip: l10n.chatBackToChannel,
                     // Through the notifier: see
                     // `SessionsNotifier.openConversation`.
-                    onPressed: () => ref
-                        .read(sessionsProvider.notifier)
-                        .closeConversation(view.session),
+                    onPressed: () =>
+                        ref.read(sessionsProvider.notifier).closeConversation(view.session),
                   )
-                : Icon(
-                    Icons.chat_bubble_outline,
-                    size: 20,
-                    color: tokens.textSecondary,
-                  ),
+                : Icon(Icons.chat_bubble_outline, size: 20, color: tokens.textSecondary),
           ),
           SizedBox(width: tokens.space2),
-          Text(
-            other?.name ?? channel?.name ?? l10n.chatNotInChannel,
-            // §12.2's `title`: this is the heading of the whole content area,
-            // which is what the level is for.
-            style: text.titleLarge,
+          Expanded(
+            child: Text(
+              other?.name ?? channel?.name ?? l10n.chatNotInChannel,
+              overflow: TextOverflow.ellipsis,
+              // §12.2's `title`: this is the heading of the whole content area,
+              // which is what the level is for.
+              style: text.titleLarge,
+            ),
           ),
           if (other != null)
             Padding(
@@ -229,12 +217,9 @@ class _ChatHeader extends ConsumerWidget {
                 style: text.bodySmall?.copyWith(color: tokens.textTertiary),
               ),
             ),
-          if (channel?.topic != null && channel!.topic!.isNotEmpty) ...[
+          if (channel?.topic != null && channel!.topic!.isNotEmpty && other == null) ...[
             SizedBox(width: tokens.space3),
-            SizedBox(
-              height: 16,
-              child: VerticalDivider(width: 1, color: tokens.borderSubtle),
-            ),
+            SizedBox(height: 16, child: VerticalDivider(width: 1, color: tokens.borderSubtle)),
             SizedBox(width: tokens.space3),
             Expanded(
               child: Text(
@@ -244,7 +229,6 @@ class _ChatHeader extends ConsumerWidget {
               ),
             ),
           ],
-          const Spacer(),
           if (view.info != null)
             Text(
               l10n.chatOnlineCount(view.info!.clientsOnline),
@@ -280,9 +264,7 @@ class _EmptyChannel extends StatelessWidget {
           SizedBox(height: tokens.space3),
           Text(
             AppLocalizations.of(context).chatEmpty,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: tokens.textTertiary),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: tokens.textTertiary),
           ),
         ],
       ),
@@ -307,10 +289,7 @@ class _MessageTile extends StatelessWidget {
     // put a sentence in their mouth — they only chose to make a client beep.
     if (message.isPoke) {
       return Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.space5,
-          vertical: tokens.space2,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: tokens.space5, vertical: tokens.space2),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -341,10 +320,7 @@ class _MessageTile extends StatelessWidget {
       // "same sender" from "different sender" — the view does not keep that
       // grouping, and inventing it here would mean guessing at data the core
       // never sent.
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.space5,
-        vertical: tokens.space2,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: tokens.space5, vertical: tokens.space2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -505,12 +481,7 @@ class _Composer extends StatelessWidget {
     final tokens = DesignTokens.of(context);
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        tokens.space5,
-        tokens.space2,
-        tokens.space5,
-        tokens.space4,
-      ),
+      padding: EdgeInsets.fromLTRB(tokens.space5, tokens.space2, tokens.space5, tokens.space4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [

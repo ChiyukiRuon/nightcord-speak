@@ -1,6 +1,5 @@
 // Chooses what the window shows: the connect screen, or a server.
 
-import 'dart:io' show Platform;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
@@ -13,7 +12,7 @@ import '../features/shortcuts/shortcut_host.dart';
 import '../features/notifications/notice_stack.dart';
 import '../features/server/server_page.dart';
 import '../features/settings/settings_page.dart';
-import '../ffi/rust_client.dart';
+import '../core/platform/services.dart';
 import '../models/connect_request.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/errors.dart';
@@ -194,7 +193,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
     // Asked before anything can fail again, and answered without the core —
     // see the no-handle exports in `ffi/bindings.dart`.
-    _crash = ref.read(rustClientProvider).crashStatus();
+    _crash = readCrashStatus(ref.read(clientTransportProvider));
 
     _exitListener = AppLifecycleListener(
       onExitRequested: () {
@@ -249,15 +248,15 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
   void _autoConnect(Settings? settings) {
     if (settings == null || _autoConnected || !mounted) return;
 
-    final raw = Platform.environment[_autoConnectVar];
+    final raw = environmentValue(_autoConnectVar);
     if (raw == null || raw.isEmpty) return;
 
     _autoConnected = true;
 
     // The environment wins where it says anything: it is the development aid,
     // and a saved preference must not quietly override what a script asked for.
-    final nickname = Platform.environment[_nicknameVar];
-    final profile = Platform.environment[_profileVar];
+    final nickname = environmentValue(_nicknameVar);
+    final profile = environmentValue(_profileVar);
 
     final client = ref.read(clientTransportProvider);
     for (final address in raw.split(',').map((part) => part.trim())) {
@@ -270,9 +269,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
           nickname: (nickname == null || nickname.isEmpty)
               ? settings.connection.nickname
               : nickname,
-          profile: (profile == null || profile.isEmpty)
-              ? settings.connection.profile
-              : profile,
+          profile: (profile == null || profile.isEmpty) ? settings.connection.profile : profile,
         ),
       );
     }
@@ -324,7 +321,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
                 status: _crash,
                 onDismissed: () => setState(() => _crashDismissed = true),
                 onResolved: () =>
-                    setState(() => _crash = ref.read(rustClientProvider).crashStatus()),
+                    setState(() => _crash = readCrashStatus(ref.read(clientTransportProvider))),
               ),
             ),
         ],

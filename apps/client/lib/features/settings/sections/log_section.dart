@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../design/theme/app_theme.dart';
-import '../../../ffi/rust_client.dart';
+import '../../../core/platform/services.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../util/reveal.dart';
 

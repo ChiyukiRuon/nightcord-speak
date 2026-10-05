@@ -7,20 +7,14 @@
 import 'package:flutter/material.dart';
 
 import '../design/theme/app_theme.dart';
-import '../ffi/native.dart';
-import '../ffi/rust_client.dart';
+import '../core/platform/services.dart';
 import '../l10n/app_localizations.dart';
 import '../util/reveal.dart';
 
 /// A minimal app that explains why the core is missing.
 class StartupFailureApp extends StatelessWidget {
   /// Wraps the failure.
-  const StartupFailureApp({
-    required this.error,
-    required this.theme,
-    this.stackTrace,
-    super.key,
-  });
+  const StartupFailureApp({required this.error, required this.theme, this.stackTrace, super.key});
 
   /// What went wrong.
   final Object error;
@@ -98,7 +92,7 @@ class _FailureScreen extends StatelessWidget {
                   '$error',
                   style: mono(AppTypography.bodySize, tokens.textSecondary, height: 1.5),
                 ),
-                if (error is! NativeLibraryNotFound && stackTrace != null) ...[
+                if (!isMissingNativeLibrary(error) && stackTrace != null) ...[
                   const SizedBox(height: AppSpacing.space6),
                   Text(l10n.stackTraceLabel, style: text.titleMedium),
                   const SizedBox(height: AppSpacing.space2),

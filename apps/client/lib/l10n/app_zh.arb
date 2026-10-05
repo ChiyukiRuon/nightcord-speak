@@ -216,5 +216,17 @@
   "modeMuted": "静音",
   "shortcutMute": "静音",
   "shortcutDeafen": "关闭扬声器",
-  "shortcutPushToTalk": "按键说话"
+  "shortcutPushToTalk": "按键说话",
+  "gatewayTitle": "连接到你的网关",
+  "gatewayDescription": "输入网关地址即可连接，仅在网关启用鉴权时需要访问密钥。",
+  "gatewayUrlLabel": "网关地址",
+  "gatewayTokenLabel": "访问令牌",
+  "gatewayConnect": "连接网关",
+  "gatewayInvalidUrl": "请输入 ws:// 或 wss:// 地址；HTTPS 页面须使用 wss://。",
+  "gatewayTokenRequired": "请输入网关访问令牌。",
+  "gatewayConnectionFailed": "连接失败，请检查地址、令牌以及网关允许的页面来源。",
+  "webEnableAudio": "启用语音",
+  "webAudioHint": "请允许麦克风权限并启用语音，加入对话。",
+  "navigationChannels": "频道",
+  "voiceHoldToTalk": "按住说话"
 }

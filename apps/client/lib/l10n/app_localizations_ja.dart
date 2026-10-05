@@ -662,4 +662,41 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get shortcutPushToTalk => 'プッシュトゥトーク';
+
+  @override
+  String get gatewayTitle => 'ゲートウェイに接続';
+
+  @override
+  String get gatewayDescription => 'ゲートウェイのアドレスを入力してください。トークンは認証が有効な場合のみ必要です。';
+
+  @override
+  String get gatewayUrlLabel => 'ゲートウェイアドレス';
+
+  @override
+  String get gatewayTokenLabel => 'アクセストークン';
+
+  @override
+  String get gatewayConnect => 'ゲートウェイに接続';
+
+  @override
+  String get gatewayInvalidUrl =>
+      'ws:// または wss:// を入力してください。HTTPS には wss:// が必要です。';
+
+  @override
+  String get gatewayTokenRequired => 'トークンを入力してください。';
+
+  @override
+  String get gatewayConnectionFailed => '接続できません。アドレス、トークン、許可されたオリジンを確認してください。';
+
+  @override
+  String get webEnableAudio => '音声を有効にする';
+
+  @override
+  String get webAudioHint => 'マイクへのアクセスを許可して音声を有効にしてください。';
+
+  @override
+  String get navigationChannels => 'チャンネル';
+
+  @override
+  String get voiceHoldToTalk => '押して話す';
 }
