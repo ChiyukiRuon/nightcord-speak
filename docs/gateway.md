@@ -103,6 +103,18 @@ Rust 协议后端解码收到的语音，通过设备专属 WsAudioSink 返回�
 
 PCM-over-WebSocket 是第一阶段传输方式，最终格式应换成浏览器侧编解码。
 
+## 屏幕共享
+
+TS6 的屏幕共享**不经过网关传输画面**。`Command::Screen` 与 `ClientEvent::Screen`
+只是 `ts-wire` 里的又一对词汇，网关原样转发，和桌面侧走 FFI 的是同一套 core、
+同一套协议实现（§2：网关不复制 Core）。信令从浏览器发出、经网关到 TS6 服务器；
+**画面本身是浏览器与对端之间的一条独立 P2P WebRTC 连接**，网关和服务器都不在
+这条路径上，也不会看到 SDP 之外的任何内容。
+
+含义有两条：网关不需要为它增加带宽预算；以及**浏览器拿不到共享画面时，
+网关侧查不到任何线索**——问题在 NAT 或浏览器的 `getDisplayMedia` 上。
+完整设计见 [`screen-sharing.md`](screen-sharing.md)。
+
 ## 启动参数
 
 ```bash

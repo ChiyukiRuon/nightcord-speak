@@ -155,6 +155,10 @@ connect / server state / channel / client / chat / permissions / voice
 
 ### Stream 命令属于 Phase 8，不属于本里程碑
 
+> **2026-10-07 修订：这一节已经被实现了**，见
+> [`docs/screen-sharing.md`](screen-sharing.md)。下面保留原判断作为记录——
+> 它在当时是对的（屏幕共享确实不在 M0.4 的范围里），只是后来做了。
+
 `setupstream` / `joinstreamrequest` / `respondjoinstreamrequest` /
 `stopstream` / `streamsignaling` / `requeststreaminfo` 是 TS6 的屏幕共享能力，
 而 **§74「MVP 暂时不要做」明确把「屏幕共享」列为不做项**。
@@ -174,6 +178,11 @@ connect / server state / channel / client / chat / permissions / voice
 
 届时要先确认一个前提：TS6 的 screen share 是复用同一条 UDP 语音通道，
 还是另开信令通道——这决定了它是否能搭在现有的 `ts-audio` 之上。
+
+**这个前提的答案（2026-10-07）**：两个都不是。命令通道只负责信令，画面走一条
+**独立的 P2P WebRTC 连接**，所以它**搭不到 `ts-audio` 上**，也不需要搭上去。
+实现顺序与上面估计的四步一致，落点也确实只在 `ts-protocol-ts6`（外加
+`ts-protocol-tsclient` 里一个不认识命令的透传钩子）。
 
 ---
 

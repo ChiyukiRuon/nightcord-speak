@@ -35,7 +35,8 @@ macOS / Android / iOS。
 | 11 | TS3 与 TS6 协议实现互相隔离             |
 
 **非目标（§74，MVP 阶段不做）**：登录、云同步、头像、好友、社交系统、插件市场、
-屏幕共享、自定义 Profile Server。Web 原属 MVP 非目标，现已进入 Phase 7。
+自定义 Profile Server。Web 原属 MVP 非目标，现已进入 Phase 7；**TS6 的屏幕共享
+（Stream）已于 2026-10-07 实现**，见 [`docs/screen-sharing.md`](docs/screen-sharing.md)。
 
 ---
 
@@ -396,6 +397,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 | **M0.5** | Multi Session                   | ✅ **实测** |
 | M0.6     | Production Client               | ✅ **全部完成** |
 | Phase 7  | Web Gateway                     | 🚧 进行中   |
+| Phase 8  | 扩展功能（§72）                 | 🚧 屏幕共享已做 |
 
 §90 的实际顺序：
 
@@ -404,7 +406,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 ⑤ TS3 Backend ✅     ⑥ TS3 Headless CLI ✅  ⑦ TS3 Voice ✅
 ⑧ Flutter FFI ✅     ⑨ Flutter UI ✅
 ⑩ TS6 Backend ✅     ⑪ Multi Session ✅
-⑫ Web Gateway 🚧     ⑬ Web Client 🚧        ⑭ 扩展功能 ⏳
+⑫ Web Gateway 🚧     ⑬ Web Client 🚧        ⑭ 扩展功能 🚧（屏幕共享）
 ```
 
 **Phase 7 当前到哪**（详细设计见 [`docs/gateway.md`](docs/gateway.md)）：
@@ -422,9 +424,9 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **24,558 行**，16 crates + CLI + gateway（不含 vendor） |
-| Dart | **18,945 行**，`apps/client/lib/` 下 87 文件（含 l10n 生成文件，不含测试） |
-| 测试 | **406 Rust + 295 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
+| Rust | **25,727 行**，16 crates + CLI + gateway（不含 vendor） |
+| Dart | **24,550 行**，`apps/client/lib/` 下 105 文件（含 l10n 生成文件，不含测试） |
+| 测试 | **420 Rust + 342 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。
@@ -825,6 +827,50 @@ Pages 控制台配置（生产/预览环境各自设置）：
 - 另有独立连接问题：默认 gateway 只绑定回环，网页原默认 ws://localhost 会指向手机。已修复未配置地址时使用页面 hostname + 8787，显式配置的地址与 Token 目的地不改写，并有回归测试。网关 LAN 访问需要重启时添加 `--bind 0.0.0.0:8787 --allow-origin http://电脑IP:5173`；当前用户运行的网关没有被修改或停止。
 - LAN HTTP 可测页面与命令，麦克风仍要求 HTTPS 安全上下文；正式 Pages 部署继续使用 HTTPS + WSS。
 
+**TS6 屏幕共享（2026-10-07）**
+
+用户要求参照 `D:\CodeProject\Reference\webspeak3` 实现 TS6 的屏幕共享收发，
+并拍板了媒体层的分工（Rust 管信令、`flutter_webrtc` 管媒体）。设计记录见
+[`docs/screen-sharing.md`](docs/screen-sharing.md)，那里有线路词汇、三个坑和
+每一项约束的理由。**这一轮全部是单测与静态检查的结论，没有和真实 TS6 服务器
+互通过**——下表 ✅ 一律只表示测试通过。
+
+| 项 | 结果 |
+| --- | --- |
+| 形状 | ✅ 信令走已连接的命令通道，画面走**独立的 P2P WebRTC 连接**。回答了 `docs/ts6.md` 留的那个前提：既不复用 UDP 语音通道，也不是「另开一条信令通道」 |
+| 分工 | ✅ `ts-model` 出领域词汇 → `ts-protocol::ScreenSharing` trait → `ts-protocol-ts6` 是**唯一**知道 `setupstream` 等字面量的地方 → FFI/网关原样转发 → Flutter 的 `ScreenController` + `ScreenShareBackend` |
+| 为什么是 `flutter_webrtc` | ✅ 六端目标下落地更快；TS6 协议仍完整留在 Rust，换媒体实现的边界就是 `ScreenShareBackend` 这一个接口 |
+| 六个命令 | ✅ `requeststreaminfo` / `setupstream` / `stopstream` / `joinstreamrequest` / `respondjoinstreamrequest` / `streamsignaling`，4 条测试盯编码、枚举取值与超长拒绝 |
+| **`answer` 的键名不对称** | ✅ 提议用 `args.offer`、应答用 `args.answer`、ICE 用 `args.{sdp,mid,mLine}`。这是对端的期望，测试盯着 |
+| **参数值必须 `get_str()`** | ✅ `UnknownCommand` 的 `content` 仍带 TS 转义，而 `CommandArgumentValue` 没有 `Display`——第一版用 `to_string()` 根本没编译过。SDP 里全是空格换行与反斜杠，拿转义形态解析会得到坏 SDP |
+| 流 id 由服务器给 | ✅ 客户端不选 id，所以「点了共享」与「拿到 id」是两件事：没拿到就取消时发不出 `stopstream`，等服务器补来 `available` 才补发。**第一版就是在这里漏了一次停止**，有回归测试 |
+| 入站命令的透传 | ✅ `StreamItem::UnknownCommand` → `ScreenExtension::decode`，通用层只认领域事件；TS3 后端不装这个扩展，命令回 `Unsupported` |
+| 入口按能力位 | ✅ `capabilities.screen_stream`，不是协议版本号。TS3 上整个面板不出现（有 widget 测试）。**这条一开始是坏的**：后端从没发布过 `CapabilitiesChanged`，见 §6 ⑳ |
+| 能力位真的会到 | ✅ `refresh` 里紧跟 `Connected` 发布 `CapabilitiesChanged`；两侧的名字各有一条测试钉住 |
+| 发布端的码率与降级策略 | ✅ `setLocalDescription` **之后**才读 sender 的 encodings（之前是空的，两个设置都写丢了，见 §6 ㉒）；`degradationPreference` 选 `maintain-framerate`；`setParameters` 的返回值与读回来的参数都进日志 |
+| 发布端的读数 | ✅ `getStats()` 每秒轮询显示在浮动小窗标题里（分辨率 · fps · 谁在限制），每 10 秒进一次 `info` 日志；一条控制器测试盯着轮询会随共享起停、同一读数不重复唤醒 |
+| 收端不依赖 `msid` | ⚠️ **只有代码路径**：`streams` 为空时自建 `MediaStream`。要真的验，得和一个不带 msid 的发端连一次（TS6 官方客户端就是），`flutter_test` 里做不到 |
+| 渲染器真的拿到流 | ✅ `renderer.muted` 整个删掉（它会把 `_init` 打断在 `srcObject` 之前，见 §6 ㉓）。同样是**只有代码路径**——`flutter_test` 里没有 `RTCVideoRenderer` |
+| 浮动小窗能拖 | ⚠️ widget 测试（**鼠标**驱动）按在空隙上也要动、指针动多少窗口动多少；但**同一套测试在真机上已经骗过一次**，见 §6 ㉔。拖动走 `Listener`，第一次移动会落一行日志——真机到底有没有拿到指针，看日志 |
+| 协议路径的日志 | ✅ 每条命令与事件一行 `info`（只有类型、stream id、client id；SDP/ICE 不进日志，§4.5）。㉓ 就是靠它定位的 |
+| SDP / ICE 不进日志 | ✅ 三个领域类型的 `Debug` 手写成 `<redacted>`（§4.5），有测试 |
+| 生命周期 | ✅ 8 条控制器测试：先 offer 后 ICE、迟到的采集被关掉、频道切换/断线收摊、观看上限本地拒绝、系统停止共享、被拒绝、订阅者离场 |
+| 入口的界面 | ✅ 3 条 widget 测试：按能力位显示且住在底栏里、按钮 → 命令 → 状态往返、从成员行进出一个共享 |
+| **界面按「这件事是谁的」分** | ✅ 发起/停止在**底栏 AFK 左边**（是我的状态，和离开、静音同类）；观看/停止观看是**成员行上那个徽章本身**（事实与入口是同一件事的两个视角）；画面是**浮在聊天上的小窗**（可拖、可全屏、可关）。用户定的，第一版是聊天上方常驻的一条 |
+| 文件与依赖 | ✅ 新增 `ts-protocol-tsclient/src/extension.rs`、`ts-protocol-ts6/src/screen.rs`、`ts-model/src/screen.rs`、Flutter `core/screen/` 与 `features/screen/`；`flutter_webrtc` 是新依赖，Windows 侧要为它加 `/utf-8`（插件源码的 UTF-8 注释在 `/WX` 下会被 C4819 打成错误） |
+| 采集参数可调 | ✅ 预设 / 分辨率 / FPS / 视频与音频码率 / 隐私 / 观众限制 / 连接模式，从 `settings.json` 一路到 `setupstream` 与编码器；越界值在 `ts-protocol-ts6` 被拒（连接模式的「服务器」明确报未实现） |
+| 两步向导界面 | ✅ 选择来源（分页 + 缩略图/实时画面）→ 设置（基本 + 可折叠高级）→ 开始直播；设置在点「开始直播」时才写盘 |
+| **独立窗口** | ✅ 观看别人的共享时可以「弹出」到自己的系统窗口（Windows；macOS/Linux 未验）。两个窗口是两个引擎，**纹理不能跨引擎**，所以是交棒而不是搬家：新窗口自己开连接、主窗口让开。真实 TS6 上跑通过连续三轮弹出/原生关闭/重新观看，返回小窗也通过 |
+| **多引擎的三个插件缺陷** | ✅ 都得打补丁，因为都在 `flutter_webrtc` 的 C++ 里：① 每个引擎析构都调**进程级**的 `LibWebRTC::Terminate()`，关一个子窗口会拆掉别人还在用的运行时；② 事件通道的 messenger 是**全局缓存**的，指向最后注册的引擎，子窗口一关就悬空（第二次弹出必崩）；③ `onTrack` 里 cascade 用错，有远端流时也会调 `addTrack`，原生只查本地表，于是报 `stream is null`。补丁在 `apps/client/windows/cmake/webrtc_multi_engine.cmake`，**在构建树里生成打过补丁的副本，不动 Pub 缓存**，上游一变就构建失败要求重新审查。**仅 Windows** |
+| 快速重开会触发服务器限流 | ✅ `ClientIsFlooding`：每轮每个候选单发一条信令，几次开关就耗尽命令预算。改成最多等 2 秒把候选并进 SDP，并对 `0x020c` 做两次延迟重试（策略留在 TS6 crate，core 与 UI 不认协议错误码） |
+| 来源选择器的预览 | ✅ 改用插件自带 `getDesktopSourceThumbnail`（异步请求更新、立即返回缓存），**不启动会置前的采集路径**；空缓存有限重试，失败保留选择而不回退到采集 |
+| **采窗口会把窗口提到最前** | ❌ **未解决**。根因是当前 libwebrtc 的 `RTCDesktopCapturerImpl::Start` 里显式调用了 `FocusOnSelectedSource()`。⚠️ **此前记在这里的「它用的是 GDI 采集器、只能自己重写发布端」是错的，已撤回**——那是从 DLL 里存在符号推出来的。更划算的方向是给 libwebrtc 打个小补丁让聚焦可选，尚未构建或验证。详情见 [`docs/screen-sharing.md`](docs/screen-sharing.md) |
+| 门禁 | ✅ 420 Rust + 342 Dart、clippy、格式、`flutter analyze`、Windows release 构建、Web release 构建全部通过 |
+
+> **本轮接手时的状态**：上一个 agent 在实现中途停下，留下未格式化的代码和六处
+> 被补丁脚本割裂的文档注释（新函数顶了邻居的注释）。接手后跑通全部门禁、补上
+> 界面测试、整理文档。**改动的实质内容没有变**，只是补完与收尾。
+
 ### 5.4 未验证
 
 - ~~macOS 的通知、`⌘,`、快捷键~~ ——**用户实测全部通过**（见 §5.3）。
@@ -847,6 +893,27 @@ Pages 控制台配置（生产/预览环境各自设置）：
   另外有一条**已知副作用**（有意保留）：库把 away 当成 mute，离开期间发不出语音
   ——见 [`docs/ts3.md`](docs/ts3.md) §11。
 - ~~频道切换、退出清理~~ ——用户于 2026-10-05 确认均已完成并测试无误。
+- **屏幕共享**：命令编码、状态机、入口都只有单测。用户 2026-10-07 实测过三轮，报回来
+  四条、修掉四个真 bug（§6 ㉑–㉔），**每一轮修完都还没被人用过**。
+  **给的用户构建一直是 debug**，而这一轮起改发 release：debug 的光栅化慢一个数量级，
+  「窗口跟不上鼠标」是不是拖拽代码的问题，只有在 release 上才分得清（§6 ㉔，已由用户
+  确认修好）。
+  第二轮拿到的读数：**发布端自报 `1280x720 5fps (bandwidth)`**——被带宽估计卡住，
+  不是 CPU。同一次里 `screen: send parameters applied=…` 那一行会说明
+  `maintain-framerate` 到底设上没有；设上了却仍然这样，就该换成限制分辨率
+  （参考实现选的就是保分辨率），而不是继续在帧率上较劲。
+  要确认的清单：能不能收到官方客户端的共享；标题里那行读数；自己预览里看到的画面
+  是不是实时。**这一轮的参数化（预设/分辨率/码率等）也还没人用过。**
+- **采窗口会把窗口提到最前面**——用户明确要求「采集应用窗口时不能让窗口到前台」，
+  **这条要求目前不满足**（**正式共享**时会提；来源选择器的预览已改用缩略图，不再碰采集）。
+  根因是**当前这份 libwebrtc 的 `RTCDesktopCapturerImpl::Start` 里显式调用了
+  `FocusOnSelectedSource()`**——源码可查，不是猜的。
+  ⚠️ 此前写在这里的「它用的是 GDI 采集器、只能自己重写发布端」**是错的**：那是从 DLL 里
+  存在 Raw/GDI 符号推出来的，而符号在不在证明不了实际走哪条路。**该结论已撤回**，
+  详见 [`docs/screen-sharing.md`](docs/screen-sharing.md)。
+  更划算的方向是给 libwebrtc 打个小补丁让聚焦可选，**尚未构建或验证**。
+  另外三件事没在别的平台上试过：macOS 的屏幕录制权限、iOS 的 Broadcast Extension、
+  浏览器端 `getDisplayMedia` 要手势与安全上下文。
 - Android / iOS 原生脚手架尚未建立。Web 已实现，尚需 iOS Safari / Android Chrome 真机与人耳语音验收；HTTPS/WSS 部署尚未进行。
 - **重连循环没有跑通过一次真实掉线**。原计划用本机 TCP 中继制造掉线，但在这台机器上
   做不到：`nightcord-cli.exe` 连不上任何本机监听（3ms 内被 RST；同一时刻、同一次调用里
@@ -878,6 +945,13 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 它中间被撤回过一次：用户报「通知正常」，于是按指示整体撤销；**撤销之后通知立刻不工作**
 ——那次「正常」跑在含新通道的构建上。真正该记的是**怎么测一个替代实现**：
 **要拿不含它的构建去测**，否则测的是它自己。这条已经写进 [`docs/notifications.md`](notifications.md)。
+
+| ⑳ | **屏幕上根本没有屏幕共享的入口** | `CapabilitiesChanged` **定义了、序列化了、Dart 也处理了，就是没有任何后端发布过它**。`ServerView.capabilities` 因此永远是默认的全 false，而 `server_page.dart` 正是用 `capabilities.screenStream` 决定要不要画那个面板。core 侧只有**拉**的 API（`Session::capabilities()`，CLI 用的是它），前端只有**推**的这条路——两边各自都对，中间没人连线。单元测试全绿：`capabilities()` 本身有两条测试，前端那条测试自己 `new` 一个事件喂进去 | 在 actor 里**紧跟 `Connected`** 发布：能力集是协议的函数（`Capabilities::for_protocol`），而 `Connected` 已经在那个分支里发了，两件事不该有先后（`actor.rs` 的 `refresh`）。回归测试分两半：Rust 侧钉住线路上 `capabilities_changed` + `screen_stream` 这两个名字（`ts-events`），Dart 侧改用 `ClientEvent.fromJson` 解真实载荷而不是手搓事件——**前端测试自己造事件，正是这条 bug 藏了这么久的原因**（同 §6 ⑫ 的教训）。**用户实测报上来的** |
+
+| ㉑ | **收不到别人的共享**，但别人看得到我的 | `onTrack` 里有一句 `if (event.streams.isEmpty) return;`——而**发端没有义务在 offer 里放 `msid`**：TS6 官方客户端就没放，轨道到达时 `streams` 是空的。于是连接建起来了、画面永远不来，**而且一个字都不说**。我们自己发的 offer 带 msid（`addTrack(track, stream)` 会给），所以只有「我们当观看者」这一半是坏的——正好是用户报的那一半 | 按参考实现的做法：`streams` 为空时**用 `event.track` 自己搭一个 `MediaStream`**（它的 `ontrack` 一直就是这么写的，从不依赖 `streams`）。顺带在协议路径上加了逐条 `info` 日志（只记类型与 id，SDP/ICE 一律不进日志），下一次失败至少能看出停在哪一步。**用户实测报上来的** |
+| ㉒ | **共享的画面帧率低** | `_Peer.offer` 在 `setLocalDescription` **之前**读 `sender.parameters.encodings`——而 sender 的 encodings **要到设了本地描述之后才存在**，所以那句 `if (encodings != null && encodings.isNotEmpty)` 从来没进去过：码率上限和 `degradationPreference` 都写进了一个空列表，整条流一直跑在 libwebrtc 的默认值上。参考实现专门用一段注释记了这件事 | 把参数搬到 `setLocalDescription` 之后，并补上 `degradationPreference`。选 **`maintain-framerate`**（保帧率、必要时缩分辨率），和参考实现**相反**——它保分辨率是因为共享的多半是文字，而这一版是被「帧率低」报上来的。`setParameters` 的返回值和读回来的参数**都进日志**——原来那个 `catch (_) {}` 会把「没设上」和「设上了」写成同一个样子，这正是它第一次没被发现的原因 |
+| ㉓ | **共享的画面在屏幕上永不出现**（两侧都是，包括自己的预览） | `_VideoState._init` 里有一句 `renderer.muted = media.local`。`RTCVideoRenderer.muted` **不是**「别把自己的声音播回来」，而是**拿流的第一个音频轨去静音麦克风**：没有 `srcObject` 时抛、流是远端的也抛、没有音频轨还抛。屏幕采集是 `audio: false`，所以三种情况全中——**异常在设 `srcObject` 之前就中断了 `_init`**，`ready` 永远是 false，渲染器一次都没拿到流。信令全程正常，日志里只有一行 `Can't be muted: The MediaStream is null` | 整句删掉：共享只有视频，本来就没有可以回授的声音。**这是用户报「看不到画面」时，靠新加的协议日志一眼定位的**——那批日志是上一轮为了查 ㉑ 才加的 |
+| ㉔ | **浮动小窗拖不动**，鼠标和窗口不同步 | 查了三层，前两层是真的、第三层没定：① `GestureDetector` 用默认的 `deferToChild`，而 `Row` **只在有子控件的地方**参与命中测试——标题、读数、按钮之间的空隙全按不动；② **只有顶上 32px 的标题条能拖**，而那块 320×180、占窗口八成面积的画面拖不动，手最先抓的偏偏是它；③ 用户复测仍报「拖不动/不同步」后，**换 `Listener` 直接拿指针事件**——不参与手势竞技场、不等滑差，并把「收到指针了没有」记进日志。**同时发现一个更大的混淆项：一直在给 debug 构建**，而 debug 的 Flutter 光栅化慢一个数量级，720p 视频纹理 + 调试版 Dart VM 完全可能把「窗口跟不上鼠标」做成真的。改成 release | 拖动覆盖**整个窗口**（两个按钮更深、照样赢走点击）；`_DragArea` 用 `Listener` + `HitTestBehavior.opaque`。第一次移动记一行日志，**只记「指针有没有到」不够，第二次报上来时那行确实出现了**——于是日志升级成把四个数一次写全：`screen: dragged by Δ on state=… bounds=… before -> after`。State 的哈希是给「`_at` 每帧被扔掉」那个假设用的：保留着 `_at` 却不动的窗口，和每帧重置 `_at` 的窗口，从外面看一模一样。同时修掉一处真的钉死：`_clamp` 的房间写成 `(extent - size).clamp(0, ∞)`，面积比窗口小时塌成 0，于是**任何位置都被钳到 0**——没有信息时不该默认禁止（§4.4），改成「没有余地就不夹」。回归测试用**鼠标**驱动（第一版用触摸，测试过了而真机没有），断言按在**空隙**上也要动、指针移多少窗口移多少、以及**面积装不下时仍能动** |
 
 | # | 症状                           | 根因                                                    | 修法                                                          |
 |---|--------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
@@ -994,6 +1068,27 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 - [x] ~~kick / ban~~
 - [x] 官方客户端语音互通 ——用户于 2026-10-05 确认通过
 - [ ] 不同真实立体声源的听感比较；poke / kick / ban 的真实服务器验证
+- [ ] **屏幕共享的复测**（用户已实测过一轮，见 §5.4）：㉑ ㉒ 修完还没被人用过。
+      要看的就三件——能不能收到别人（官方客户端）的共享、小窗标题里的 fps 是多少、
+      那一行里 `limited-by` 写的是 `cpu` 还是 `bandwidth`。
+      **第三项决定 ㉒ 里 `maintain-framerate` 这个选择要不要翻过来**
+- [ ] **采窗口会把窗口提到最前面**（用户的要求是「不能提」，**目前不满足**）。
+      **先试便宜的那条**：当前 libwebrtc 的 `RTCDesktopCapturerImpl::Start` 里显式调用
+      `FocusOnSelectedSource()`，给它打个小补丁让聚焦变成可选，再看后台窗口采集是否
+      需要显式启用 WGC。**这个补丁尚未构建、也未验证。**
+      只有在补丁行不通时，才轮到「自己拥有发布端」那条重路（WGC 采集 + 编码 + 对等连接，
+      Windows 先落地、macOS 跟上，并永久维护两套媒体栈）；已知的坑：`webrtc-rs` 不编码
+      （要自己编 libvpx 再指给 `env-libvpx-sys`），且它与 TeamSpeak 的 offer/ICE 互通
+      **从未验过**。
+      完整的证据链与**已撤回的旧结论**在 [`docs/screen-sharing.md`](docs/screen-sharing.md)。
+- [ ] 成员行的单击要等双击判定，所以点「观看」到命令发出去之间约 300ms
+      （与连接页保存行同一个代价，见 §7 更早那条）。要压掉只能用 `onTapDown`，
+      代价是拖动列表也会触发——所以先留着
+- [ ] 屏幕共享的两个已知取舍，等有实测数据再决定要不要动：
+      只用 TeamSpeak 官方的那两条 STUN（参考实现还带了 Google 的第三条，
+      跨 NAT 打不通时再补，那是一条要往外发查询的第三方端点）；
+      观看上限 4 写在三处（`setupstream` 的 `viewer_limit`、控制器的本地闸门、
+      浮动小窗标题里的 `0/4`），真需要改的时候要一起改
 - [x] ~~未连接时够不到设置~~ —— `SettingsDialog.session` 改 `int?`，连接页加按钮
 - [x] ~~可重试错误的 SnackBar 底色~~ —— **早已修好**（`app_shell.dart` 用
       `tokens.infoBg` / `tokens.errorBg`），待办是过期的，本轮清理
@@ -1010,10 +1105,12 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 
 ### 明确不做（§74）
 
-登录、云同步、头像、好友、社交、插件市场、屏幕共享。Web 已按 Phase 7 开始实现。
+登录、云同步、头像、好友、社交、插件市场。Web 已按 Phase 7 开始实现。
 
-> TS6 的 `stream` 命令族属于**屏幕共享**，因此是 §72（Phase 8），
-> 不是 M0.4 的欠账。见 [`docs/ts6.md`](docs/ts6.md)。
+> **屏幕共享原在这条里**，已于 2026-10-07 实现（TS6 有、TS3 没有），
+> 见 [`docs/screen-sharing.md`](docs/screen-sharing.md)。
+> 它当时不属于 M0.4 的欠账、而属于 §72（Phase 8）——这个判断没变，
+> 只是 Phase 8 的这一项提前做掉了。
 
 ---
 
@@ -1026,7 +1123,8 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 | `DEVELOPMENT.md`           | 最初的设计文档，保持原样；被修正处在本文注明               |
 | `docs/architecture.md`     | crate 分层与依赖、关键实现决策、与 `DEVELOPMENT.md` 的差异 |
 | `docs/ts3.md`              | TS3 backend：actor 模式、快照 diff、权限、局限             |
-| `docs/ts6.md`              | TS6：实测结论、共享适配层、`stream` 归 Phase 8             |
+| `docs/ts6.md`              | TS6：实测结论、共享适配层、`stream` 归 Phase 8（已实现）   |
+| `docs/screen-sharing.md`   | 屏幕共享：信令与媒体分层、线路词汇、三个坑、约束与安全     |
 | `docs/audio.md`            | 音频管线、线程模型、收发格式差异、已知取舍                 |
 | `docs/logging.md`          | 日志：位置、轮转、环境变量、「UI 可见即落日志」的不变式     |
 | `docs/reconnect.md`        | 重连：职责边界、fork 补丁、退避表、为什么首连失败不重试     |
@@ -1174,3 +1272,163 @@ Rust 与 Dart 侧不受影响（§4.1 说注释用英文，这条是同一个方
 - 聊天标题栏后续修复：名称与备注组成占满可用宽度的分组，在线人数独立留在右端，避免无备注时人数因名称的宽松约束移到中间；覆盖有/无备注两条布局路径。
 
 - 提交前门禁：Rust 格式检查、全工作区 clippy（所有 target/feature）、全工作区 Rust 测试、Flutter analyze 与完整 Flutter 测试通过；Windows debug 构建通过。
+
+### 2026-10-07：TS6 屏幕共享与接手收尾
+
+- 实现 TS6 屏幕共享的发起与观看：Rust 管协议与共享状态，`flutter_webrtc` 管媒体，
+  Flutter 管界面。信令走已连接的命令通道，画面走独立的 P2P WebRTC 连接。
+  设计记录见 [`docs/screen-sharing.md`](docs/screen-sharing.md)，验证表见 §5.3。
+- 门禁：Rust 与 Dart 测试、clippy 全工作区、Rust 格式、`flutter analyze`、
+  Windows 与 Web 构建全部通过（数字见 §5.2，后续几轮继续往上加）。
+- **用户实测报上来的第一件事：界面上找不到入口。** 根因是 `CapabilitiesChanged`
+  从来没有被发布过——整个前端只有 `capabilities.screen_stream` 一处判断，而它恒为
+  false。见 §6 ⑳。
+- **用户看了之后重排了界面**（第一版是聊天上方常驻的两行）：发起/停止搬到底栏 AFK
+  左边，观看/停止观看搬进成员行上那个徽章本身，画面改成一个可拖的浮动小窗（用户从
+  三个方案里选的）。见 §5.3 那一行与 [`docs/screen-sharing.md`](docs/screen-sharing.md)。
+- 重排时自己踩了一个坑，被同一轮写下的测试当场抓住（和 §6 ⑥ 一样的抓法）：
+  `ScreenShareButton` 把 `controller.active` 读在 `ListenableBuilder` **外面**，
+  于是按钮图标永远停在按下前的那一面——`ListenableBuilder` 的通知会重跑 builder，
+  但不会重跑那个捕获了旧值的闭包。**凡是要随通知变的东西，都得读在 builder 里面。**
+- **未做**：与真实 TS6 服务器的互通过一次也没有；macOS / 移动端 / 浏览器的采集与
+  权限未验证。见 §5.4。
+
+#### 教训：补丁脚本插代码会割裂文档注释
+
+一次脚本化的批量编辑把新函数/新字段插在**既有声明的文档注释之后、声明本身之前**，
+于是那段注释（连同 `# Safety` 段）成了新符号的注释，而原来的符号掉了注释。
+本轮一次撞出**六处**：
+
+```text
+crates/ts-protocol/src/traits.rs     ScreenSharing 顶了 Backend 的注释
+crates/ts-ffi/src/lib.rs             nightcord_screen 顶了 set_away 的注释
+crates/ts-session/src/session.rs     Session::screen 顶了 set_away 的注释
+apps/client/lib/ffi/bindings.dart    screen 字段顶了 setAway 的注释
+apps/client/lib/ffi/rust_client.dart 同上
+apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
+```
+
+**编译器不会报，测试不会红，diff 看上去也对**——只有通读新代码才发现。
+
+**约定**：用脚本插符号时，**锚点要么选在文档注释之前，要么把注释一起重写**；
+插入之后逐个新符号确认「它的注释说的是不是它」。`nightcord_screen` 那一处还带着
+`# Safety` 段——把 unsafe 的调用前提安到另一个函数头上，不只是难看。
+
+### 2026-10-07：屏幕共享的参数化、两步向导与「窗口被提到前台」的调查
+
+- **参数不再写死**：新增 `ScreenOptions`（来源 / 分辨率 / FPS / 视频与音频码率 / 捕获音频 /
+  隐私 / 观众限制 / 连接模式），从 `settings.json` 的 `screen` 节一路穿到 `setupstream`
+  与编码器。枚举在 `ts-model`，数字映射在 `ts-protocol-ts6`；越界值在那里被拒，
+  「服务器」模式明确报未实现而不是发一个连不上的流。
+  `contentHint` 在 flutter_webrtc 里没有 API，用 `degradationPreference` 近似——
+  「演示」预设保分辨率，其余保帧率。**这一条是与原版的已知差异。**
+- **踩到两个真坑，都补了注释**：Windows 抓屏根本不看分辨率约束（分辨率改落在编码器上），
+  而帧率要**同时**发标准的 `ideal` 和旧式的 `mandatory`——发一种就有一个平台不生效。
+- **界面**：底栏 ⛶ 打开两步向导——先选来源（应用程序 / 屏幕 / 摄像头三页 + 缩略图），
+  再进设置（基本 + 可折叠高级）。**设置只在点「开始直播」时写盘**：改了又取消的，
+  不该影响明天的共享。观众上限从「写在三处」收敛成 `ScreenController.viewerLimit` 一处。
+- **两个探针**（都在 `run/`，仓库忽略）：
+  - `run/wgc-probe`：证明这台机器能用 Windows Graphics Capture 抓**别人的**窗口、
+    抓得到帧、**而且窗口不动**。
+  - `run/source-probe`：证明 `flutter_webrtc` 头文件里那个「自己喂帧」的钩子
+    （`CreateCustomVideoSource` + `OnCapturedFrame`）**在预编译 DLL 里没有实现**——
+    调用直接段错误。
+- **结论**：采窗口会把窗口提到最前，根因在 `libwebrtc.dll` 选用 GDI 采集器（它读不到
+  被挡住的窗口，就先翻上来）。四条「便宜的路」逐条查死，唯一的出路是自己拥有发布端。
+  用户看过价钱后决定**只记录、不开工**——产品行为改为：选窗口不自动开采集，
+  要按「预览」才会，按钮下写明代价。全部证据链见
+  [`docs/screen-sharing.md`](docs/screen-sharing.md)。此处关于 GDI 与「唯一路线」的推论已由下节修正。
+- 门禁：Rust 与 Dart 全绿、clippy、格式、`flutter analyze`、Windows release 构建通过。
+
+### 2026-10-07：窗口预览复查与生命周期修复
+
+- 当前 libwebrtc 版本源码在启动窗口视频采集时显式调用 `FocusOnSelectedSource()`；
+  不能由 DLL 中存在 Raw/GDI 符号推断实际采集路径，也不能由探针崩溃断言 API 未实现。
+  自建 Rust 发布端不是已经证明的唯一方案；优先评估原生库聚焦开关与 WGC 配置。
+- 桌面预览改用现有缩略图方法，不启动 `getDisplayMedia`；空缓存有限重试，失败不回退
+  到视频采集。正式共享的置前行为尚未修复，原生桌面效果仍待真机验收。
+- 只预览选中来源，串行打开与释放；修复切页、关闭、重复选择时的迟到结果泄漏。
+  切换来源类别清空选择，开始共享前等待清理。摄像头页不再自动打开所有摄像头。
+- 新增 5 个回归测试覆盖缩略图调用、空缓存失败、切页、关闭及快速换源。
+- 本轮验证：`flutter analyze --no-pub` 无问题；`flutter test --no-pub` 共 326 项通过。
+  未重建原生客户端，未进行后台窗口缩略图与真实 TS6 互通验收。
+- 实现审查待办：音频选项仍未完整接线（offer 只添加视频轨道）；私密/联系人模式缺少
+  本地观众授权逻辑；无 msid 的远端多轨道合并和 peer 关闭异常路径需补覆盖。
+  这些项目尚未修复，不应按已支持的完整能力验收。
+
+### 2026-10-07：屏幕共享独立窗口失败与重试崩溃
+
+- 日志两次报 `MediaStreamAddTrack() stream is null`，随后崩溃笔记为 `0xc0000005`。
+  修复 onTrack cascade 对已有远端流重复 addTrack；音视频事件串行合并、等待原生添加，
+  关闭期间释放迟到合成流，远端轨道交给 peer 管理。崩溃笔记无符号，未断言最后崩溃函数。
+- 修复 start 发错通道、未等待 handler 注册与事件订阅的握手竞争；每次打开分配独立通道，
+  串行打开、失败清理、重复点击保护，关闭子引擎之前释放媒体。
+- Windows 构建生成 flutter_webrtc 生命周期补丁：全局初始化一次，移除每个引擎析构时的
+  全局 Terminate，避免关闭子引擎破坏主引擎。保持全局环境至进程退出，不修改 Pub 缓存。
+  新版本补丁锚点不匹配时构建失败，要求审查；macOS 尚未验证。
+- 新增 4 个 Dart 回归测试；原生工具 `apps/client/tool/screen_window_smoke.dart` 连续
+  3 轮创建/初始化/销毁子窗口并复验主引擎 peer，通过、退出码 0。
+  原生回归不连接真实 TS6 服务器，实际远端画面弹出仍待用户验收。
+- 本轮静态分析通过，完整 Flutter 测试 330 项通过；Windows debug 构建通过。
+
+### 2026-10-07：独立窗口修复的 Release 交付核对
+
+- 用户重试仍失败；Windows Application 事件 1000 明确记录崩溃进程路径为
+  `apps/client/build/windows/x64/runner/Release/nightcord_client.exe`。
+  当时 Release exe 为 18:54:17、媒体插件 DLL 为 16:02:28，上一轮仅更新 Debug，
+  所以 19:59 的重试实际没有执行已修复代码。属于构建交付遗漏，不能据此判断修复无效。
+- 交付修复时核对用户实际运行的构建目录，同时更新对应模式的 Dart 产物与插件 DLL。
+  本轮重新构建 Release；实际 TS6 观看与弹出窗口仍需在新产物上验收。
+- Release 构建通过，核对 `data/app.so` 含新轨道错误处理和独立通道逻辑，
+  `flutter_webrtc_plugin.dll` 不再导入全局 Terminate。exe 外壳无需重编时其时间戳不会改变，
+  不能只检查 exe；修复实际落在 Dart AOT 与媒体插件产物中。
+
+### 2026-10-07：真实 TS6 独立窗口交接与第二次打开崩溃
+
+- 新版仍失败，真实服务器复现发现子窗口 discover 有回答、join 无回答：旧窗口仍占用
+  同一客户端的观看连接。改为先 leave 并释放旧 peer，再让子窗口加入；等待远端媒体
+  到达才完成弹出，失败清理子窗口并恢复内嵌观看。新增交接顺序与失败恢复回归测试。
+- 连续重开复现另一个 `0xc0000005`：插件的全局 `g_host_messenger` 指向已关闭的
+  子引擎，主引擎新建事件通道时使用失效指针。项目构建补丁改为每引擎映射，事件通道
+  保留自身 messenger 引用，插件析构删除映射，不修改 Pub 缓存。
+- 下载并校验锁定版本原始包，SHA256 与 `pubspec.lock` 一致，相关源码与本机缓存
+  一致，确认全局指针问题存在于 `flutter_webrtc 1.6.2+hotfix.4` 发布包。
+- 真实视频工具 `apps/client/tool/screen_video_smoke.dart` 使用产品子窗口路径。
+  20:39–20:40 在真实 TS6 服务器连续两轮内嵌观看、弹出、收到视频、关闭、重新观看
+  通过；主窗口与子窗口每轮均记录首帧，进程退出码 0。使用独立身份，不启动麦克风。
+- 静态分析通过，最终完整 Flutter 测试 333 项通过；覆盖子窗口连接失败清理。
+  Windows 原生诊断 Debug 构建通过，正式 Debug/Release 重新生成。
+  macOS 多引擎与实际界面人工验收尚未完成。
+
+### 2026-10-07：独立窗口原生关闭与回到小窗
+
+- 用户标题栏关闭触发 20:52 的 `0xc0000025` 崩溃，上一轮工具只测试主侧主动关闭，
+  漏掉原生关闭路径；无符号笔记不足以确定最后的原生函数。
+- 子窗口启用关闭拦截与 `WindowListener`；标题栏“×”请求主侧统一清理，先释放观看
+  条目、取消信令转发，子侧释放 peer 和画面后回复调用，再发原生关闭。已经销毁的
+  窗口通知不再向该引擎重复发送关闭命令，防止关闭期间重入。
+- 独立窗口右上角新增“回到小窗”，补齐五种界面语言；释放子窗口观看后，由原会话
+  重建同一发布者的内嵌观看。关闭独立窗口只停止观看，不退出主程序。
+- 回归覆盖清理后恢复观看、重复返回不重复加入、已销毁窗口不重复关闭。
+  `flutter analyze` 通过，完整 Flutter 测试 335 项通过。
+- 21:00 真实 TS6 工具验证原生关闭后主进程继续观看/再次弹出，以及返回小窗后
+  视频接收恢复，退出码 0。多轮测试间隔 8 秒，避免真实服务器的防刷预算耗尽。
+  Windows Debug/Release 正式产物同步更新；macOS 原生关闭仍待验收。
+
+### 2026-10-07：快速重开共享窗口触发服务器限流
+
+- 用户再次重开失败，21:04:48 日志明确报 `ClientIsFlooding`；21:05:08 弹出超时后
+  主窗口能重新收画面，没有新崩溃。上一轮工具加 8 秒间隔掩盖了真实连续操作问题。
+- ICE 最多收集 2 秒后与 SDP 合并，候选按 mid/媒体索引写入对应媒体段；原生 SDK
+  返回的 SDP 缺少候选，需显式补入。未知媒体段及迟到候选仍走 trickle，保留跨网能力。
+  完全相同 offer 去重，变化的 offer 仍正常应答。日志不输出 SDP 或候选内容。
+- 通用适配器保留服务器错误码，扩展接口提供重试策略；TS6 仅对明确限流拒绝
+  `0x020c` 延迟 3/6 秒，最多两次，保持 15 秒总命令期限。不重试权限拒绝、超时
+  或不确定送达；具体错误码和策略不进入 core/UI。
+- 命令最终失败转发到独立窗口，结束空等并清理；观看就绪还要求本地应答已提交，
+  修正 onTrack 先到导致诊断工具过早切换的问题。
+- 21:35–21:36 真实 TS6 无额外冷却等待连续三轮弹出/关闭/重新观看通过，最后返回
+  小窗也通过；日志确实记录限流后一次 3 秒重试及恢复首帧，共七次首帧、退出码 0。
+- 门禁：`flutter analyze` 无问题，完整 Flutter 测试 342 项通过；两项 Rust crate
+  测试共 62 项通过，相关 crates clippy 通过。Windows 正式 Debug/Release 同步更新。
+  macOS 与跨 NAT 真机验收仍未完成。
