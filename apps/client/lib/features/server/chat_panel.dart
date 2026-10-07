@@ -200,35 +200,46 @@ class _ChatHeader extends ConsumerWidget {
                 : Icon(Icons.chat_bubble_outline, size: 20, color: tokens.textSecondary),
           ),
           SizedBox(width: tokens.space2),
+          // The title group fills the available width so counts stay at the edge.
           Expanded(
-            child: Text(
-              other?.name ?? channel?.name ?? l10n.chatNotInChannel,
-              overflow: TextOverflow.ellipsis,
-              // §12.2's `title`: this is the heading of the whole content area,
-              // which is what the level is for.
-              style: text.titleLarge,
+            child: Row(
+              children: [
+                // A short name should not reserve half the header before its topic.
+                Flexible(
+                  child: Text(
+                    other?.name ?? channel?.name ?? l10n.chatNotInChannel,
+                    overflow: TextOverflow.ellipsis,
+                    // §12.2's `title`: this is the heading of the whole content area,
+                    // which is what the level is for.
+                    style: text.titleLarge,
+                  ),
+                ),
+                if (other != null)
+                  Padding(
+                    padding: EdgeInsets.only(left: tokens.space2),
+                    child: Text(
+                      l10n.chatPrivateLabel,
+                      style: text.bodySmall?.copyWith(color: tokens.textTertiary),
+                    ),
+                  ),
+                if (channel?.topic != null && channel!.topic!.isNotEmpty && other == null) ...[
+                  SizedBox(width: tokens.space3),
+                  SizedBox(
+                    height: 16,
+                    child: VerticalDivider(width: 1, color: tokens.borderSubtle),
+                  ),
+                  SizedBox(width: tokens.space3),
+                  Expanded(
+                    child: Text(
+                      channel.topic!,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (other != null)
-            Padding(
-              padding: EdgeInsets.only(left: tokens.space2),
-              child: Text(
-                l10n.chatPrivateLabel,
-                style: text.bodySmall?.copyWith(color: tokens.textTertiary),
-              ),
-            ),
-          if (channel?.topic != null && channel!.topic!.isNotEmpty && other == null) ...[
-            SizedBox(width: tokens.space3),
-            SizedBox(height: 16, child: VerticalDivider(width: 1, color: tokens.borderSubtle)),
-            SizedBox(width: tokens.space3),
-            Expanded(
-              child: Text(
-                channel.topic!,
-                overflow: TextOverflow.ellipsis,
-                style: text.bodySmall?.copyWith(color: tokens.textSecondary),
-              ),
-            ),
-          ],
           if (view.info != null)
             Text(
               l10n.chatOnlineCount(view.info!.clientsOnline),

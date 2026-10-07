@@ -446,6 +446,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a short channel name keeps its topic close in the desktop header', (tester) async {
+    final view = _view();
+    view.channels[1] = const Channel(id: 1, name: 'Default Channel', topic: 'Channel topic');
+    await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+    // Regression: Expanded reserved half the header for even a short name.
+    final name = tester.getRect(
+      find.descendant(of: find.byType(ChatPanel), matching: find.text('Default Channel')),
+    );
+    final topic = tester.getRect(find.text('Channel topic'));
+    expect(topic.left - name.right, lessThan(40));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('online count stays at the right edge with or without a topic', (tester) async {
+    final view = _view();
+    for (final topic in [null, 'Channel topic']) {
+      view.channels[1] = Channel(id: 1, name: 'Lobby', topic: topic);
+      await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
+      await tester.pumpAndSettle();
+      final panel = tester.getRect(find.byType(ChatPanel));
+      final count = tester.getRect(find.text('4 人在线'));
+      // Regression: a loose title left the count in the middle without a topic.
+      expect(panel.right - count.right, closeTo(20, 1));
+      expect(tester.takeException(), isNull);
+    }
+  });
   testWidgets('the settings page', (tester) async {
     // Built as the home route rather than pushed: the page is whole without a
     // Navigator behind it, which is also what the other pages' tests do.
