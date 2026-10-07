@@ -281,6 +281,17 @@ cd apps/client && flutter gen-l10n
 > exe/DLL，文件被占用时构建以 `error MSB3073`（cmake_install 失败）告终，
 > 报错信息不会直说原因。冒烟测试时踩到过一次。
 
+> **改了用到新图标的地方，release 构建要额外删一次字体子集**——
+> 图标字体在 release 下按 kernel 裁成子集，而**这个目标不会因为 kernel 变化
+> 重跑**：新加的 `Icons.*` 会不在字体里，界面上一片空白（见 §6 ㉖）。要么
+> `flutter clean`，要么只删这一个文件再 build：
+>
+> ```bash
+> rm -f apps/client/build/flutter_assets/fonts/MaterialIcons-Regular.otf
+> ```
+>
+> debug 构建与 `flutter test` 不做 tree-shake，**它们看不见这个问题**。
+
 **macOS（在 Mac 构建节点上，见 [`docs/macos.md`](docs/macos.md)）**：
 
 ```bash
@@ -298,7 +309,7 @@ flutter build macos --debug                 # 会连着 cargo build -p ts-ffi �
 ```bash
 bash scripts/fmt.sh --check                                        # 格式
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test  --workspace --all-features                             # 402 个
+cargo test  --workspace --all-features                             # 422 个
 cd apps/client && flutter analyze && flutter test                  # 293 个
 ```
 
@@ -426,7 +437,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 |------|--------------------------------|
 | Rust | **25,727 行**，16 crates + CLI + gateway（不含 vendor） |
 | Dart | **24,550 行**，`apps/client/lib/` 下 105 文件（含 l10n 生成文件，不含测试） |
-| 测试 | **420 Rust + 342 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
+| 测试 | **422 Rust + 345 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。
@@ -865,7 +876,7 @@ Pages 控制台配置（生产/预览环境各自设置）：
 | 快速重开会触发服务器限流 | ✅ `ClientIsFlooding`：每轮每个候选单发一条信令，几次开关就耗尽命令预算。改成最多等 2 秒把候选并进 SDP，并对 `0x020c` 做两次延迟重试（策略留在 TS6 crate，core 与 UI 不认协议错误码） |
 | 来源选择器的预览 | ✅ 改用插件自带 `getDesktopSourceThumbnail`（异步请求更新、立即返回缓存），**不启动会置前的采集路径**；空缓存有限重试，失败保留选择而不回退到采集 |
 | **采窗口会把窗口提到最前** | ❌ **未解决**。根因是当前 libwebrtc 的 `RTCDesktopCapturerImpl::Start` 里显式调用了 `FocusOnSelectedSource()`。⚠️ **此前记在这里的「它用的是 GDI 采集器、只能自己重写发布端」是错的，已撤回**——那是从 DLL 里存在符号推出来的。更划算的方向是给 libwebrtc 打个小补丁让聚焦可选，尚未构建或验证。详情见 [`docs/screen-sharing.md`](docs/screen-sharing.md) |
-| 门禁 | ✅ 420 Rust + 342 Dart、clippy、格式、`flutter analyze`、Windows release 构建、Web release 构建全部通过 |
+| 门禁 | ✅ 422 Rust + 345 Dart、clippy、格式、`flutter analyze`、Windows release 构建、Web release 构建全部通过 |
 
 > **本轮接手时的状态**：上一个 agent 在实现中途停下，留下未格式化的代码和六处
 > 被补丁脚本割裂的文档注释（新函数顶了邻居的注释）。接手后跑通全部门禁、补上
@@ -887,6 +898,10 @@ Pages 控制台配置（生产/预览环境各自设置）：
 - **麦克风增益**：换算、clamp、存储、滑杆曲线、两处 UI 都有单测，**没有人真机听过**
   ——「别人听到多大声」这件事只有耳朵能判断，而且增益在本地没有监听回路（听不到自己）。
   +10 dB 会在本来就响的时候削波，这是刻意的（把麦克风拧大就是这个后果）。
+- **恢复默认快捷键**：命令链（`reset_shortcuts` → FFI → transport → settings）有单测与
+  FFI 往返测试，按钮「按哪一行问哪一行」有 widget 测试，**但按钮改完还没被人点过**
+  （用户报「看不见」时用的是第一版裸图标）。键名表（§6 ㉕）也只有测试与一次离屏渲染
+  看过——**没有在新的 release 构建上再确认一次**。
 - **离开状态**：命令链、三态折叠、持久化、对话框都有单测，**没有对真实服务器发过一次**。
   要确认的是外部视角：点一下离开，**别人的客户端**（第二个客户端或 CLI）是否看到离开标记
   与那句话；改一条消息重启应用后是否还在；再点回在线标记是否消失。
@@ -946,12 +961,19 @@ macOS，实际那条路径是空壳，而且**把失败报成了成功**。它�
 ——那次「正常」跑在含新通道的构建上。真正该记的是**怎么测一个替代实现**：
 **要拿不含它的构建去测**，否则测的是它自己。这条已经写进 [`docs/notifications.md`](notifications.md)。
 
+㉕ 又是另一类，而且这次的「另一个环境」不是别的系统而是**另一个构建模式**：那段代码在
+debug 下对、在测试里也对，唯独 release 下是错的——因为它读的 Flutter API 只在
+`assert` 里被填上。**这个仓库的所有测试都跑 debug**，所以这一类没有任何测试能抓到；
+能做的只有把它写在文件头，让下一个读代码的人不必先踩一遍。
+
 | ⑳ | **屏幕上根本没有屏幕共享的入口** | `CapabilitiesChanged` **定义了、序列化了、Dart 也处理了，就是没有任何后端发布过它**。`ServerView.capabilities` 因此永远是默认的全 false，而 `server_page.dart` 正是用 `capabilities.screenStream` 决定要不要画那个面板。core 侧只有**拉**的 API（`Session::capabilities()`，CLI 用的是它），前端只有**推**的这条路——两边各自都对，中间没人连线。单元测试全绿：`capabilities()` 本身有两条测试，前端那条测试自己 `new` 一个事件喂进去 | 在 actor 里**紧跟 `Connected`** 发布：能力集是协议的函数（`Capabilities::for_protocol`），而 `Connected` 已经在那个分支里发了，两件事不该有先后（`actor.rs` 的 `refresh`）。回归测试分两半：Rust 侧钉住线路上 `capabilities_changed` + `screen_stream` 这两个名字（`ts-events`），Dart 侧改用 `ClientEvent.fromJson` 解真实载荷而不是手搓事件——**前端测试自己造事件，正是这条 bug 藏了这么久的原因**（同 §6 ⑫ 的教训）。**用户实测报上来的** |
 
 | ㉑ | **收不到别人的共享**，但别人看得到我的 | `onTrack` 里有一句 `if (event.streams.isEmpty) return;`——而**发端没有义务在 offer 里放 `msid`**：TS6 官方客户端就没放，轨道到达时 `streams` 是空的。于是连接建起来了、画面永远不来，**而且一个字都不说**。我们自己发的 offer 带 msid（`addTrack(track, stream)` 会给），所以只有「我们当观看者」这一半是坏的——正好是用户报的那一半 | 按参考实现的做法：`streams` 为空时**用 `event.track` 自己搭一个 `MediaStream`**（它的 `ontrack` 一直就是这么写的，从不依赖 `streams`）。顺带在协议路径上加了逐条 `info` 日志（只记类型与 id，SDP/ICE 一律不进日志），下一次失败至少能看出停在哪一步。**用户实测报上来的** |
 | ㉒ | **共享的画面帧率低** | `_Peer.offer` 在 `setLocalDescription` **之前**读 `sender.parameters.encodings`——而 sender 的 encodings **要到设了本地描述之后才存在**，所以那句 `if (encodings != null && encodings.isNotEmpty)` 从来没进去过：码率上限和 `degradationPreference` 都写进了一个空列表，整条流一直跑在 libwebrtc 的默认值上。参考实现专门用一段注释记了这件事 | 把参数搬到 `setLocalDescription` 之后，并补上 `degradationPreference`。选 **`maintain-framerate`**（保帧率、必要时缩分辨率），和参考实现**相反**——它保分辨率是因为共享的多半是文字，而这一版是被「帧率低」报上来的。`setParameters` 的返回值和读回来的参数**都进日志**——原来那个 `catch (_) {}` 会把「没设上」和「设上了」写成同一个样子，这正是它第一次没被发现的原因 |
 | ㉓ | **共享的画面在屏幕上永不出现**（两侧都是，包括自己的预览） | `_VideoState._init` 里有一句 `renderer.muted = media.local`。`RTCVideoRenderer.muted` **不是**「别把自己的声音播回来」，而是**拿流的第一个音频轨去静音麦克风**：没有 `srcObject` 时抛、流是远端的也抛、没有音频轨还抛。屏幕采集是 `audio: false`，所以三种情况全中——**异常在设 `srcObject` 之前就中断了 `_init`**，`ready` 永远是 false，渲染器一次都没拿到流。信令全程正常，日志里只有一行 `Can't be muted: The MediaStream is null` | 整句删掉：共享只有视频，本来就没有可以回授的声音。**这是用户报「看不到画面」时，靠新加的协议日志一眼定位的**——那批日志是上一轮为了查 ㉑ 才加的 |
 | ㉔ | **浮动小窗拖不动**，鼠标和窗口不同步 | 查了三层，前两层是真的、第三层没定：① `GestureDetector` 用默认的 `deferToChild`，而 `Row` **只在有子控件的地方**参与命中测试——标题、读数、按钮之间的空隙全按不动；② **只有顶上 32px 的标题条能拖**，而那块 320×180、占窗口八成面积的画面拖不动，手最先抓的偏偏是它；③ 用户复测仍报「拖不动/不同步」后，**换 `Listener` 直接拿指针事件**——不参与手势竞技场、不等滑差，并把「收到指针了没有」记进日志。**同时发现一个更大的混淆项：一直在给 debug 构建**，而 debug 的 Flutter 光栅化慢一个数量级，720p 视频纹理 + 调试版 Dart VM 完全可能把「窗口跟不上鼠标」做成真的。改成 release | 拖动覆盖**整个窗口**（两个按钮更深、照样赢走点击）；`_DragArea` 用 `Listener` + `HitTestBehavior.opaque`。第一次移动记一行日志，**只记「指针有没有到」不够，第二次报上来时那行确实出现了**——于是日志升级成把四个数一次写全：`screen: dragged by Δ on state=… bounds=… before -> after`。State 的哈希是给「`_at` 每帧被扔掉」那个假设用的：保留着 `_at` 却不动的窗口，和每帧重置 `_at` 的窗口，从外面看一模一样。同时修掉一处真的钉死：`_clamp` 的房间写成 `(extent - size).clamp(0, ∞)`，面积比窗口小时塌成 0，于是**任何位置都被钳到 0**——没有信息时不该默认禁止（§4.4），改成「没有余地就不夹」。回归测试用**鼠标**驱动（第一版用触摸，测试过了而真机没有），断言按在**空隙**上也要动、指针移多少窗口移多少、以及**面积装不下时仍能动** |
+| ㉕ | **release 构建里快捷键显示成 `Ctrl+Shift+0x70010`** | `Chord.format()` 的键名取自 `PhysicalKeyboardKey.debugName`，而 Flutter 把这个 getter 填在 `assert` 里——SDK 自己那行注释就是「will be null in release mode」，`_debugNames` 那张表也是 `kReleaseMode ? {} : {…}`。于是 debug 构建与全部测试读 `Ctrl+Shift+M`，**用户拿到的 release 构建读十六进制**（`0x70010` 就是 `Key M`），启动日志那行 `shortcut mute is …` 同样是它。测试全绿是因为**测试只跑 debug**——这是 §6 ⑱ 的同源版本，只是这次漏掉的是构建模式而不是平台 | 键名表改由我们自己拥有（`lib/util/key_names.dart`）：USB HID usage → 名字，拼写照 Flutter 的（`Arrow Left`、`Audio Volume Mute`），两种构建下一致；表里没有的码仍回落到十六进制，那正是 `settings.json` 里存的东西。函数收 usage 的 `int` 而不是 `PhysicalKeyboardKey`，`debugName` 因此不在伸手可及之处。回归测试钉住一批键名与回落值——**它抓不到这类回归**（依旧只在 debug 跑），所以「为什么不能用 Flutter 的」写在那个文件头上。**用户实测报上来的** |
+| ㉖ | **release 构建里新加的图标不显示**——用户看到的「按钮里面一点东西都没有」 | 图标字体在 release 下会被 tree-shake：`build/flutter_assets/fonts/MaterialIcons-Regular.otf` 只有 8 KB，是 `font-subset` 按 **kernel 里出现的 `IconData` 常量**裁出来的子集。那份子集生成于 21:50，而「恢复默认」按钮（22:00 才写）用的 `settings_backup_restore` 不在其中——**22:07 与 22:39 两次 release 构建都没有重新生成它**（文件 mtime 一动不动），于是那个字形在实际交付的构建里根本不存在。核对方式：解出子集的 cmap，与 `lib/` 里用到的 `Icons.*` 逐个比——55 个里只有这一个不在，其余都在（所以不是子集整体过期）。debug 构建不 tree-shake（字体是完整的 1.6 MB），`flutter test` 也不经过它，**这件事在任何测试与调试构建里都看不见** | 删掉 `build/flutter_assets/fonts/MaterialIcons-Regular.otf` 再构建：子集输出缺失，构建系统才会重跑 `font-subset`，重新生成的子集 67 个字形、含 `U+E582`。**「加个图标再 build 一次」是无效的**——kernel 变化不会让这个目标变脏；`flutter clean` 同样有效，代价是一次全量重建。排查手法：用 `fontLoader` 把 SDK 的**完整**字体塞进离屏渲染，量的是完整字体，**与用户手上那份不是一回事**（这一轮就是这么被骗过去的） |
 
 | # | 症状                           | 根因                                                    | 修法                                                          |
 |---|--------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
@@ -1432,3 +1454,29 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
 - 门禁：`flutter analyze` 无问题，完整 Flutter 测试 342 项通过；两项 Rust crate
   测试共 62 项通过，相关 crates clippy 通过。Windows 正式 Debug/Release 同步更新。
   macOS 与跨 NAT 真机验收仍未完成。
+
+### 2026-10-07：恢复默认快捷键（按钮与键名）
+
+- **功能**：设置 → 快捷键 每行一个「恢复默认」按钮。默认值按平台由 `ts-settings` 拥有
+  （macOS 是 Command，其余是 Control），所以前端**只负责问**：新命令
+  `reset_shortcuts { action }` 走 FFI/网关同一条 `ts-wire` 词汇，回包带着**整个
+  settings**（不是裸 `ok`），`SettingsNotifier._collect` 因此也认这个名字。
+  一个按钮只管自己那一行——`ShortcutSettings::reset` 与 FFI 测试各钉了一遍。
+- **按钮的可见性**（用户报「现在这个配色谁看得见」，随后又报「按钮里面一点东西
+  都没有」）：**根因是 §6 ㉖——release 构建的图标字体子集里根本没有那个字形**，
+  所以按钮是空的，裸图标那版连边界都没有，看起来就是「什么都没有」。样式也一并
+  改了：从 18px 的裸 `IconButton`（主题色 `textSecondary`，一行里没有任何边界）
+  改成 §17.2 的 secondary 材质（`OutlinedButton`：`surface1` 底、`borderDefault`
+  边框、`textPrimary` 图标），36×36 方形，与同一行里那个输入框同高。**不带文字**：
+  每行一个，标签在手机上会挤掉输入框，说明交给 tooltip。回归测试除了「按哪一行问
+  哪一行」，还盯着那一行里**确实有个 `OutlinedButton`**——否则改回裸图标不会有人发现。
+  **教训**：那一版的离屏渲染是用 `FontLoader` 直接加载 SDK 的完整字体做的，图标
+  当然画得出来——量出来的「按钮可见」与用户看到的「按钮是空的」说的不是一件事。
+- **`Ctrl+Shift+0x70010`**：见 §6 ㉕。键名表落在 `lib/util/key_names.dart`。
+- **文案**：那条 tooltip 按用户要求从「把这一条恢复成默认」改成**「恢复默认」**
+  （五种语言同步，`flutter gen-l10n` 产物一起更新）。按钮就在那一行上，不必再解释
+  「这一条」是哪一条。
+- **两个小顺手**：删掉上一轮遗留在 `pages_render_test.dart` 里的 `PROBE` print；
+  §5.2 的测试数按本轮实跑更新（422 Rust + 345 Dart）。
+- 门禁：`flutter analyze` 无问题，Rust 全工作区测试、完整 Flutter 测试全绿。
+- **未验证**：改完的按钮与新的键名都**没有在真机上再看一次**（§5.4）。
