@@ -114,6 +114,13 @@ impl RemoteVoice {
         })
     }
 
+    /// Missing browser frames must clear speech rather than retain the last word.
+    pub(crate) fn mark_idle(&mut self) {
+        self.last_transmitting = false;
+        self.last_level = 0.0;
+        self.last_peak = 0.0;
+    }
+
     /// Gates and encodes one mixed frame; `None` means the gate is closed.
     ///
     /// Takes the frame mutably because the microphone gain is applied to it —
@@ -329,6 +336,23 @@ impl ts_protocol::AudioSink for WsAudioSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_browser_frames_clear_local_speech() {
+        // Regression: stopping browser capture retained the last speaking frame.
+        let mut voice = RemoteVoice::new(
+            SessionId::new(1),
+            VoiceActivationMode::Continuous,
+            VoiceActivationSettings::default(),
+        )
+        .expect("encoder");
+        voice
+            .encode_frame(&mut vec![0.25; FRAME_SAMPLES])
+            .expect("frame");
+        assert!(voice.levels().2);
+        voice.mark_idle();
+        assert_eq!(voice.levels(), (0.0, 0.0, false));
+    }
 
     #[test]
     fn input_frames_round_trip_through_their_little_endian_bytes() {

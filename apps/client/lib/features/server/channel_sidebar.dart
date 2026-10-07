@@ -273,7 +273,7 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
             member: member,
             singleTap: widget.onOpenChat != null,
             depth: row.depth + 1,
-            speaking: _view.speaking.contains(member.id),
+            speaking: _view.isSpeaking(member.id),
             // Someone else's name is the way into a private conversation with
             // them — the only one there is, and without it a private message
             // arrives with nowhere to read it.
@@ -729,15 +729,6 @@ class _MemberRow extends StatelessWidget {
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
 
-    // The name lighting up is the whole indicator, the way TeamSpeak draws it:
-    // an icon next to a talking name is one more thing to read when the eye is
-    // already on the name.
-    //
-    // `online` rather than the old green: §9 is the presence family and this
-    // is a state of a person. A muted red would have been the wrong family —
-    // nothing has gone wrong.
-    final nameColour = speaking ? tokens.online : tokens.textPrimary;
-
     // Wrapped in a `Material` for the same reason a channel row is: an
     // `InkWell` paints its hover highlight on the nearest `Material` above it,
     // and without one the colour was being set and never drawn.
@@ -760,13 +751,16 @@ class _MemberRow extends StatelessWidget {
           padding: EdgeInsets.only(
             left: tokens.space6 + depth * tokens.space3,
             right: tokens.space2,
-            top: tokens.space1 / 2,
-            bottom: tokens.space1 / 2,
+            top: tokens.space1,
+            bottom: tokens.space1,
           ),
           child: Row(
             children: [
               // §22's compact size.
-              Avatar(name: member.name, size: 28),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: Avatar(name: member.name, size: 28, speaking: speaking),
+              ),
               SizedBox(width: tokens.space2),
               Expanded(
                 // The away message rides with the name rather than hiding in a
@@ -788,7 +782,9 @@ class _MemberRow extends StatelessWidget {
                   ),
                   overflow: TextOverflow.ellipsis,
                   style: (member.isSelf ? text.titleMedium : text.bodyMedium)?.copyWith(
-                    color: nameColour,
+                    color: tokens.textPrimary,
+                    fontWeight: member.isSelf ? AppTypography.semibold : null,
+                    fontVariations: member.isSelf ? const [FontVariation('wght', 600)] : null,
                   ),
                 ),
               ),

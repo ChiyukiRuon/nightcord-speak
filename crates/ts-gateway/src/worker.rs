@@ -195,7 +195,11 @@ impl Worker {
                 },
 
                 _ = ticker.tick(), if self.voice.is_some() => {
+                    let before = self.voice.as_ref().map(|voice| voice.levels().2);
                     self.pump_voice().await;
+                    if before != self.voice.as_ref().map(|voice| voice.levels().2) {
+                        self.publish_voice_state().await;
+                    }
                 }
             }
         }
@@ -229,6 +233,7 @@ impl Worker {
 
         let frames: Vec<Vec<f32>> = self.pending_audio.drain().map(|(_, frame)| frame).collect();
         if !mix(&frames, &mut self.mixed) {
+            voice.mark_idle();
             // Nobody sent anything this tick: sending silence would burn
             // uplink for a room nobody is talking in.
             return;
@@ -451,6 +456,15 @@ impl Worker {
             Command::VoiceStop => {
                 let was_bound = self.voice.take().map(|voice| voice.session);
                 self.voice_sink = None;
+                if let Some(session) = was_bound {
+                    let state = VoiceState {
+                        transmitting: false,
+                        ..self.voice_intent
+                    };
+                    let event = ClientEvent::VoiceStateChanged(state);
+                    self.snapshots.apply(session, &event);
+                    self.send(FfiEvent::client(session, event));
+                }
                 self.send(FfiEvent::ok(name, was_bound));
             }
 

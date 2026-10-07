@@ -151,6 +151,10 @@ class ServerView {
   /// Our own client record, once the server has identified us.
   Client? get ownClient => ownClientId == null ? null : clients[ownClientId];
 
+  /// Local speech comes from the audio gate, since servers do not echo it.
+  bool isSpeaking(int clientId) =>
+      isConnected && (clientId == ownClientId ? voice.transmitting : speaking.contains(clientId));
+
   /// The channel we are in.
   Channel? get ownChannel => ownChannelId == null ? null : channels[ownChannelId];
 
@@ -158,8 +162,7 @@ class ServerView {
   ///
   /// Flat rather than nested because every consumer so far is a dropdown; a
   /// tree would be the right shape for a tree control, and there is not one.
-  List<Channel> get channelsInTreeOrder =>
-      tree().map((row) => row.channel).toList(growable: false);
+  List<Channel> get channelsInTreeOrder => tree().map((row) => row.channel).toList(growable: false);
 
   /// Per-person playback gains the user has set this session.
   ///
@@ -229,16 +232,16 @@ class ServerView {
   /// beside real users only ever raises the question of what it is. The
   /// official client hides them for the same reason.
   List<Client> clientsIn(int channelId) {
-    final members = clients.values
-        .where((c) => c.clientType == ClientType.voice && c.channelId == channelId)
-        .toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final members =
+        clients.values
+            .where((c) => c.clientType == ClientType.voice && c.channelId == channelId)
+            .toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return members;
   }
 
   /// The messages in one thread, oldest first.
-  List<Message> messagesIn(String conversation) =>
-      conversations[conversation] ?? const <Message>[];
+  List<Message> messagesIn(String conversation) => conversations[conversation] ?? const <Message>[];
 
   /// The thread the UI should be showing: the channel we are in.
   String get activeConversation =>
@@ -330,6 +333,7 @@ class ServerView {
         // Nobody is talking on a connection that is gone, and the last
         // `speaking: false` may have been the packet that never arrived.
         speaking.clear();
+        voice = voice.copyWith(transmitting: false);
 
       case ReconnectScheduledEvent(:final attempt, :final delayMs):
         // Kept rather than ignored: this is the only thing that knows *when* the

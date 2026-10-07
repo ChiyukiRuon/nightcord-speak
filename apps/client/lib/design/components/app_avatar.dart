@@ -17,6 +17,8 @@
 // per person; §2.1's "avoid high saturation" is about the chrome, and a
 // generated identity mark is not chrome.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/design_tokens.dart';
@@ -25,7 +27,16 @@ import '../tokens/app_typography.dart';
 /// A circular mark standing in for a user's picture.
 class Avatar extends StatelessWidget {
   /// Builds an avatar for `name`.
-  const Avatar({required this.name, this.size = 28, this.dimmed = false, super.key});
+  const Avatar({
+    required this.name,
+    this.size = 28,
+    this.dimmed = false,
+    this.speaking = false,
+    super.key,
+  });
+
+  /// Side arcs distinguish speech from the avatar's persistent presence.
+  final bool speaking;
 
   /// The display name the mark is derived from.
   final String name;
@@ -43,7 +54,7 @@ class Avatar extends StatelessWidget {
     final hue = _hueFor(name);
     final tokens = DesignTokens.of(context);
 
-    return Container(
+    final avatar = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -70,6 +81,10 @@ class Avatar extends StatelessWidget {
         ),
       ),
     );
+    return CustomPaint(
+      foregroundPainter: speaking ? SpeakingArcsPainter(tokens.online) : null,
+      child: avatar,
+    );
   }
 
   /// A stable hue for a name.
@@ -83,4 +98,26 @@ class Avatar extends StatelessWidget {
     }
     return (hash % 360).toDouble();
   }
+}
+
+/// Two open arcs keep the avatar visible while signalling active speech.
+class SpeakingArcsPainter extends CustomPainter {
+  const SpeakingArcsPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+    final rect = (Offset.zero & size).inflate(3);
+    canvas.drawArc(rect, -math.pi / 4, math.pi / 2, false, paint);
+    canvas.drawArc(rect, 3 * math.pi / 4, math.pi / 2, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(SpeakingArcsPainter oldDelegate) => color != oldDelegate.color;
 }

@@ -379,7 +379,11 @@ async fn run(
             },
 
             _ = ticker.tick(), if voice.is_some() => {
+                let before = voice.as_ref().map(|active| active.engine.state());
                 pump_voice(&mut core, &mut voice, &events).await;
+                if before != voice.as_ref().map(|active| active.engine.state()) {
+                    report_voice_state(voice.as_ref(), &events);
+                }
             }
         }
     }
@@ -628,6 +632,15 @@ async fn handle(
         Command::VoiceStop => {
             // Dropping the engine stops the streams and releases the devices.
             let was_bound = voice.take().map(|active| active.session);
+            if let Some(session) = was_bound {
+                events.push(FfiEvent::client(
+                    session,
+                    ClientEvent::VoiceStateChanged(VoiceState {
+                        transmitting: false,
+                        ..*voice_intent
+                    }),
+                ));
+            }
             events.push(FfiEvent::ok(name, was_bound));
         }
 

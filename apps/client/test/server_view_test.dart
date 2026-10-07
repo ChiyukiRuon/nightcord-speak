@@ -16,12 +16,8 @@ void applyAll(ServerView target, List<ClientEvent> events) {
   }
 }
 
-Channel channel(int id, String name, {int? parent, int order = 0}) => Channel(
-  id: id,
-  name: name,
-  parentId: parent,
-  order: order,
-);
+Channel channel(int id, String name, {int? parent, int order = 0}) =>
+    Channel(id: id, name: name, parentId: parent, order: order);
 
 Client client(int id, String name, int channelId) =>
     Client(id: id, name: name, channelId: channelId);
@@ -30,13 +26,7 @@ Client clientWithUid(int id, String name, int channelId, String uid) =>
     Client(id: id, name: name, channelId: channelId, uniqueId: uid);
 
 Message message(int id, String content, MessageTarget target, {String from = 'Alice'}) =>
-    Message(
-      id: id,
-      senderName: from,
-      target: target,
-      content: content,
-      timestamp: 0,
-    );
+    Message(id: id, senderName: from, target: target, content: content, timestamp: 0);
 
 void main() {
   group('channel tree', () {
@@ -48,10 +38,11 @@ void main() {
         ChannelCreatedEvent(channel(3, 'CS2', parent: 2)),
       ]);
 
-      expect(
-        target.tree().map((r) => (r.depth, r.channel.name)),
-        [(0, 'Lobby'), (1, 'Gaming'), (2, 'CS2')],
-      );
+      expect(target.tree().map((r) => (r.depth, r.channel.name)), [
+        (0, 'Lobby'),
+        (1, 'Gaming'),
+        (2, 'CS2'),
+      ]);
     });
 
     test('siblings follow the server ordering, not arrival order', () {
@@ -62,10 +53,7 @@ void main() {
         ChannelCreatedEvent(channel(2, 'First', parent: 1, order: 10)),
       ]);
 
-      expect(
-        target.tree().map((r) => r.channel.name),
-        ['Lobby', 'First', 'Second'],
-      );
+      expect(target.tree().map((r) => r.channel.name), ['Lobby', 'First', 'Second']);
     });
 
     test('equal ordering keys fall back to the id, so the order is stable', () {
@@ -141,9 +129,7 @@ void main() {
     test('updating a client replaces rather than duplicating', () {
       final target = view();
       target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
-      target.apply(
-        ClientUpdatedEvent(const Client(id: 10, name: 'Alice B', channelId: 1)),
-      );
+      target.apply(ClientUpdatedEvent(const Client(id: 10, name: 'Alice B', channelId: 1)));
 
       expect(target.clients, hasLength(1));
       expect(target.clients[10]!.name, 'Alice B');
@@ -188,7 +174,6 @@ void main() {
 
       expect(target.clientsIn(7), isEmpty);
     });
-
 
     test('a message from someone else lands in the thread with them', () {
       // Regression: TS3's private message names its *recipient*, and on a
@@ -253,9 +238,7 @@ void main() {
       final target = view();
       target.apply(ClientJoinedEvent(client(10, 'Alice', 1)));
 
-      target.apply(
-        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'wake up'),
-      );
+      target.apply(const PokedEvent(clientId: 10, senderName: 'Alice', message: 'wake up'));
 
       final thread = target.conversations[ConversationKey.client(10)];
       expect(thread, hasLength(1));
@@ -269,12 +252,8 @@ void main() {
       // and neither may collide with the first real message — whose id the
       // server assigns from one.
       final target = view();
-      target.apply(
-        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'one'),
-      );
-      target.apply(
-        const PokedEvent(clientId: 10, senderName: 'Alice', message: 'two'),
-      );
+      target.apply(const PokedEvent(clientId: 10, senderName: 'Alice', message: 'one'));
+      target.apply(const PokedEvent(clientId: 10, senderName: 'Alice', message: 'two'));
 
       final thread = target.conversations[ConversationKey.client(10)]!;
       expect(thread, hasLength(2));
@@ -487,9 +466,7 @@ void main() {
   group('messages', () {
     test('a channel message lands in that channel thread', () {
       final target = view();
-      target.apply(
-        MessageReceivedEvent(message(1, 'hello', const ChannelTarget(5))),
-      );
+      target.apply(MessageReceivedEvent(message(1, 'hello', const ChannelTarget(5))));
 
       expect(target.messagesIn(ConversationKey.channel(5)), hasLength(1));
       expect(target.messagesIn(ConversationKey.server), isEmpty);
@@ -517,10 +494,7 @@ void main() {
         MessageReceivedEvent(message(2, 'second', MessageTarget.server)),
       ]);
 
-      expect(
-        target.messagesIn(ConversationKey.server).map((m) => m.content),
-        ['first', 'second'],
-      );
+      expect(target.messagesIn(ConversationKey.server).map((m) => m.content), ['first', 'second']);
     });
   });
 
@@ -569,6 +543,24 @@ void main() {
   });
 
   group('speaking', () {
+    test('local speech follows the audio gate and clears on disconnect', () {
+      // Regression: servers do not echo our speech, so our avatar stayed idle.
+      final target = view();
+      target.ownClientId = 4;
+      target.apply(const ConnectionStateChangedEvent(ConnectionState.connected));
+      target.apply(const VoiceStateChangedEvent(VoiceState(transmitting: true)));
+      expect(target.isSpeaking(4), isTrue);
+      expect(target.isSpeaking(5), isFalse);
+      target.apply(const VoiceStateChangedEvent(VoiceState()));
+      expect(target.isSpeaking(4), isFalse);
+      target.apply(const SpeakingEvent(clientId: 5, speaking: true));
+      expect(target.isSpeaking(5), isTrue);
+      target.apply(const VoiceStateChangedEvent(VoiceState(transmitting: true)));
+      target.apply(const DisconnectedEvent());
+      expect(target.isSpeaking(4), isFalse);
+      expect(target.isSpeaking(5), isFalse);
+    });
+
     test('a name lights up and goes out again', () {
       // Regression: `SpeakingEvent` was parsed and then dropped — and the core
       // never sent it either, so the two failures hid each other and nobody
