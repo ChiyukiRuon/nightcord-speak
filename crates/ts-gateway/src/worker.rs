@@ -526,6 +526,23 @@ impl Worker {
                 }
             }
 
+            Command::ResetShortcuts { action } => match self.core.reset_shortcut(*action) {
+                // Answered with the settings, because on macOS the defaults are
+                // not what the front-end would have guessed.
+                Ok(()) => {
+                    let settings = self.core.settings().clone();
+                    match serde_json::to_value(settings) {
+                        Ok(data) => self.send(FfiEvent::with_data(name, None, data)),
+                        Err(error) => self.send(FfiEvent::failed(
+                            name,
+                            None,
+                            ClientError::Protocol(ts_model::ProtocolError::new(error.to_string())),
+                        )),
+                    }
+                }
+                Err(error) => self.send(FfiEvent::failed(name, None, error)),
+            },
+
             Command::BookmarksGet => self.send_bookmarks(name),
 
             Command::BookmarksUpdate(bookmarks) => {

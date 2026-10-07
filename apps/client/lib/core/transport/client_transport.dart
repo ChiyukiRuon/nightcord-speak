@@ -24,6 +24,7 @@ import '../../models/connect_request.dart';
 import '../../models/domain.dart';
 import '../../models/events.dart';
 import '../../models/settings.dart';
+import '../../models/shortcuts.dart';
 
 /// What the app may ask of a client core, and what the core reports back.
 abstract interface class ClientTransport {
@@ -116,6 +117,14 @@ abstract interface class ClientTransport {
 
   /// Replaces the preferences, and writes them down.
   void updateSettings(Settings settings);
+
+  /// Asks the core to put one binding back to its default.
+  ///
+  /// The default depends on the platform and is owned by `ts-settings`, so this
+  /// is a request rather than an `updateSettings` with a value worked out here.
+  /// The answer is a `reset_shortcuts` result carrying the settings, exactly as
+  /// a refresh would.
+  void resetShortcut(ShortcutAction action);
 
   /// Asks for the saved servers; the answer is a `bookmarks` result.
   void requestBookmarks();

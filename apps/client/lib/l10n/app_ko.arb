@@ -294,5 +294,7 @@
   "screenSetupPreview": "미리보기",
   "screenSetupPreviewNote": "미리 보기는 정지 이미지입니다. 미리 볼 수 없는 창도 공유할 수 있습니다.",
   "screenPopOut": "창으로 분리",
-  "screenReturnInline": "작은 창으로 돌아가기"
+  "screenReturnInline": "작은 창으로 돌아가기",
+  "settingsShortcutsReset": "기본값으로 복원"
+  
 }

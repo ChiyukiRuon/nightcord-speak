@@ -295,5 +295,7 @@
   "screenSetupPreview": "預覽",
   "screenSetupPreviewNote": "預覽使用靜態縮圖；視窗無法預覽時仍可分享。",
   "screenPopOut": "彈出視窗",
-  "screenReturnInline": "回到小視窗"
+  "screenReturnInline": "回到小視窗",
+  "settingsShortcutsReset": "恢復預設"
+  
 }

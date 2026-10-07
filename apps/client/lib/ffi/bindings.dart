@@ -50,6 +50,9 @@ typedef _MarkCleanExitDart = bool Function(Handle handle);
 typedef _ScreenC = Void Function(Handle, Uint32, Pointer<Utf8>);
 typedef _ScreenDart = void Function(Handle, int, Pointer<Utf8>);
 
+typedef _ResetShortcutsC = Void Function(Handle, Pointer<Utf8>);
+typedef _ResetShortcutsDart = void Function(Handle, Pointer<Utf8>);
+
 typedef _ConnectC = Void Function(Handle handle, Pointer<Utf8> requestJson);
 typedef _ConnectDart = void Function(Handle handle, Pointer<Utf8> requestJson);
 
@@ -249,6 +252,9 @@ class NightcordBindings {
       ban = library.lookupFunction<_BanC, _BanDart>('nightcord_ban'),
       screen = library.lookupFunction<_ScreenC, _ScreenDart>('nightcord_screen'),
       setAway = library.lookupFunction<_SetAwayC, _SetAwayDart>('nightcord_set_away'),
+      resetShortcuts = library.lookupFunction<_ResetShortcutsC, _ResetShortcutsDart>(
+        'nightcord_reset_shortcuts',
+      ),
       setClientVolume = library.lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
         'nightcord_voice_set_client_volume',
       ),
@@ -364,6 +370,10 @@ class NightcordBindings {
   /// Marks us away or back; `message` is what to say, and is ignored when
   /// `away` is false.
   final void Function(Handle, int, bool, Pointer<Utf8>) setAway;
+
+  /// Puts one binding back to the platform's default; the argument is
+  /// serialised `ShortcutAction` JSON.
+  final void Function(Handle, Pointer<Utf8>) resetShortcuts;
 
   /// Scales one client's audio within the mix.
   final void Function(Handle, int, int, double) setClientVolume;

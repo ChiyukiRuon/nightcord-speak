@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+import '../models/shortcuts.dart';
 
 import '../core/transport/client_transport.dart';
 import '../models/connect_request.dart';
@@ -275,6 +276,12 @@ class RustClient implements ClientTransport {
   /// drift from the core's.
   @override
   void requestSettings() => _bindings.settingsGet(_handle);
+
+  @override
+  void resetShortcut(ShortcutAction action) => _withText(
+    jsonEncode(action.wire),
+    (text) => _bindings.resetShortcuts(_handle, text),
+  );
 
   /// Replaces the preferences, and writes them down.
   ///

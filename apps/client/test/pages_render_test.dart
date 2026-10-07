@@ -42,6 +42,7 @@ import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
 import 'package:nightcord_client/models/screen_options.dart';
 import 'package:nightcord_client/models/settings.dart';
+import 'package:nightcord_client/models/shortcuts.dart';
 import 'package:nightcord_client/models/voice_status.dart';
 import 'package:nightcord_client/providers/providers.dart';
 import 'package:nightcord_client/state/notifications.dart';
@@ -125,6 +126,12 @@ class _SilentTransport implements ClientTransport {
       'screen:${command['action']}:${command['client_id'] ?? command['stream_id'] ?? ''}',
     );
   }
+
+  /// Recorded with the row it names: the buttons are per row, and a page that
+  /// reset all three from one of them would look identical from the outside.
+  /// Only ever *asked* — the defaults are the core's to know.
+  @override
+  void resetShortcut(ShortcutAction action) => calls.add('resetShortcut:${action.wire}');
 
   /// Recorded so a test can tell "the slider moved" from "the core was told":
   /// the local state changes either way, and only the second one survives a
@@ -1830,6 +1837,38 @@ void main() {
     // Stopping takes the start timeout with it.
     await tester.tap(find.byIcon(Icons.stop_screen_share));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('restoring the shortcuts asks the core rather than guessing', (tester) async {
+    // The defaults differ by platform — Command on macOS, Control everywhere
+    // else — and only `ts-settings` knows which. A page that filled them in
+    // itself would be right on one platform and wrong on the other, silently.
+    final transport = _SilentTransport();
+    await tester.pumpWidget(
+      _app(_container(view: _view(), transport: transport), const SettingsPage(session: 1)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('快捷键'));
+    await tester.pumpAndSettle();
+
+    // One per row, and the one that was pressed names its own row.
+    final restore = find.byTooltip('恢复默认');
+    expect(restore, findsNWidgets(ShortcutAction.values.length));
+
+    // And the row *has* a button there, not just a tooltip: the first version
+    // was a bare 18-pixel glyph with nothing around it, which read as part of
+    // the background rather than as the one thing on the page that undoes a
+    // change.
+    expect(
+      find.descendant(of: restore.first, matching: find.byType(OutlinedButton)),
+      findsOneWidget,
+    );
+
+    await tester.tap(restore.last);
+    await tester.pumpAndSettle();
+
+    expect(transport.calls, contains('resetShortcut:push_to_talk'));
     expect(tester.takeException(), isNull);
   });
 

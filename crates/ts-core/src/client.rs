@@ -104,6 +104,25 @@ impl Client {
         Ok(())
     }
 
+    /// Puts one shortcut binding back to what the core would default to.
+    ///
+    /// The front-end cannot work the default out for itself: it differs by
+    /// platform — macOS gets Command, everywhere else Control — and a second
+    /// copy of that rule would drift from this one. So the defaults stay here
+    /// and the front-end asks for one.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file cannot be written.
+    pub fn reset_shortcut(
+        &mut self,
+        action: ts_settings::ShortcutAction,
+    ) -> Result<(), ClientError> {
+        let mut settings = self.settings.clone();
+        settings.shortcuts = settings.shortcuts.reset(action);
+        self.update_settings(settings)
+    }
+
     /// The saved servers (§40).
     #[must_use]
     pub fn bookmarks(&self) -> &BookmarkList {

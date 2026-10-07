@@ -899,4 +899,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get screenReturnInline => '小窓に戻す';
+
+  @override
+  String get settingsShortcutsReset => '既定に戻す';
 }

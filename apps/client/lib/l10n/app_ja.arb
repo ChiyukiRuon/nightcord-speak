@@ -295,5 +295,7 @@
   "screenSetupPreview": "プレビュー",
   "screenSetupPreviewNote": "プレビューは静止画です。表示できないウィンドウも共有できます。",
   "screenPopOut": "ウィンドウに分離",
-  "screenReturnInline": "小窓に戻す"
+  "screenReturnInline": "小窓に戻す",
+  "settingsShortcutsReset": "既定に戻す"
+  
 }

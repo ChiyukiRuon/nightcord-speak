@@ -893,6 +893,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get screenReturnInline => '回到小窗';
+
+  @override
+  String get settingsShortcutsReset => '恢复默认';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1783,4 +1786,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get screenReturnInline => '回到小視窗';
+
+  @override
+  String get settingsShortcutsReset => '恢復預設';
 }

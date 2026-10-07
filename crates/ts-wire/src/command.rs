@@ -228,6 +228,12 @@ pub enum Command {
     /// to a running engine.
     SettingsUpdate(Box<Settings>),
 
+    /// Put one shortcut binding back to the platform's default.
+    ///
+    /// Not a `SettingsUpdate`: the defaults depend on the platform and live in
+    /// the core, so a front-end cannot send them — only ask for one.
+    ResetShortcuts { action: ts_settings::ShortcutAction },
+
     /// Report the saved servers.
     ///
     /// Renamed to match [`Command::name`]; see [`Command::ListDevices`].
@@ -290,6 +296,7 @@ impl Command {
             Self::VoiceSetClientVolume { .. } => "voice_set_client_volume",
             Self::SettingsGet => "settings",
             Self::SettingsUpdate(_) => "settings_update",
+            Self::ResetShortcuts { .. } => "reset_shortcuts",
             Self::BookmarksGet => "bookmarks",
             Self::BookmarksUpdate(_) => "bookmarks_update",
             Self::BookmarksAdd(_) => "bookmark_add",

@@ -124,6 +124,31 @@ pub struct ShortcutSettings {
     pub push_to_talk: Option<Chord>,
 }
 
+impl ShortcutSettings {
+    /// The same bindings with one of them back to this platform's default.
+    ///
+    /// The defaults are not something the front-end can work out — macOS gets
+    /// Command where everything else gets Control — so a settings page asking
+    /// for "the default" has to ask here.
+    #[must_use]
+    pub fn reset(self, action: ShortcutAction) -> Self {
+        match action {
+            ShortcutAction::Mute => Self {
+                mute: default_mute_shortcut(),
+                ..self
+            },
+            ShortcutAction::Deafen => Self {
+                deafen: default_deafen_shortcut(),
+                ..self
+            },
+            ShortcutAction::PushToTalk => Self {
+                push_to_talk: default_push_to_talk_shortcut(),
+                ..self
+            },
+        }
+    }
+}
+
 impl Default for ShortcutSettings {
     fn default() -> Self {
         Self {
@@ -132,6 +157,18 @@ impl Default for ShortcutSettings {
             push_to_talk: default_push_to_talk_shortcut(),
         }
     }
+}
+
+/// Which of the three bindings an edit is about.
+///
+/// Serialised as `snake_case`, and that spelling is part of the wire: the
+/// front-end sends it back to name the row whose button was pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShortcutAction {
+    Mute,
+    Deafen,
+    PushToTalk,
 }
 
 /// One key combination.
@@ -665,6 +702,40 @@ mod tests {
 
         store.save(&settings).unwrap();
         assert_eq!(store.load().unwrap(), settings);
+    }
+
+    #[test]
+    fn resetting_one_binding_leaves_the_others_where_they_were() {
+        // The settings page gives every row its own button, and "restore this
+        // one" has to mean exactly that — restoring all three from one row is
+        // the kind of thing that looks right until somebody is halfway through
+        // setting two of them up.
+        let custom = |key| {
+            Some(Chord {
+                key,
+                ctrl: true,
+                shift: false,
+                alt: false,
+                meta: false,
+            })
+        };
+        let edited = ShortcutSettings {
+            mute: custom(0x0007_0014),
+            deafen: custom(0x0007_0015),
+            push_to_talk: custom(0x0007_0013),
+        };
+
+        let after = edited.clone().reset(ShortcutAction::Deafen);
+
+        assert_eq!(after.mute, edited.mute, "the row above moved");
+        assert_eq!(
+            after.push_to_talk, edited.push_to_talk,
+            "the row below moved"
+        );
+        // Back to whatever this platform defaults to, which is the thing the
+        // front-end cannot work out for itself.
+        assert_eq!(after.deafen, ShortcutSettings::default().deafen);
+        assert_ne!(after.deafen, edited.deafen, "nothing was reset");
     }
 
     #[test]

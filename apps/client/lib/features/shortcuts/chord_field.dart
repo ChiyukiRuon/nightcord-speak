@@ -19,7 +19,13 @@ import '../../models/shortcuts.dart';
 /// `Backspace` clears.
 class ChordField extends StatefulWidget {
   /// Shows [chord] for [label].
-  const ChordField({required this.label, required this.chord, required this.onChanged, super.key});
+  const ChordField({
+    required this.label,
+    required this.chord,
+    required this.onChanged,
+    this.trailing,
+    super.key,
+  });
 
   /// What the shortcut does.
   final String label;
@@ -29,6 +35,14 @@ class ChordField extends StatefulWidget {
 
   /// Called when the binding changes. Null means cleared.
   final ValueChanged<Chord?> onChanged;
+
+  /// Something after the recorder — the settings page puts this row's
+  /// "restore the default" here.
+  ///
+  /// A slot rather than a callback: the recorder knows nothing about defaults,
+  /// and the page that owns the row is the one that knows what else belongs on
+  /// it.
+  final Widget? trailing;
 
   @override
   State<ChordField> createState() => _ChordFieldState();
@@ -191,6 +205,11 @@ class _ChordFieldState extends State<ChordField> {
               ),
             ),
           ),
+          // After the recorder, where the page's own row of controls sits.
+          if (widget.trailing case final trailing?) ...[
+            SizedBox(width: tokens.space2),
+            trailing,
+          ],
         ],
       ),
     );

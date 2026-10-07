@@ -514,6 +514,35 @@ pub unsafe extern "C" fn nightcord_ban(
     }
 }
 
+/// Puts one binding back to the platform default, given as serialised
+/// `ShortcutAction` JSON.
+///
+/// The answer carries the whole settings object rather than a bare `ok`: the
+/// default differs by platform and the front-end has no way to work it out, so
+/// the reply is how it learns what the value became.
+///
+/// # Safety
+///
+/// `handle` must be live, and `request` null or a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_reset_shortcuts(
+    handle: *mut NightcordClient,
+    request: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(request) }) else {
+        reject(client, "reset_shortcuts", "no action provided");
+        return;
+    };
+    if let Some(action) =
+        parse_json::<ts_settings::ShortcutAction>(client, "reset_shortcuts", &text)
+    {
+        client.send(Command::ResetShortcuts { action });
+    }
+}
+
 /// Runs one screen-sharing control command, given as serialised
 /// `ScreenCommand` JSON.
 ///

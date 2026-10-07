@@ -910,4 +910,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get screenReturnInline => '작은 창으로 돌아가기';
+
+  @override
+  String get settingsShortcutsReset => '기본값으로 복원';
 }

@@ -30,6 +30,33 @@ class ShortcutsSection extends ConsumerWidget {
           ChordField(
             label: action.label(l10n),
             chord: settings.shortcuts[action],
+            // Per row, not one button for the three: a shortcut is something
+            // tried one at a time, and "put that one back" is a different
+            // request from "put everything back". Always enabled, even when the
+            // row already holds the default — a page cannot tell whether it
+            // does, and a button that guessed would be wrong on one platform or
+            // the other.
+            //
+            // A button with a box around it, and not the bare icon this started
+            // as: a lone grey glyph at the end of a row reads as decoration
+            // rather than as a control, so the action was effectively invisible
+            // — §17.2's secondary materials are what every other row action in
+            // these settings wears. Icon only, where those others carry a
+            // label: there is one of these per row, and the words would crowd
+            // the recorder on a phone. The tooltip says them instead.
+            trailing: Tooltip(
+              message: l10n.settingsShortcutsReset,
+              child: OutlinedButton(
+                onPressed: () => ref.read(settingsProvider.notifier).resetShortcut(action),
+                style: OutlinedButton.styleFrom(
+                  // §33's hit area, and square: a lone icon in a wide button
+                  // reads as a button with something missing.
+                  minimumSize: const Size.square(36),
+                  padding: EdgeInsets.zero,
+                ),
+                child: const Icon(Icons.settings_backup_restore, size: 18),
+              ),
+            ),
             onChanged: (chord) => ref
                 .read(settingsProvider.notifier)
                 .update(
@@ -38,7 +65,7 @@ class ShortcutsSection extends ConsumerWidget {
                   ),
                 ),
           ),
-        SizedBox(height: tokens.space1),
+        SizedBox(height: tokens.space3),
         Text(
           l10n.settingsShortcutsHelp,
           style: Theme.of(

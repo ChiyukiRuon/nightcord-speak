@@ -685,6 +685,24 @@ async fn handle(
             Err(error) => events.push(FfiEvent::failed(name, None, error)),
         },
 
+        Command::ResetShortcuts { action } => match core.reset_shortcut(action) {
+            // Answered with the settings rather than a bare `ok`: the point of
+            // the button is to see what the value became, and on macOS that is
+            // not what the front-end would have guessed.
+            Ok(()) => match serde_json::to_value(core.settings()) {
+                Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
+                Err(error) => {
+                    tracing::error!(%error, "could not serialise the settings");
+                    events.push(FfiEvent::failed(
+                        name,
+                        None,
+                        ClientError::Protocol(ProtocolError::new(error.to_string())),
+                    ));
+                }
+            },
+            Err(error) => events.push(FfiEvent::failed(name, None, error)),
+        },
+
         Command::BookmarksGet => match serde_json::to_value(core.bookmarks()) {
             Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
             Err(error) => {
@@ -1107,6 +1125,15 @@ mod tests {
         assert!(!client.send(Command::VoiceStop));
     }
 
+    /// A turn-taking token for the tests that write the developer's real
+    /// settings file.
+    ///
+    /// Cargo runs the tests in one binary in parallel, so two of these racing
+    /// each read the file the other is halfway through replacing. It showed up
+    /// as a failure only in a full run and never on its own, which is the
+    /// signature of exactly this.
+    static SETTINGS_FILE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Polls until a command reports back, returning the batch that carried it.
     ///
     /// The batch comes back rather than a `bool` because draining happens here:
@@ -1232,6 +1259,9 @@ mod tests {
         // This writes a real file in the real profile, so whatever was there is
         // put back afterwards. A test that leaves the developer's own
         // preferences rewritten is a test that gets switched off.
+        let _turn = SETTINGS_FILE
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let store = ts_settings::SettingsStore::platform_default().expect("a data root");
         let before = store.load().unwrap_or_default();
 
@@ -1266,6 +1296,74 @@ mod tests {
         assert!(
             (data["audio"]["activation"]["sensitivity"].as_f64().unwrap() - 0.25).abs() < 1e-6,
             "got {data}"
+        );
+    }
+
+    #[test]
+    fn resetting_the_shortcuts_answers_with_the_platform_defaults() {
+        // The button exists because the front-end *cannot* work these out: the
+        // defaults are Control everywhere except macOS, where they are Command,
+        // and `ts-settings` owns that rule. So the answer has to be the
+        // settings themselves — a bare `ok` would leave the page showing
+        // whatever was there before.
+        //
+        // This writes a real file in the real profile, so the bindings are put
+        // back afterwards, before the assertions.
+        let _turn = SETTINGS_FILE
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let store = ts_settings::SettingsStore::platform_default().expect("a data root");
+        let before = store.load().unwrap_or_default();
+
+        // Two bindings that are not the defaults, so a reset that did nothing
+        // — or one that did all three — cannot pass.
+        let custom = |key| {
+            Some(ts_settings::Chord {
+                key,
+                ctrl: true,
+                shift: false,
+                alt: false,
+                meta: false,
+            })
+        };
+        let mut edited = before.clone();
+        edited.shortcuts.mute = custom(0x0007_0014); // the key labelled Q
+        edited.shortcuts.deafen = custom(0x0007_0015); // ... and W
+        store.save(&edited).expect("write custom bindings");
+
+        let client = NightcordClient::new().expect("start the core");
+        client.send(Command::ResetShortcuts {
+            action: ts_settings::ShortcutAction::Mute,
+        });
+        let batch = wait_for_batch(&client, "reset_shortcuts", Duration::from_secs(5))
+            .expect("reset_shortcuts went unanswered");
+
+        let parsed: serde_json::Value = serde_json::from_str(&batch).expect("valid JSON");
+        let data = parsed
+            .as_array()
+            .and_then(|events| {
+                events
+                    .iter()
+                    .find(|event| event["command"] == "reset_shortcuts")
+            })
+            .map(|event| event["data"].clone())
+            .expect("a settings result");
+
+        store.save(&before).expect("restore the settings");
+
+        let macos = cfg!(target_os = "macos");
+        let mute = &data["shortcuts"]["mute"];
+        assert_eq!(mute["shift"], true, "got {data}");
+        assert_eq!(mute["ctrl"], !macos, "got {data}");
+        assert_eq!(mute["meta"], macos, "got {data}");
+        // Genuinely the core's own default, not the value that was in the file
+        // a moment ago.
+        assert_ne!(mute["key"], 0x0007_0014, "got {data}");
+        // And the row beside it was not touched: one button per row means one
+        // row per press.
+        assert_eq!(
+            data["shortcuts"]["deafen"]["key"], 0x0007_0015,
+            "the deafen binding moved with it, got {data}"
         );
     }
 

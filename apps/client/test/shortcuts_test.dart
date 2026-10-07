@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/models/settings.dart';
 import 'package:nightcord_client/models/shortcuts.dart';
+import 'package:nightcord_client/util/key_names.dart';
 
 Map<String, dynamic> roundTrip(Settings settings) =>
     jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>;
@@ -110,6 +111,34 @@ void main() {
       });
 
       expect(settings.shortcuts.mute, isNull);
+    });
+  });
+
+  group('key names', () {
+    test('are spelled out here rather than asked of Flutter', () {
+      // What this guards is a build-mode difference, and the suite runs in one
+      // mode only: `PhysicalKeyboardKey.debugName` is filled in inside an
+      // `assert` — Flutter's own comment says it "will be null in release
+      // mode" — so naming keys that way printed `Ctrl+Shift+0x70010` on a
+      // shipped build while every test and debug build read `Ctrl+Shift+M`.
+      // Nothing here can catch a return to that, so what is pinned instead is
+      // the table: these spellings are the app's own now.
+      expect(physicalKeyName(PhysicalKeyboardKey.keyM.usbHidUsage), 'M');
+      expect(physicalKeyName(PhysicalKeyboardKey.digit0.usbHidUsage), '0');
+      expect(physicalKeyName(PhysicalKeyboardKey.escape.usbHidUsage), 'Escape');
+      expect(physicalKeyName(PhysicalKeyboardKey.space.usbHidUsage), 'Space');
+      expect(physicalKeyName(PhysicalKeyboardKey.f5.usbHidUsage), 'F5');
+      expect(physicalKeyName(PhysicalKeyboardKey.pageUp.usbHidUsage), 'Page Up');
+      expect(physicalKeyName(PhysicalKeyboardKey.arrowLeft.usbHidUsage), 'Arrow Left');
+      expect(physicalKeyName(PhysicalKeyboardKey.numpad4.usbHidUsage), 'Numpad 4');
+      expect(physicalKeyName(PhysicalKeyboardKey.audioVolumeMute.usbHidUsage), 'Audio Volume Mute');
+    });
+
+    test('fall back to the code the file holds, for a key with no name', () {
+      // `Abort` is a key Flutter knows and this table does not. Hex rather than
+      // a guess: it is what `settings.json` says for that key, and a made-up
+      // label would be worse than a code nobody recognises.
+      expect(physicalKeyName(PhysicalKeyboardKey.abort.usbHidUsage), '0x7009b');
     });
   });
 

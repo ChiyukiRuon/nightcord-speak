@@ -1746,6 +1746,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Back to small window'**
   String get screenReturnInline;
+
+  /// No description provided for @settingsShortcutsReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore default'**
+  String get settingsShortcutsReset;
 }
 
 class _AppLocalizationsDelegate

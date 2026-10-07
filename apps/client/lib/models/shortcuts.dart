@@ -6,6 +6,8 @@
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 
+import '../util/key_names.dart';
+
 /// What a shortcut can set off.
 ///
 /// The UI labels live in `l10n/labels.dart`. The log line that names an action
@@ -14,7 +16,14 @@ import 'package:flutter/services.dart';
 enum ShortcutAction {
   mute,
   deafen,
-  pushToTalk,
+  pushToTalk;
+
+  /// The spelling the core reads, which is its own rather than this enum's.
+  String get wire => switch (this) {
+    ShortcutAction.mute => 'mute',
+    ShortcutAction.deafen => 'deafen',
+    ShortcutAction.pushToTalk => 'push_to_talk',
+  };
 }
 
 /// One key combination.
@@ -66,6 +75,11 @@ class Chord {
 
   /// The combination as a person would write it, e.g. `Ctrl+Shift+M`.
   ///
+  /// The key's own name comes from `physicalKeyName`, a table this app owns —
+  /// Flutter's `debugName` is null outside a debug build, which is how a
+  /// released app came to print `Ctrl+Shift+0x70010` where every test read
+  /// `Ctrl+Shift+M`. That file has the story.
+  ///
   /// macOS spells two of the four modifiers differently — `Option` for Alt and
   /// `Cmd` for Meta — and a Mac user reading `Meta+Alt` has to translate before
   /// recognising their own shortcut. The primary modifier leads on both
@@ -91,7 +105,7 @@ class Chord {
         if (alt) 'Alt',
         if (meta) 'Meta',
       ],
-      _keyName(key),
+      physicalKeyName(key.usbHidUsage),
     ];
     return parts.join('+');
   }
@@ -145,24 +159,6 @@ class Chord {
     );
   }
 
-  /// See [format].
-  ///
-  /// Flutter spells physical keys out in full — `Key M`, `Digit 1` — which is
-  /// right for a debugger and wrong for a settings page, where the point is
-  /// to recognise your own shortcut at a glance.
-  static String _keyName(PhysicalKeyboardKey key) {
-    final name = key.debugName;
-    if (name == null || name.isEmpty) {
-      return '0x${key.usbHidUsage.toRadixString(16)}';
-    }
-
-    for (final prefix in ['Key ', 'Digit ']) {
-      if (name.startsWith(prefix) && name.length > prefix.length) {
-        return name.substring(prefix.length);
-      }
-    }
-    return name;
-  }
 }
 
 /// Which keys do what.

@@ -9,6 +9,7 @@ import '../../models/events.dart';
 import '../../models/settings.dart';
 import '../voice/voice_backend.dart';
 import 'client_transport.dart';
+import '../../models/shortcuts.dart';
 import 'remote_socket.dart';
 import 'device_store.dart';
 
@@ -442,6 +443,10 @@ class RemoteTransport implements ClientTransport {
   void testOutput() => voice.testOutput();
   @override
   void requestSettings() => _send('settings');
+
+  @override
+  void resetShortcut(ShortcutAction action) =>
+      _send('reset_shortcuts', {'action': action.wire});
   @override
   void updateSettings(Settings settings) {
     _mode = settings.audio.mode;

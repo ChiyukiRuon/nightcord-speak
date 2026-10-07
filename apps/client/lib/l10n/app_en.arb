@@ -1038,5 +1038,7 @@
   "screenSetupPreview": "Preview",
   "screenSetupPreviewNote": "Preview uses a snapshot. You can still share a window when its preview is unavailable.",
   "screenPopOut": "Pop out",
-  "screenReturnInline": "Back to small window"
+  "screenReturnInline": "Back to small window",
+  "settingsShortcutsReset": "Restore default"
+  
 }

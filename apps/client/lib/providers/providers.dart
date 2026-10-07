@@ -17,6 +17,7 @@ import '../models/domain.dart';
 import '../models/events.dart';
 import '../models/bookmarks.dart';
 import '../models/settings.dart';
+import '../models/shortcuts.dart';
 import '../models/voice_status.dart';
 import '../state/notifications.dart';
 import '../state/server_view.dart';
@@ -478,8 +479,19 @@ class SettingsNotifier extends Notifier<Settings?> {
     ref.read(clientTransportProvider).updateSettings(settings);
   }
 
+  /// Asks the core to put one binding back to its default.
+  ///
+  /// Nothing is guessed here on purpose: on macOS the default is Command and on
+  /// every other platform Control, and only `ts-settings` knows which. The
+  /// answer arrives as a result carrying the whole settings object.
+  void resetShortcut(ShortcutAction action) =>
+      ref.read(clientTransportProvider).resetShortcut(action);
+
   void _collect(CommandResult result) {
-    if (result.command != 'settings' || !result.ok) return;
+    // Both of these answer with the settings: a reset is a change, and what
+    // changed is exactly what the reply carries.
+    const answers = {'settings', 'reset_shortcuts'};
+    if (!answers.contains(result.command) || !result.ok) return;
 
     final data = result.data;
     if (data == null) return;

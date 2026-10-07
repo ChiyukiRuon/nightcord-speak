@@ -956,4 +956,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get screenReturnInline => 'Back to small window';
+
+  @override
+  String get settingsShortcutsReset => 'Restore default';
 }
