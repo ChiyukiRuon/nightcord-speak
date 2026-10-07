@@ -389,6 +389,11 @@ impl Worker {
                 self.report(name, Some(session), outcome);
             }
 
+            Command::Screen { session, command } => {
+                let session = *session;
+                let outcome = with_session!(self.core, session, s => s.screen(command.clone()));
+                self.report(name, Some(session), outcome);
+            }
             Command::SetAway {
                 session,
                 away,

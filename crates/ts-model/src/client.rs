@@ -17,6 +17,9 @@ pub struct ClientFlags {
     pub output_muted: bool,
     /// Currently recording locally.
     pub recording: bool,
+    /// Broadcasting a screen share.
+    #[serde(default)]
+    pub streaming: bool,
     /// Has channel-commander rights in its channel.
     pub channel_commander: bool,
 }
@@ -30,6 +33,7 @@ impl ClientFlags {
             input_muted: false,
             output_muted: false,
             recording: false,
+            streaming: false,
             channel_commander: false,
         }
     }

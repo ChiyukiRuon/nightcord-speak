@@ -3,6 +3,7 @@
 // Everything below this file talks to the Rust core through `providers`; the
 // only place that knows about FFI is `ffi/`.
 
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
@@ -14,13 +15,24 @@ import 'core/platform/services.dart';
 import 'core/transport/client_transport.dart';
 import 'core/transport/transport_factory.dart';
 import 'features/gateway/gateway_gate.dart';
+import 'features/screen/detached/screen_window.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
 import 'widgets/startup_failure.dart';
 import 'widgets/app_shell.dart';
 
-void main() {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // A window opened by `desktop_multi_window` runs *this* function in an engine
+  // of its own, and the only thing that tells the two apart is the arguments
+  // the opener passed. Asked first, before anything else touches the core: the
+  // detached window has no core of its own and must not start one.
+  final detached = await detachedScreenArgs();
+  if (detached != null) {
+    await runScreenWindow(detached);
+    return;
+  }
 
   // Installed before anything else can fail, and before the core is asked to
   // start — the failure worth recording might be that very call.

@@ -176,6 +176,23 @@ pub trait PermissionsReport: Send + Sync {
     fn permissions(&self) -> Permissions;
 }
 
+/// Screen sharing control, which only some protocols carry.
+///
+/// Media never crosses this boundary: the peers negotiate a separate connection
+/// between themselves and the frontend owns it, so what travels here is the
+/// control vocabulary alone. A backend that does not implement the trait gets
+/// the same [`ClientError::Unsupported`] as any other unimplemented capability.
+#[async_trait]
+pub trait ScreenSharing: Send + Sync {
+    /// Runs one control command.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the backend cannot express the command, or when the server
+    /// rejects it.
+    async fn execute(&mut self, command: ts_model::ScreenCommand) -> Result<(), ClientError>;
+}
+
 /// One backend, with each capability reached through its own trait object.
 ///
 /// A caller that only needs to send chat asks for [`Backend::messaging`] and
@@ -183,6 +200,7 @@ pub trait PermissionsReport: Send + Sync {
 /// capability unimplemented and get a clear [`ClientError::Unsupported`] rather
 /// than a silent no-op.
 pub struct Backend {
+    screen: Option<Box<dyn ScreenSharing>>,
     kind: ProtocolKind,
     connection: Box<dyn Connection>,
     channels: Box<dyn ChannelOperations>,
@@ -194,6 +212,29 @@ pub struct Backend {
 }
 
 impl Backend {
+    /// Adds screen sharing, for backends whose protocol carries it.
+    ///
+    /// Separate from [`Backend::new`] because it is the only capability a
+    /// protocol may leave out this way: TS3 has no equivalent command family,
+    /// and the frontend already hides the entry point behind
+    /// [`ts_model::Capabilities::screen_stream`].
+    #[must_use]
+    pub fn with_screen(mut self, screen: Box<dyn ScreenSharing>) -> Self {
+        self.screen = Some(screen);
+        self
+    }
+
+    /// Screen sharing, or [`ClientError::Unsupported`] when the backend has
+    /// none.
+    pub async fn screen(&mut self, command: ts_model::ScreenCommand) -> Result<(), ClientError> {
+        match &mut self.screen {
+            Some(screen) => screen.execute(command).await,
+            None => Err(ClientError::Unsupported(
+                "screen sharing is unavailable".into(),
+            )),
+        }
+    }
+
     /// Assembles a backend from its capability implementations.
     ///
     /// They normally come from one struct — see the `Ts3Client` composition in
@@ -211,6 +252,7 @@ impl Backend {
         permissions: Box<dyn PermissionsReport>,
     ) -> Self {
         Self {
+            screen: None,
             kind,
             connection,
             channels,

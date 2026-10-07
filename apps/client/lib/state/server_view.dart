@@ -424,6 +424,7 @@ class ServerView {
 
       // Not part of the rendered state.
       case ErrorEvent():
+      case ScreenEvent():
       case UnknownEvent():
         break;
     }

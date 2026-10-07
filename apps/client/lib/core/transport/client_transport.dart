@@ -37,6 +37,9 @@ abstract interface class ClientTransport {
   /// Closes a connection.
   void disconnect(int session);
 
+  /// Controls screen sharing using domain commands.
+  void screen(int session, Map<String, dynamic> command);
+
   /// Moves us into a channel.
   void joinChannel(int session, int channelId);
 

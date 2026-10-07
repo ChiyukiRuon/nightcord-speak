@@ -513,6 +513,10 @@ async fn handle(
             report(events, name, Some(session), outcome);
         }
 
+        Command::Screen { session, command } => {
+            let outcome = with_session!(core, session, s => s.screen(command));
+            report(events, name, Some(session), outcome);
+        }
         Command::SetAway {
             session,
             away,

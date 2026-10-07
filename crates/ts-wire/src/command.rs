@@ -57,6 +57,11 @@ impl AudioDirection {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "command", content = "payload", rename_all = "snake_case")]
 pub enum Command {
+    /// Screen control; media travels directly between peers.
+    Screen {
+        session: SessionId,
+        command: ts_model::ScreenCommand,
+    },
     /// Open a new connection.
     ///
     /// Boxed because a `ConnectRequest` is an order of magnitude larger than
@@ -264,6 +269,7 @@ impl Command {
     pub const fn name(&self) -> &'static str {
         match self {
             Self::Connect(_) => "connect",
+            Self::Screen { .. } => "screen",
             Self::Disconnect { .. } => "disconnect",
             Self::JoinChannel { .. } => "join_channel",
             Self::LeaveChannel { .. } => "leave_channel",

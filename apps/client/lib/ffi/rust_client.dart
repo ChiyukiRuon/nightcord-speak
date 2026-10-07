@@ -196,6 +196,15 @@ class RustClient implements ClientTransport {
     ),
   );
 
+  /// Runs one screen-sharing control command.
+  ///
+  /// Only the control vocabulary goes through here — discovery, joining and
+  /// signalling. The picture never crosses this boundary, so the map is small
+  /// even while a share is running.
+  @override
+  void screen(int session, Map<String, dynamic> command) =>
+      _withText(jsonEncode(command), (text) => _bindings.screen(_handle, session, text));
+
   /// Marks us away, or back at the keyboard.
   ///
   /// `message` is what to say about it, and the core ignores it when [away] is

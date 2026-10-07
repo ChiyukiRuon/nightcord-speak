@@ -48,6 +48,19 @@ dependencies:
   # version is pinned by `flutter_localizations`, not by us. Naming a range
   # here would only be a second opinion that can conflict with the SDK's.
   intl: any
+  # Screen sharing, TS6 only. The media side — capture, encode, transport,
+  # render — is the one thing this project does not write itself: doing it in
+  # Rust means integrating three more stacks per platform, and the browser
+  # still needs its own. Only `ScreenShareBackend` implements it, so replacing
+  # it later touches one file. See `docs/screen-sharing.md`.
+  flutter_webrtc: ^1.6.2+hotfix.4
+  # A second operating-system window, for watching a share outside the client.
+  # Its own engine, so the picture is joined again rather than copied — see
+  # `docs/screen-sharing.md`. Windows only so far.
+  desktop_multi_window: ^0.3.1
+  # Sizes, titles and closes that window. `desktop_multi_window` deliberately
+  # has none of those and defers to this, which is why both arrived together.
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:

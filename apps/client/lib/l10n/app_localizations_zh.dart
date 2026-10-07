@@ -725,6 +725,174 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutViewLicenses => '查看组件许可证';
+
+  @override
+  String get screenStart => '共享屏幕';
+
+  @override
+  String get screenStop => '停止共享';
+
+  @override
+  String get screenLeave => '停止观看';
+
+  @override
+  String get screenWatch => '观看';
+
+  @override
+  String get screenConnecting => '正在连接…';
+
+  @override
+  String get screenViewers => '观看人数';
+
+  @override
+  String get screenFullscreen => '全屏';
+
+  @override
+  String get fullscreenExit => '退出全屏';
+
+  @override
+  String get screenHidePreview => '隐藏预览';
+
+  @override
+  String get memberStreaming => '正在共享屏幕';
+
+  @override
+  String get screenEnded => '屏幕共享已结束';
+
+  @override
+  String get screenCaptureFailed => '无法采集屏幕，请检查屏幕录制权限后重试。';
+
+  @override
+  String get screenRefused => '共享请求被拒绝。';
+
+  @override
+  String get screenTimeout => '屏幕共享连接超时，请重试。';
+
+  @override
+  String get screenConnectionFailed => '屏幕共享连接失败，请重试。';
+
+  @override
+  String get screenTitle => '屏幕共享';
+
+  @override
+  String get screenSetupSources => '选择来源';
+
+  @override
+  String get screenSetupApps => '应用程序';
+
+  @override
+  String get screenSetupScreens => '屏幕';
+
+  @override
+  String get screenSetupCameras => '摄像头';
+
+  @override
+  String get screenSetupNoSources => '没有找到可共享的内容';
+
+  @override
+  String get screenSetupNext => '下一个';
+
+  @override
+  String get screenSetupBack => '返回';
+
+  @override
+  String get screenSetupGoLive => '开始直播';
+
+  @override
+  String get screenSetupBasic => '基本设置';
+
+  @override
+  String get screenSetupAdvanced => '高级设置';
+
+  @override
+  String get screenSetupPreset => '预设';
+
+  @override
+  String get screenSetupSource => '源';
+
+  @override
+  String get screenSetupPresentation => '演示';
+
+  @override
+  String get screenSetupCaptureAudio => '捕获音频';
+
+  @override
+  String get screenSetupPrivacy => '隐私';
+
+  @override
+  String get screenSetupPublic => '公开';
+
+  @override
+  String get screenSetupContacts => '联系人';
+
+  @override
+  String get screenSetupPrivate => '私人';
+
+  @override
+  String get screenSetupResolution => '分辨率';
+
+  @override
+  String get screenSetupFps => 'FPS';
+
+  @override
+  String get screenSetupVideoBitrate => '比特率';
+
+  @override
+  String get screenSetupAudioBitrate => '音频比特率';
+
+  @override
+  String get screenSetupViewerLimit => '观众限制';
+
+  @override
+  String get screenSetupUnlimited => '不限';
+
+  @override
+  String get screenSetupMode => '连接模式';
+
+  @override
+  String get screenSetupSfuUnavailable => '需要服务器端中转媒体，本客户端尚未实现';
+
+  @override
+  String get screenSetupHelpPreset => '一次设定分辨率、帧率与比特率。之后改动任何一项，就变成你自己的组合。';
+
+  @override
+  String get screenSetupHelpCaptureAudio => '连同被共享窗口的声音一起发送。';
+
+  @override
+  String get screenSetupHelpPrivacy => '「联系人」按「私人」处理——本客户端没有可核对的好友名单。';
+
+  @override
+  String get screenSetupHelpResolution => '画面在编码前缩放到的尺寸。采集本身无论选哪个都是原始大小。';
+
+  @override
+  String get screenSetupHelpFps => '每秒发送多少帧。越低越省带宽，也越不连贯。';
+
+  @override
+  String get screenSetupHelpVideoBitrate => '编码器最多能用多少带宽传画面。别人看到的就是这个换来的画质。';
+
+  @override
+  String get screenSetupHelpAudioBitrate => '编码器最多能用多少带宽传声音。只在捕获音频打开时生效。';
+
+  @override
+  String get screenSetupHelpViewerLimit => '最多允许多人同时观看。「不限」交给服务器决定。';
+
+  @override
+  String get screenSetupHelpMode => 'P2P 直连每一位观看者。经服务器中转尚未实现。';
+
+  @override
+  String get screenSetupKbps => 'Kbps';
+
+  @override
+  String get screenSetupPreview => '预览';
+
+  @override
+  String get screenSetupPreviewNote => '预览使用静态缩略图；窗口不可预览时仍可共享。';
+
+  @override
+  String get screenPopOut => '弹出窗口';
+
+  @override
+  String get screenReturnInline => '回到小窗';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1447,4 +1615,172 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutViewLicenses => '查看元件授權';
+
+  @override
+  String get screenStart => '分享螢幕';
+
+  @override
+  String get screenStop => '停止分享';
+
+  @override
+  String get screenLeave => '停止觀看';
+
+  @override
+  String get screenWatch => '觀看';
+
+  @override
+  String get screenConnecting => '正在連線…';
+
+  @override
+  String get screenViewers => '觀看人數';
+
+  @override
+  String get screenFullscreen => '全螢幕';
+
+  @override
+  String get fullscreenExit => '結束全螢幕';
+
+  @override
+  String get screenHidePreview => '隱藏預覽';
+
+  @override
+  String get memberStreaming => '正在分享畫面';
+
+  @override
+  String get screenEnded => '螢幕分享已結束';
+
+  @override
+  String get screenCaptureFailed => '無法擷取螢幕，請檢查螢幕錄製權限後重試。';
+
+  @override
+  String get screenRefused => '分享請求遭拒。';
+
+  @override
+  String get screenTimeout => '螢幕分享連線逾時，請重試。';
+
+  @override
+  String get screenConnectionFailed => '螢幕分享連線失敗，請重試。';
+
+  @override
+  String get screenTitle => '螢幕分享';
+
+  @override
+  String get screenSetupSources => '選擇來源';
+
+  @override
+  String get screenSetupApps => '應用程式';
+
+  @override
+  String get screenSetupScreens => '螢幕';
+
+  @override
+  String get screenSetupCameras => '攝影機';
+
+  @override
+  String get screenSetupNoSources => '找不到可分享的內容';
+
+  @override
+  String get screenSetupNext => '下一步';
+
+  @override
+  String get screenSetupBack => '返回';
+
+  @override
+  String get screenSetupGoLive => '開始直播';
+
+  @override
+  String get screenSetupBasic => '基本設定';
+
+  @override
+  String get screenSetupAdvanced => '進階設定';
+
+  @override
+  String get screenSetupPreset => '預設';
+
+  @override
+  String get screenSetupSource => '來源';
+
+  @override
+  String get screenSetupPresentation => '簡報';
+
+  @override
+  String get screenSetupCaptureAudio => '擷取音訊';
+
+  @override
+  String get screenSetupPrivacy => '隱私';
+
+  @override
+  String get screenSetupPublic => '公開';
+
+  @override
+  String get screenSetupContacts => '聯絡人';
+
+  @override
+  String get screenSetupPrivate => '私人';
+
+  @override
+  String get screenSetupResolution => '解析度';
+
+  @override
+  String get screenSetupFps => 'FPS';
+
+  @override
+  String get screenSetupVideoBitrate => '位元率';
+
+  @override
+  String get screenSetupAudioBitrate => '音訊位元率';
+
+  @override
+  String get screenSetupViewerLimit => '觀眾限制';
+
+  @override
+  String get screenSetupUnlimited => '不限';
+
+  @override
+  String get screenSetupMode => '連線模式';
+
+  @override
+  String get screenSetupSfuUnavailable => '需要伺服器端中转媒體，本客戶端尚未實作';
+
+  @override
+  String get screenSetupHelpPreset => '一次設定解析度、影格率與位元率。之後改動任何一項，就變成你自己的組合。';
+
+  @override
+  String get screenSetupHelpCaptureAudio => '連同被分享視窗的聲音一起傳送。';
+
+  @override
+  String get screenSetupHelpPrivacy => '「聯絡人」按「私人」處理——本客戶端沒有可核對的好友名單。';
+
+  @override
+  String get screenSetupHelpResolution => '畫面在編碼前縮放到的尺寸。擷取本身無論選哪個都是原始大小。';
+
+  @override
+  String get screenSetupHelpFps => '每秒傳送多少影格。越低越省頻寬，也越不流暢。';
+
+  @override
+  String get screenSetupHelpVideoBitrate => '編碼器最多能用多少頻寬傳畫面。別人看到的就是這個換來的畫質。';
+
+  @override
+  String get screenSetupHelpAudioBitrate => '編碼器最多能用多少頻寬傳聲音。只在擷取音訊開啟時生效。';
+
+  @override
+  String get screenSetupHelpViewerLimit => '最多允許多人同時觀看。「不限」交給伺服器決定。';
+
+  @override
+  String get screenSetupHelpMode => 'P2P 直連每一位觀看者。經伺服器中轉尚未實作。';
+
+  @override
+  String get screenSetupKbps => 'Kbps';
+
+  @override
+  String get screenSetupPreview => '預覽';
+
+  @override
+  String get screenSetupPreviewNote => '預覽使用靜態縮圖；視窗無法預覽時仍可分享。';
+
+  @override
+  String get screenPopOut => '彈出視窗';
+
+  @override
+  String get screenReturnInline => '回到小視窗';
 }

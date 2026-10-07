@@ -14,6 +14,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../voice/voice_bar.dart';
+import '../screen/screen_pip.dart';
 import 'channel_sidebar.dart';
 import 'chat_panel.dart';
 import 'reconnect_banner.dart';
@@ -53,7 +54,20 @@ class ServerPage extends ConsumerWidget {
       mobileTitle: view.info?.name ?? AppLocalizations.of(context).navigationChannels,
       navigationWidth: channelSidebarWidth,
       navigation: ChannelSidebar(view: view),
-      content: ChatPanel(view: view),
+      // The share, when there is one, floats over the conversation instead of
+      // taking a band off the top of it — see `screen_pip.dart`. The stack is
+      // what gives it both the area to float in and the bounds to be dragged
+      // within, so `ScreenPip` has to stay a direct child of it.
+      content: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          fit: StackFit.expand,
+          children: [
+            ChatPanel(view: view),
+            if (view.capabilities.screenStream)
+              ScreenPip(view: view, bounds: constraints.biggest),
+          ],
+        ),
+      ),
       footer: VoiceBar(session: session),
       banner: view.connection == ConnectionState.reconnecting
           ? ReconnectBanner(session: session)

@@ -187,6 +187,7 @@ fn client_of(id: tsclientlib::ClientId, client: &BookClient, own: tsclientlib::C
             input_muted: client.input_muted,
             output_muted: client.output_muted,
             recording: client.is_recording,
+            streaming: client.is_streaming.unwrap_or(false),
             channel_commander: client.is_channel_commander,
         },
         // Away with an empty message is a real state — it is what a plain

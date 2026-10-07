@@ -42,7 +42,10 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use ts_identity::app_data_root;
-use ts_model::{ReconnectPolicy, SettingsError, VoiceActivationMode, VoiceActivationSettings};
+use ts_model::{
+    ReconnectPolicy, ScreenAccess, ScreenMode, SettingsError, VoiceActivationMode,
+    VoiceActivationSettings,
+};
 
 /// The file's name inside the application data root.
 pub const FILE_NAME: &str = "settings.json";
@@ -81,6 +84,10 @@ pub struct Settings {
     /// How the front-end presents itself — currently just the language.
     #[serde(default)]
     pub ui: UiSettings,
+
+    /// What a screen share is started with.
+    #[serde(default)]
+    pub screen: ScreenSettings,
 }
 
 impl Default for Settings {
@@ -93,6 +100,7 @@ impl Default for Settings {
             shortcuts: ShortcutSettings::default(),
             presence: PresenceSettings::default(),
             ui: UiSettings::default(),
+            screen: ScreenSettings::default(),
         }
     }
 }
@@ -430,6 +438,57 @@ pub struct PresenceSettings {
     pub away_message: String,
 }
 
+/// What a screen share is started with.
+///
+/// The core never reads these — they are consumed by the front-end's capture
+/// and encoder, and travel to the server inside the start command. They live
+/// here for the same reason [`UiSettings`] does: `settings.json` is the
+/// application's one preferences file.
+///
+/// No `preset` field. A preset is a named set of numbers, so which one is
+/// selected is *derivable* from these — and storing the name as well would let
+/// the two disagree, which is the one thing a preset must not do. The table
+/// itself is on the front-end, next to the control that offers it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScreenSettings {
+    /// Wanted capture height in pixels; 0 keeps the source's own.
+    pub height: u32,
+    /// Wanted frames per second; 0 leaves it to the platform.
+    pub fps: u32,
+    /// What the encoder may spend on the picture.
+    pub video_bitrate_kbps: u32,
+    /// Whether to send the capture's own audio with it.
+    ///
+    /// Off by default even though the reference client starts with it on: this
+    /// build has no audio capture path yet, and asking the server for a stream
+    /// with sound that carries none is worse than asking for one without.
+    pub audio: bool,
+    /// What the encoder may spend on that audio. Ignored while `audio` is off.
+    pub audio_bitrate_kbps: u32,
+    pub access: ScreenAccess,
+    /// How many viewers to allow; 0 means as many as the server will carry.
+    pub viewer_limit: u32,
+    pub mode: ScreenMode,
+}
+
+impl Default for ScreenSettings {
+    fn default() -> Self {
+        // "720p30" — the reference client's own default preset, so a first run
+        // gets the same picture as the client this one is meant to match.
+        Self {
+            height: 720,
+            fps: 30,
+            video_bitrate_kbps: 2500,
+            audio: false,
+            audio_bitrate_kbps: 128,
+            access: ScreenAccess::Public,
+            viewer_limit: 0,
+            mode: ScreenMode::P2p,
+        }
+    }
+}
+
 /// Reads and writes [`Settings`] in one directory.
 ///
 /// The root is explicit so tests can point at a temporary directory and mobile
@@ -592,10 +651,46 @@ mod tests {
                 language: Some("en".into()),
                 theme: Some("black".into()),
             },
+            screen: ScreenSettings {
+                height: 1440,
+                fps: 60,
+                video_bitrate_kbps: 6000,
+                audio: true,
+                audio_bitrate_kbps: 192,
+                access: ScreenAccess::Private,
+                viewer_limit: 4,
+                mode: ScreenMode::P2p,
+            },
         };
 
         store.save(&settings).unwrap();
         assert_eq!(store.load().unwrap(), settings);
+    }
+
+    #[test]
+    fn a_file_written_before_screen_sharing_existed_starts_at_720p30() {
+        // The whole section is missing, which is the ordinary case for anyone
+        // upgrading: the defaults have to be the reference client's own
+        // starting preset, not zeros — a height of zero means "the source's own
+        // resolution" and a bitrate of zero means "no video at all".
+        let dir = TempDir::new("screen-defaults");
+        let store = dir.store();
+        fs::write(
+            store.path(),
+            r#"{"version":1,"connection":{"nickname":"Alice"}}"#,
+        )
+        .unwrap();
+
+        let screen = store.load().unwrap().screen;
+        assert_eq!(screen.height, 720);
+        assert_eq!(screen.fps, 30);
+        assert_eq!(screen.video_bitrate_kbps, 2500);
+        assert!(!screen.audio);
+        assert_eq!(screen.access, ScreenAccess::Public);
+        // Zero here is "no limit", which is also the default — so the assertion
+        // is about the meaning, not the number.
+        assert_eq!(screen.viewer_limit, 0);
+        assert_eq!(screen.mode, ScreenMode::P2p);
     }
 
     #[test]

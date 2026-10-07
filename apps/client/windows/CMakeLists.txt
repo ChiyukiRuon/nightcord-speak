@@ -57,6 +57,13 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# The media SDK sources contain UTF-8 comments. MSVC otherwise uses the host
+# ANSI code page and promotes C4819 to an error under the plugin's /WX flags.
+if(TARGET flutter_webrtc_plugin)
+  target_compile_options(flutter_webrtc_plugin PRIVATE /utf-8)
+  include(cmake/webrtc_multi_engine.cmake)
+endif()
+
 
 # === Nightcord Rust core ===
 #

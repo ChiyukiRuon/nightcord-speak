@@ -212,6 +212,7 @@ class NotificationPolicy {
       case ErrorEvent():
       case DisconnectedEvent():
       case ReconnectScheduledEvent():
+      case ScreenEvent():
       case UnknownEvent():
         return null;
     }

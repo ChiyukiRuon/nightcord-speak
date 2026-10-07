@@ -1410,6 +1410,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View component licenses'**
   String get aboutViewLicenses;
+
+  /// No description provided for @screenStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Share screen'**
+  String get screenStart;
+
+  /// No description provided for @screenStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop sharing'**
+  String get screenStop;
+
+  /// No description provided for @screenLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop watching'**
+  String get screenLeave;
+
+  /// No description provided for @screenWatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch'**
+  String get screenWatch;
+
+  /// No description provided for @screenConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get screenConnecting;
+
+  /// No description provided for @screenViewers.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewers'**
+  String get screenViewers;
+
+  /// No description provided for @screenFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Full screen'**
+  String get screenFullscreen;
+
+  /// No description provided for @fullscreenExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get fullscreenExit;
+
+  /// No description provided for @screenHidePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide preview'**
+  String get screenHidePreview;
+
+  /// No description provided for @memberStreaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing their screen'**
+  String get memberStreaming;
+
+  /// No description provided for @screenEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen sharing ended'**
+  String get screenEnded;
+
+  /// No description provided for @screenCaptureFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not capture the screen. Check screen recording permission and try again.'**
+  String get screenCaptureFailed;
+
+  /// No description provided for @screenRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'The sharing request was declined.'**
+  String get screenRefused;
+
+  /// No description provided for @screenTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen sharing timed out. Try again.'**
+  String get screenTimeout;
+
+  /// No description provided for @screenConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen sharing connection failed. Try again.'**
+  String get screenConnectionFailed;
+
+  /// No description provided for @screenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen share'**
+  String get screenTitle;
+
+  /// No description provided for @screenSetupSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a source'**
+  String get screenSetupSources;
+
+  /// No description provided for @screenSetupApps.
+  ///
+  /// In en, this message translates to:
+  /// **'Applications'**
+  String get screenSetupApps;
+
+  /// No description provided for @screenSetupScreens.
+  ///
+  /// In en, this message translates to:
+  /// **'Screens'**
+  String get screenSetupScreens;
+
+  /// No description provided for @screenSetupCameras.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get screenSetupCameras;
+
+  /// No description provided for @screenSetupNoSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to share was found'**
+  String get screenSetupNoSources;
+
+  /// No description provided for @screenSetupNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get screenSetupNext;
+
+  /// No description provided for @screenSetupBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get screenSetupBack;
+
+  /// No description provided for @screenSetupGoLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Start streaming'**
+  String get screenSetupGoLive;
+
+  /// No description provided for @screenSetupBasic.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic'**
+  String get screenSetupBasic;
+
+  /// No description provided for @screenSetupAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get screenSetupAdvanced;
+
+  /// No description provided for @screenSetupPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Preset'**
+  String get screenSetupPreset;
+
+  /// No description provided for @screenSetupSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get screenSetupSource;
+
+  /// No description provided for @screenSetupPresentation.
+  ///
+  /// In en, this message translates to:
+  /// **'Presentation'**
+  String get screenSetupPresentation;
+
+  /// No description provided for @screenSetupCaptureAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture audio'**
+  String get screenSetupCaptureAudio;
+
+  /// No description provided for @screenSetupPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get screenSetupPrivacy;
+
+  /// No description provided for @screenSetupPublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get screenSetupPublic;
+
+  /// No description provided for @screenSetupContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts'**
+  String get screenSetupContacts;
+
+  /// No description provided for @screenSetupPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get screenSetupPrivate;
+
+  /// No description provided for @screenSetupResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get screenSetupResolution;
+
+  /// No description provided for @screenSetupFps.
+  ///
+  /// In en, this message translates to:
+  /// **'FPS'**
+  String get screenSetupFps;
+
+  /// No description provided for @screenSetupVideoBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Bitrate'**
+  String get screenSetupVideoBitrate;
+
+  /// No description provided for @screenSetupAudioBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio bitrate'**
+  String get screenSetupAudioBitrate;
+
+  /// No description provided for @screenSetupViewerLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewer limit'**
+  String get screenSetupViewerLimit;
+
+  /// No description provided for @screenSetupUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get screenSetupUnlimited;
+
+  /// No description provided for @screenSetupMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection'**
+  String get screenSetupMode;
+
+  /// No description provided for @screenSetupSfuUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs the server to relay the media, which this client does not do yet'**
+  String get screenSetupSfuUnavailable;
+
+  /// No description provided for @screenSetupHelpPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Sets resolution, frame rate and bitrate together. Change any of them afterwards and this becomes your own set.'**
+  String get screenSetupHelpPreset;
+
+  /// No description provided for @screenSetupHelpCaptureAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Sends what the shared window plays, alongside its picture.'**
+  String get screenSetupHelpCaptureAudio;
+
+  /// No description provided for @screenSetupHelpPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts behaves as private: this client has no contact list to check against.'**
+  String get screenSetupHelpPrivacy;
+
+  /// No description provided for @screenSetupHelpResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'What the picture is scaled to before it is encoded. The capture itself is always the source’s own size.'**
+  String get screenSetupHelpResolution;
+
+  /// No description provided for @screenSetupHelpFps.
+  ///
+  /// In en, this message translates to:
+  /// **'How many frames a second are sent. Lower costs less bandwidth and looks less smooth.'**
+  String get screenSetupHelpFps;
+
+  /// No description provided for @screenSetupHelpVideoBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'The most the encoder may spend on the picture. What watchers see is what this buys.'**
+  String get screenSetupHelpVideoBitrate;
+
+  /// No description provided for @screenSetupHelpAudioBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'The most the encoder may spend on sound. Only used while capture audio is on.'**
+  String get screenSetupHelpAudioBitrate;
+
+  /// No description provided for @screenSetupHelpViewerLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'How many people may watch at once. Unlimited leaves it to the server.'**
+  String get screenSetupHelpViewerLimit;
+
+  /// No description provided for @screenSetupHelpMode.
+  ///
+  /// In en, this message translates to:
+  /// **'P2P sends the picture straight to each watcher. Relaying it through the server is not implemented here.'**
+  String get screenSetupHelpMode;
+
+  /// No description provided for @screenSetupKbps.
+  ///
+  /// In en, this message translates to:
+  /// **'Kbps'**
+  String get screenSetupKbps;
+
+  /// No description provided for @screenSetupPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get screenSetupPreview;
+
+  /// No description provided for @screenSetupPreviewNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview uses a snapshot. You can still share a window when its preview is unavailable.'**
+  String get screenSetupPreviewNote;
+
+  /// No description provided for @screenPopOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Pop out'**
+  String get screenPopOut;
+
+  /// No description provided for @screenReturnInline.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to small window'**
+  String get screenReturnInline;
 }
 
 class _AppLocalizationsDelegate

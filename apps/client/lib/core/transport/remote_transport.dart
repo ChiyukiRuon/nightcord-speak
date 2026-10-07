@@ -350,6 +350,10 @@ class RemoteTransport implements ClientTransport {
         'reason': reason,
       });
   @override
+  void screen(int session, Map<String, dynamic> command) =>
+      _send('screen', {'session': session, 'command': command});
+
+  @override
   void setAway(int session, {required bool away, String? message}) {
     _send('set_away', {'session': session, 'away': away, 'message': message});
   }

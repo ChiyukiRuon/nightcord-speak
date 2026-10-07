@@ -775,4 +775,185 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutViewLicenses => 'View component licenses';
+
+  @override
+  String get screenStart => 'Share screen';
+
+  @override
+  String get screenStop => 'Stop sharing';
+
+  @override
+  String get screenLeave => 'Stop watching';
+
+  @override
+  String get screenWatch => 'Watch';
+
+  @override
+  String get screenConnecting => 'Connecting…';
+
+  @override
+  String get screenViewers => 'Viewers';
+
+  @override
+  String get screenFullscreen => 'Full screen';
+
+  @override
+  String get fullscreenExit => 'Exit full screen';
+
+  @override
+  String get screenHidePreview => 'Hide preview';
+
+  @override
+  String get memberStreaming => 'Sharing their screen';
+
+  @override
+  String get screenEnded => 'Screen sharing ended';
+
+  @override
+  String get screenCaptureFailed =>
+      'Could not capture the screen. Check screen recording permission and try again.';
+
+  @override
+  String get screenRefused => 'The sharing request was declined.';
+
+  @override
+  String get screenTimeout => 'Screen sharing timed out. Try again.';
+
+  @override
+  String get screenConnectionFailed =>
+      'Screen sharing connection failed. Try again.';
+
+  @override
+  String get screenTitle => 'Screen share';
+
+  @override
+  String get screenSetupSources => 'Choose a source';
+
+  @override
+  String get screenSetupApps => 'Applications';
+
+  @override
+  String get screenSetupScreens => 'Screens';
+
+  @override
+  String get screenSetupCameras => 'Camera';
+
+  @override
+  String get screenSetupNoSources => 'Nothing to share was found';
+
+  @override
+  String get screenSetupNext => 'Next';
+
+  @override
+  String get screenSetupBack => 'Back';
+
+  @override
+  String get screenSetupGoLive => 'Start streaming';
+
+  @override
+  String get screenSetupBasic => 'Basic';
+
+  @override
+  String get screenSetupAdvanced => 'Advanced';
+
+  @override
+  String get screenSetupPreset => 'Preset';
+
+  @override
+  String get screenSetupSource => 'Source';
+
+  @override
+  String get screenSetupPresentation => 'Presentation';
+
+  @override
+  String get screenSetupCaptureAudio => 'Capture audio';
+
+  @override
+  String get screenSetupPrivacy => 'Privacy';
+
+  @override
+  String get screenSetupPublic => 'Public';
+
+  @override
+  String get screenSetupContacts => 'Contacts';
+
+  @override
+  String get screenSetupPrivate => 'Private';
+
+  @override
+  String get screenSetupResolution => 'Resolution';
+
+  @override
+  String get screenSetupFps => 'FPS';
+
+  @override
+  String get screenSetupVideoBitrate => 'Bitrate';
+
+  @override
+  String get screenSetupAudioBitrate => 'Audio bitrate';
+
+  @override
+  String get screenSetupViewerLimit => 'Viewer limit';
+
+  @override
+  String get screenSetupUnlimited => 'Unlimited';
+
+  @override
+  String get screenSetupMode => 'Connection';
+
+  @override
+  String get screenSetupSfuUnavailable =>
+      'Needs the server to relay the media, which this client does not do yet';
+
+  @override
+  String get screenSetupHelpPreset =>
+      'Sets resolution, frame rate and bitrate together. Change any of them afterwards and this becomes your own set.';
+
+  @override
+  String get screenSetupHelpCaptureAudio =>
+      'Sends what the shared window plays, alongside its picture.';
+
+  @override
+  String get screenSetupHelpPrivacy =>
+      'Contacts behaves as private: this client has no contact list to check against.';
+
+  @override
+  String get screenSetupHelpResolution =>
+      'What the picture is scaled to before it is encoded. The capture itself is always the source’s own size.';
+
+  @override
+  String get screenSetupHelpFps =>
+      'How many frames a second are sent. Lower costs less bandwidth and looks less smooth.';
+
+  @override
+  String get screenSetupHelpVideoBitrate =>
+      'The most the encoder may spend on the picture. What watchers see is what this buys.';
+
+  @override
+  String get screenSetupHelpAudioBitrate =>
+      'The most the encoder may spend on sound. Only used while capture audio is on.';
+
+  @override
+  String get screenSetupHelpViewerLimit =>
+      'How many people may watch at once. Unlimited leaves it to the server.';
+
+  @override
+  String get screenSetupHelpMode =>
+      'P2P sends the picture straight to each watcher. Relaying it through the server is not implemented here.';
+
+  @override
+  String get screenSetupKbps => 'Kbps';
+
+  @override
+  String get screenSetupPreview => 'Preview';
+
+  @override
+  String get screenSetupPreviewNote =>
+      'Preview uses a snapshot. You can still share a window when its preview is unavailable.';
+
+  @override
+  String get screenPopOut => 'Pop out';
+
+  @override
+  String get screenReturnInline => 'Back to small window';
 }

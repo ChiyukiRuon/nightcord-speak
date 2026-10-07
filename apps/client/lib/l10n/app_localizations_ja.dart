@@ -727,4 +727,176 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get aboutViewLicenses => 'コンポーネントのライセンス';
+
+  @override
+  String get screenStart => '画面を共有';
+
+  @override
+  String get screenStop => '共有を停止';
+
+  @override
+  String get screenLeave => '視聴を停止';
+
+  @override
+  String get screenWatch => '視聴';
+
+  @override
+  String get screenConnecting => '接続中…';
+
+  @override
+  String get screenViewers => '視聴者数';
+
+  @override
+  String get screenFullscreen => '全画面';
+
+  @override
+  String get fullscreenExit => '全画面を終了';
+
+  @override
+  String get screenHidePreview => 'プレビューを隠す';
+
+  @override
+  String get memberStreaming => '画面を共有中';
+
+  @override
+  String get screenEnded => '画面共有が終了しました';
+
+  @override
+  String get screenCaptureFailed => '画面を取得できません。画面収録の権限を確認して再試行してください。';
+
+  @override
+  String get screenRefused => '共有リクエストが拒否されました。';
+
+  @override
+  String get screenTimeout => '画面共有の接続がタイムアウトしました。再試行してください。';
+
+  @override
+  String get screenConnectionFailed => '画面共有の接続に失敗しました。再試行してください。';
+
+  @override
+  String get screenTitle => '画面共有';
+
+  @override
+  String get screenSetupSources => 'ソースを選択';
+
+  @override
+  String get screenSetupApps => 'アプリ';
+
+  @override
+  String get screenSetupScreens => '画面';
+
+  @override
+  String get screenSetupCameras => 'カメラ';
+
+  @override
+  String get screenSetupNoSources => '共有できるものが見つかりません';
+
+  @override
+  String get screenSetupNext => '次へ';
+
+  @override
+  String get screenSetupBack => '戻る';
+
+  @override
+  String get screenSetupGoLive => '配信を開始';
+
+  @override
+  String get screenSetupBasic => '基本設定';
+
+  @override
+  String get screenSetupAdvanced => '詳細設定';
+
+  @override
+  String get screenSetupPreset => 'プリセット';
+
+  @override
+  String get screenSetupSource => 'ソース';
+
+  @override
+  String get screenSetupPresentation => 'プレゼン';
+
+  @override
+  String get screenSetupCaptureAudio => '音声をキャプチャ';
+
+  @override
+  String get screenSetupPrivacy => 'プライバシー';
+
+  @override
+  String get screenSetupPublic => '公開';
+
+  @override
+  String get screenSetupContacts => '連絡先';
+
+  @override
+  String get screenSetupPrivate => '非公開';
+
+  @override
+  String get screenSetupResolution => '解像度';
+
+  @override
+  String get screenSetupFps => 'FPS';
+
+  @override
+  String get screenSetupVideoBitrate => 'ビットレート';
+
+  @override
+  String get screenSetupAudioBitrate => '音声ビットレート';
+
+  @override
+  String get screenSetupViewerLimit => '視聴者数制限';
+
+  @override
+  String get screenSetupUnlimited => '無制限';
+
+  @override
+  String get screenSetupMode => '接続モード';
+
+  @override
+  String get screenSetupSfuUnavailable => 'サーバー側でメディアを中継する必要があり、このクライアントは未対応です';
+
+  @override
+  String get screenSetupHelpPreset =>
+      '解像度・フレームレート・ビットレートをまとめて設定します。あとから変更すると独自の組み合わせになります。';
+
+  @override
+  String get screenSetupHelpCaptureAudio => '共有するウィンドウの音声も映像と一緒に送ります。';
+
+  @override
+  String get screenSetupHelpPrivacy =>
+      '「連絡先」は「非公開」と同じ扱いです。照合できる連絡先がこのクライアントにないためです。';
+
+  @override
+  String get screenSetupHelpResolution => 'エンコード前に縮小するサイズです。キャプチャ自体は常に元の大きさです。';
+
+  @override
+  String get screenSetupHelpFps => '1秒あたりのフレーム数です。低いほど帯域を食いませんが、なめらかさは失われます。';
+
+  @override
+  String get screenSetupHelpVideoBitrate =>
+      'エンコーダーが映像に使える上限です。視聴者に見えるのはこの分の画質です。';
+
+  @override
+  String get screenSetupHelpAudioBitrate =>
+      'エンコーダーが音声に使える上限です。音声キャプチャが有効なときだけ使われます。';
+
+  @override
+  String get screenSetupHelpViewerLimit => '同時に視聴できる人数です。「無制限」はサーバーに任せます。';
+
+  @override
+  String get screenSetupHelpMode => 'P2P は視聴者ごとに直接送ります。サーバー経由の中継は未実装です。';
+
+  @override
+  String get screenSetupKbps => 'Kbps';
+
+  @override
+  String get screenSetupPreview => 'プレビュー';
+
+  @override
+  String get screenSetupPreviewNote => 'プレビューは静止画です。表示できないウィンドウも共有できます。';
+
+  @override
+  String get screenPopOut => 'ウィンドウに分離';
+
+  @override
+  String get screenReturnInline => '小窓に戻す';
 }

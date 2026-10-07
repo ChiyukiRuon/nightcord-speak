@@ -514,6 +514,36 @@ pub unsafe extern "C" fn nightcord_ban(
     }
 }
 
+/// Runs one screen-sharing control command, given as serialised
+/// `ScreenCommand` JSON.
+///
+/// Nothing here carries media: the peers negotiate their own connection and the
+/// frontend owns it, so this is discovery, joining and signalling only.
+///
+/// # Safety
+///
+/// `handle` must be live, and `request` null or a NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_screen(
+    handle: *mut NightcordClient,
+    session: u32,
+    request: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(request) }) else {
+        reject(client, "screen", "no request provided");
+        return;
+    };
+    if let Some(command) = parse_json::<ts_model::ScreenCommand>(client, "screen", &text) {
+        client.send(Command::Screen {
+            session: SessionId::new(session),
+            command,
+        });
+    }
+}
+
 /// Marks us away, or back at the keyboard.
 ///
 /// `away` is the switch and `message` is what to say about it; `message` may be

@@ -6,6 +6,7 @@
 // by hand, does not break the UI.
 
 import 'domain.dart';
+import 'screen_options.dart';
 import 'shortcuts.dart';
 
 /// Everything the client remembers between runs.
@@ -18,6 +19,7 @@ class Settings {
     this.shortcuts = const ShortcutSettings(),
     this.presence = const PresenceSettings(),
     this.ui = const UiSettings(),
+    this.screen = const ScreenSettings(),
   });
 
   /// On-disk format version. The core refuses one it does not know.
@@ -29,6 +31,7 @@ class Settings {
   final ShortcutSettings shortcuts;
   final PresenceSettings presence;
   final UiSettings ui;
+  final ScreenSettings screen;
 
   Settings copyWith({
     AudioSettings? audio,
@@ -37,6 +40,7 @@ class Settings {
     ShortcutSettings? shortcuts,
     PresenceSettings? presence,
     UiSettings? ui,
+    ScreenSettings? screen,
   }) => Settings(
     version: version,
     audio: audio ?? this.audio,
@@ -45,6 +49,7 @@ class Settings {
     shortcuts: shortcuts ?? this.shortcuts,
     presence: presence ?? this.presence,
     ui: ui ?? this.ui,
+    screen: screen ?? this.screen,
   );
 
   factory Settings.fromJson(Map<String, dynamic> json) => Settings(
@@ -55,6 +60,7 @@ class Settings {
     shortcuts: ShortcutSettings.fromJson(_object(json['shortcuts'])),
     presence: PresenceSettings.fromJson(_object(json['presence'])),
     ui: UiSettings.fromJson(_object(json['ui'])),
+    screen: ScreenSettings.fromJson(_object(json['screen'])),
   );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +71,7 @@ class Settings {
     'shortcuts': shortcuts.toJson(),
     'presence': presence.toJson(),
     'ui': ui.toJson(),
+    'screen': screen.toJson(),
   };
 }
 
@@ -422,6 +429,99 @@ class UiSettings {
   );
 
   Map<String, dynamic> toJson() => {'language': language, 'theme': theme};
+}
+
+/// What a screen share is started with.
+///
+/// Mirrors `ts_settings::ScreenSettings`. The core never reads these — they are
+/// consumed by the capture and the encoder on this side, and travel to the
+/// server inside the start command.
+///
+/// No `preset` field, on purpose: a preset is a named set of these numbers, so
+/// the selected one is *derived* from them (see `ScreenPreset.matching`). Two
+/// answers to "which preset is this" is exactly what a preset must not have.
+class ScreenSettings {
+  const ScreenSettings({
+    this.height = 720,
+    this.fps = 30,
+    this.videoBitrateKbps = 2500,
+    this.audio = false,
+    this.audioBitrateKbps = 128,
+    this.access = ScreenAccess.public,
+    this.viewerLimit = 0,
+    this.mode = ScreenMode.p2p,
+  });
+
+  /// Wanted capture height in pixels; 0 keeps the source's own.
+  final int height;
+
+  /// Wanted frames per second; 0 leaves it to the platform.
+  final int fps;
+
+  /// What the encoder may spend on the picture.
+  final int videoBitrateKbps;
+
+  /// Whether to send the capture's own audio with it.
+  ///
+  /// Off by default even though the reference client starts with it on: there
+  /// is no audio capture path here yet, and asking the server for a stream with
+  /// sound that carries none is worse than asking for one without.
+  final bool audio;
+
+  /// What the encoder may spend on that audio. Ignored while [audio] is false.
+  final int audioBitrateKbps;
+
+  final ScreenAccess access;
+
+  /// How many viewers to allow; 0 means as many as the server will carry.
+  final int viewerLimit;
+
+  final ScreenMode mode;
+
+  ScreenSettings copyWith({
+    int? height,
+    int? fps,
+    int? videoBitrateKbps,
+    bool? audio,
+    int? audioBitrateKbps,
+    ScreenAccess? access,
+    int? viewerLimit,
+    ScreenMode? mode,
+  }) => ScreenSettings(
+    height: height ?? this.height,
+    fps: fps ?? this.fps,
+    videoBitrateKbps: videoBitrateKbps ?? this.videoBitrateKbps,
+    audio: audio ?? this.audio,
+    audioBitrateKbps: audioBitrateKbps ?? this.audioBitrateKbps,
+    access: access ?? this.access,
+    viewerLimit: viewerLimit ?? this.viewerLimit,
+    mode: mode ?? this.mode,
+  );
+
+  factory ScreenSettings.fromJson(Map<String, dynamic> json) => ScreenSettings(
+    // `?? 720` rather than `?? 0`, matching serde: a missing height means the
+    // default preset, and zero would mean "the source's own resolution" — a
+    // different picture entirely.
+    height: (json['height'] as num?)?.toInt() ?? 720,
+    fps: (json['fps'] as num?)?.toInt() ?? 30,
+    videoBitrateKbps: (json['video_bitrate_kbps'] as num?)?.toInt() ?? 2500,
+    audio: json['audio'] as bool? ?? false,
+    audioBitrateKbps: (json['audio_bitrate_kbps'] as num?)?.toInt() ?? 128,
+    access: ScreenAccess.fromWire(json['access'] as String?),
+    viewerLimit: (json['viewer_limit'] as num?)?.toInt() ?? 0,
+    mode: ScreenMode.fromWire(json['mode'] as String?),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'height': height,
+    'fps': fps,
+    'video_bitrate_kbps': videoBitrateKbps,
+    'audio': audio,
+    'audio_bitrate_kbps': audioBitrateKbps,
+    'access': access.wire,
+    'viewer_limit': viewerLimit,
+    'mode': mode.wire,
+  };
 }
 
 /// Reads a nested object, tolerating anything else.

@@ -29,7 +29,11 @@ mod message;
 mod moderation;
 mod permission;
 mod protocol;
+mod screen;
 mod server;
+pub use screen::{
+    ScreenAccess, ScreenCommand, ScreenEvent, ScreenMode, ScreenOptions, ScreenSignal, ScreenSource,
+};
 mod target;
 mod voice;
 

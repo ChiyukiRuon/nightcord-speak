@@ -26,6 +26,8 @@ use ts_model::{
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", content = "payload", rename_all = "snake_case")]
 pub enum ClientEvent {
+    /// Screen sharing discovery and peer negotiation.
+    Screen(ts_model::ScreenEvent),
     // --- lifecycle --------------------------------------------------------
     /// The session moved to a different lifecycle state.
     ConnectionStateChanged(ConnectionState),
@@ -153,6 +155,7 @@ impl ClientEvent {
         match self {
             Self::ConnectionStateChanged(_) => "connection_state_changed",
             Self::Connected { .. } => "connected",
+            Self::Screen(_) => "screen",
             Self::ServerInfoChanged(_) => "server_info_changed",
             Self::Disconnected => "disconnected",
             Self::ReconnectScheduled { .. } => "reconnect_scheduled",
@@ -262,6 +265,7 @@ impl Default for EventBus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ts_model::ProtocolKind;
 
     #[test]
     fn subscriber_receives_published_events() {
@@ -308,6 +312,24 @@ mod tests {
         assert!(a.try_recv().is_ok());
         assert!(b.try_recv().is_ok());
         assert_eq!(bus.subscriber_count(), 2);
+    }
+
+    #[test]
+    fn the_capability_flags_arrive_under_the_names_the_front_ends_read() {
+        // The screen-sharing entry exists only because Dart reads
+        // `capabilities.screen_stream` out of this payload, and nothing but
+        // this test sits between the two spellings. Renaming either half is
+        // otherwise a silent "the feature vanished from the UI" — which is
+        // exactly what happened once: the event was defined, serialised and
+        // handled, and no backend ever published it.
+        let json =
+            serde_json::to_value(ClientEvent::CapabilitiesChanged(Capabilities::TS6)).unwrap();
+        assert_eq!(json["event"], "capabilities_changed");
+        assert_eq!(json["payload"]["screen_stream"], true);
+        assert_eq!(
+            serde_json::to_value(Capabilities::for_protocol(ProtocolKind::Ts3)).unwrap()["screen_stream"],
+            false
+        );
     }
 
     #[test]

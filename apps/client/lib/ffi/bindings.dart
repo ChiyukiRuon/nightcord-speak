@@ -47,6 +47,9 @@ typedef _MarkCleanExitDart = bool Function(Handle handle);
 
 // --- commands --------------------------------------------------------------
 
+typedef _ScreenC = Void Function(Handle, Uint32, Pointer<Utf8>);
+typedef _ScreenDart = void Function(Handle, int, Pointer<Utf8>);
+
 typedef _ConnectC = Void Function(Handle handle, Pointer<Utf8> requestJson);
 typedef _ConnectDart = void Function(Handle handle, Pointer<Utf8> requestJson);
 
@@ -244,6 +247,7 @@ class NightcordBindings {
       poke = library.lookupFunction<_PokeC, _PokeDart>('nightcord_poke'),
       kick = library.lookupFunction<_KickC, _KickDart>('nightcord_kick'),
       ban = library.lookupFunction<_BanC, _BanDart>('nightcord_ban'),
+      screen = library.lookupFunction<_ScreenC, _ScreenDart>('nightcord_screen'),
       setAway = library.lookupFunction<_SetAwayC, _SetAwayDart>('nightcord_set_away'),
       setClientVolume = library.lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
         'nightcord_voice_set_client_volume',
@@ -352,6 +356,10 @@ class NightcordBindings {
 
   /// Bans another client; `duration` is serialised `BanDuration` JSON.
   final void Function(Handle, int, int, Pointer<Utf8>, Pointer<Utf8>) ban;
+
+  /// Runs one screen-sharing command; the argument is serialised
+  /// `ScreenCommand` JSON.
+  final void Function(Handle, int, Pointer<Utf8>) screen;
 
   /// Marks us away or back; `message` is what to say, and is ignored when
   /// `away` is false.

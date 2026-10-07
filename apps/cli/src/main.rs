@@ -490,6 +490,7 @@ async fn termination_signal() {
 fn render(event: &SessionEvent) {
     let session = event.session;
     match &event.event {
+        ClientEvent::Screen(_) => {}
         ClientEvent::ConnectionStateChanged(state) => {
             println!("[{session}] connection: {state:?}");
         }

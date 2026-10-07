@@ -3265,6 +3265,7 @@ dependencies = [
 name = "ts-protocol-ts6"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "ts-events",
  "ts-identity",
  "ts-model",

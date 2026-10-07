@@ -175,6 +175,7 @@ class ClientFlags {
     this.inputMuted = false,
     this.outputMuted = false,
     this.recording = false,
+    this.streaming = false,
     this.channelCommander = false,
   });
 
@@ -182,6 +183,7 @@ class ClientFlags {
   final bool inputMuted;
   final bool outputMuted;
   final bool recording;
+  final bool streaming;
   final bool channelCommander;
 
   /// Neither heard nor hearing.
@@ -192,6 +194,7 @@ class ClientFlags {
     inputMuted: json['input_muted'] as bool? ?? false,
     outputMuted: json['output_muted'] as bool? ?? false,
     recording: json['recording'] as bool? ?? false,
+    streaming: json['streaming'] as bool? ?? false,
     channelCommander: json['channel_commander'] as bool? ?? false,
   );
 }

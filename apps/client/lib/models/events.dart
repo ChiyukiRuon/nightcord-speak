@@ -66,6 +66,7 @@ sealed class ClientEvent {
         (value as Map?)?.cast<String, dynamic>() ?? const {};
 
     return switch (name) {
+      'screen' => ScreenEvent(map(payload)),
       'connected' => ConnectedEvent(
         server: Server.fromJson(map(payload)['server'] as Map<String, dynamic>? ?? const {}),
         info: ServerInfo.fromJson(map(payload)['info'] as Map<String, dynamic>? ?? const {}),
@@ -110,6 +111,18 @@ sealed class ClientEvent {
       _ => UnknownEvent(name ?? 'unknown'),
     };
   }
+}
+
+/// Screen-sharing negotiation, already reduced by the core to the domain
+/// vocabulary.
+///
+/// Kept as a map rather than a closed set of classes: the core owns the shape
+/// (`ScreenCommand` in `ts-model`) and the only reader is the screen controller,
+/// which switches on `type` anyway. Nothing else in the app — the server view,
+/// the notification rules, the message list — looks at it.
+class ScreenEvent extends ClientEvent {
+  const ScreenEvent(this.data);
+  final Map<String, dynamic> data;
 }
 
 /// The handshake finished.

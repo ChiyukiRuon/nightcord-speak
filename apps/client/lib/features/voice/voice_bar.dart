@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design/components/app_text_prompt.dart';
+import '../../design/components/voice_bar_button.dart';
 import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
+import '../screen/screen_share_button.dart';
 import '../settings/settings_page.dart';
 import 'mic_gain_flyout.dart';
 
@@ -104,7 +106,7 @@ class VoiceBar extends ConsumerWidget {
                 // forgets the view, and the channel tree and the conversation
                 // go with it. That is more than a stray click should cost, even
                 // beside a button this deliberately placed.
-                _VoiceButton(
+                VoiceBarButton(
                   // A door with an arrow out of it: the same 「leaving」 a
                   // sign-in screen draws, rather than a broken chain, which
                   // reads as "this link is broken" — a fault, not a choice.
@@ -118,11 +120,16 @@ class VoiceBar extends ConsumerWidget {
               ],
             ),
           ),
+          // Screen sharing stands beside away for the same reason away stands
+          // beside the microphone: both are states of *ours* that the server
+          // publishes, rather than something about sound. It is absent
+          // entirely on a protocol that cannot carry it — see the widget.
+          if (view?.capabilities.screenStream ?? false) ScreenShareButton(session: session),
           // Away sits to the left of the microphone because it is about us
           // rather than about sound: it says whether we are here at all. The
           // glyph is the one the member list already draws for an away client,
           // so the button and the badge read as the same fact.
-          _VoiceButton(
+          VoiceBarButton(
             // An alarm clock with a Z on its face — the closest the Material
             // set comes to the ZZZ of falling asleep, and the reason the away
             // button no longer looks like a clock you could set.
@@ -143,7 +150,7 @@ class VoiceBar extends ConsumerWidget {
           // top: how loud we are is the microphone's business, and the button
           // is where a hand already is when someone wants to change it.
           MicGainFlyout(
-            child: _VoiceButton(
+            child: VoiceBarButton(
               icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
               tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
               active: voice.inputMuted,
@@ -154,7 +161,7 @@ class VoiceBar extends ConsumerWidget {
               onPressed: () => ref.read(sessionsProvider.notifier).toggleInputMuted(session),
             ),
           ),
-          _VoiceButton(
+          VoiceBarButton(
             icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
             tooltip: voice.outputMuted ? l10n.voiceUndeafen : l10n.voiceDeafen,
             active: voice.outputMuted,
@@ -162,7 +169,7 @@ class VoiceBar extends ConsumerWidget {
             enabled: online,
             onPressed: () => ref.read(sessionsProvider.notifier).toggleOutputMuted(session),
           ),
-          _VoiceButton(
+          VoiceBarButton(
             icon: Icons.settings,
             tooltip: l10n.settingsTitle,
             // Unlike the two buttons above, settings do not need a live
@@ -239,75 +246,5 @@ class VoiceBar extends ConsumerWidget {
     if (message == null) return;
 
     sessions.goAwayWith(session, message.trim());
-  }
-}
-
-/// One round control in the voice bar.
-///
-/// Size, icon size and hover all come from the theme's `iconButtonTheme` (§33),
-/// so this only decides the *tint* — which is the part that carries meaning.
-class _VoiceButton extends StatelessWidget {
-  const _VoiceButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    this.onSecondaryTap,
-    this.onLongPress,
-    this.active = false,
-    this.colour,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  /// A second action behind the right mouse button, when the control has one.
-  final VoidCallback? onSecondaryTap;
-
-  /// The same second action for a finger, which has no right button.
-  final VoidCallback? onLongPress;
-
-  final bool active;
-  final Color? colour;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = DesignTokens.of(context);
-    final tint = !enabled
-        ? tokens.textDisabled
-        : active
-        ? (colour ?? tokens.primary)
-        : tokens.textSecondary;
-
-    if (onSecondaryTap == null && onLongPress == null) {
-      return IconButton(
-        onPressed: enabled ? onPressed : null,
-        tooltip: tooltip,
-        icon: Icon(icon, color: tint),
-      );
-    }
-
-    // A button with a second action keeps the tooltip, but *outside* itself and
-    // *outside* the gesture detector. An `IconButton`'s tooltip is a `Tooltip`
-    // sitting below the button, and `Tooltip` claims a long press on touch
-    // platforms — which is exactly the gesture that has to open the away
-    // message, on exactly the platforms that have no right button. Nested the
-    // other way round, the inner detector is hit-tested first and wins.
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        // Wrapped rather than folded in: an `IconButton` has no secondary tap,
-        // so without this the away message would be reachable only on a machine
-        // with a right button.
-        onSecondaryTap: enabled ? onSecondaryTap : null,
-        onLongPress: enabled ? onLongPress : null,
-        child: IconButton(
-          onPressed: enabled ? onPressed : null,
-          icon: Icon(icon, color: tint),
-        ),
-      ),
-    );
   }
 }

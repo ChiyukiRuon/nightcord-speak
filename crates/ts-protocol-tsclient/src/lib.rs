@@ -34,6 +34,7 @@
 mod actor;
 mod convert;
 mod diff;
+pub mod extension;
 mod identity;
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -95,6 +96,7 @@ pub fn generate_identity() -> Result<ts_identity::Identity, IdentityError> {
 #[derive(Clone)]
 pub struct TsClient {
     inner: Arc<Inner>,
+    extension: Option<Arc<dyn extension::ScreenExtension>>,
 }
 
 struct Inner {
@@ -128,6 +130,7 @@ impl TsClient {
         identity: Option<(IdentityStore, String)>,
     ) -> Self {
         Self {
+            extension: None,
             inner: Arc::new(Inner {
                 events,
                 session,
@@ -156,12 +159,14 @@ impl TsClient {
         // Resolution happens here; the handshake itself happens in the actor.
         let connection = open_connection(&config)?;
 
-        let context = Arc::new(Context::new(
+        let mut context = Context::new(
             self.inner.session,
             self.inner.server.clone(),
             self.inner.events.clone(),
             self.inner.identity.clone(),
-        ));
+        );
+        context.extension = self.extension.clone();
+        let context = Arc::new(context);
         // Install a sink that was set before this connect, so audio is routed
         // from the very first frame rather than after the UI gets around to it.
         if let Some(sink) = self.audio_sink() {
@@ -526,6 +531,64 @@ pub fn backend(
         Box::new(client.clone()),
         Box::new(client),
     )
+}
+
+/// Installs backend-owned wire vocabulary over the existing connection.
+pub fn backend_with_screen(
+    events: EventBus,
+    session: SessionId,
+    server: Server,
+    identity: Option<(IdentityStore, String)>,
+    extension: Arc<dyn extension::ScreenExtension>,
+) -> Backend {
+    let kind = server.protocol;
+    let mut client = TsClient::new(events, session, server, identity);
+    client.extension = Some(extension);
+    Backend::new(
+        kind,
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+        Box::new(client.clone()),
+    )
+    .with_screen(Box::new(client))
+}
+
+#[async_trait]
+impl ts_protocol::ScreenSharing for TsClient {
+    async fn execute(&mut self, command: ts_model::ScreenCommand) -> Result<(), ClientError> {
+        let extension = self
+            .extension
+            .as_ref()
+            .ok_or_else(|| ClientError::Unsupported("screen sharing is unavailable".into()))?;
+        tokio::time::timeout(Duration::from_secs(15), async {
+            let mut attempt = 0;
+            loop {
+                let packet = extension.encode(command.clone())?;
+                match self
+                    .call(|reply| Command::Extension { packet, reply })
+                    .await
+                {
+                    Ok(()) => return Ok(()),
+                    Err(error) => {
+                        let Some(delay) = extension.retry_delay(attempt, &error) else {
+                            return Err(error);
+                        };
+                        tracing::info!(session = %self.inner.session, attempt = attempt + 1,
+                                delay_ms = delay.as_millis(),
+                                "screen command throttled by server; retrying");
+                        tokio::time::sleep(delay).await;
+                        attempt += 1;
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| ClientError::Timeout)?
+    }
 }
 
 fn server_type(dialect: Dialect) -> ServerType {

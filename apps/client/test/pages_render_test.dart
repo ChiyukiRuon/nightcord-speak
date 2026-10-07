@@ -21,6 +21,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nightcord_client/core/screen/screen_providers.dart';
+import 'package:nightcord_client/core/screen/screen_share_backend.dart';
+import 'package:nightcord_client/features/screen/screen_pip.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/design/components/app_logo.dart';
 import 'package:nightcord_client/features/server/channel_sidebar.dart';
@@ -37,6 +40,7 @@ import 'package:nightcord_client/models/bookmarks.dart';
 import 'package:nightcord_client/models/connect_request.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
+import 'package:nightcord_client/models/screen_options.dart';
 import 'package:nightcord_client/models/settings.dart';
 import 'package:nightcord_client/models/voice_status.dart';
 import 'package:nightcord_client/providers/providers.dart';
@@ -73,6 +77,12 @@ class _SilentTransport implements ClientTransport {
   @override
   void connect(ConnectRequest request) => calls.add('connect:${request.address}');
 
+  /// Pushes one event as if the core had reported it.
+  ///
+  /// The screen controller only moves on what the server says back, so a test
+  /// that taps "share" and stops there never reaches the state a user sees.
+  void emit(FfiEvent event) => _events.add(event);
+
   /// Recorded because the whole point of the member menu is which of these it
   /// chooses, and with which arguments — a menu that wired "kick from server"
   /// to the channel scope would be invisible otherwise.
@@ -97,6 +107,24 @@ class _SilentTransport implements ClientTransport {
   @override
   void setAway(int session, {required bool away, String? message}) =>
       calls.add('away:${away ? "yes" : "no"}:${message ?? ""}');
+
+  /// The settings each `start` carried, in order.
+  ///
+  /// Kept apart from [calls] so the assertions about *which* command went out
+  /// stay readable — and so a test can ask what the share was set to without
+  /// unpicking a string.
+  final List<Map<String, dynamic>> starts = [];
+
+  /// Recorded with the peer it names: "watch" and "join" are one word apart,
+  /// and only the second one reaches the server once the stream is known.
+  @override
+  void screen(int session, Map<String, dynamic> command) {
+    final options = command['options'];
+    if (options is Map) starts.add(options.cast<String, dynamic>());
+    calls.add(
+      'screen:${command['action']}:${command['client_id'] ?? command['stream_id'] ?? ''}',
+    );
+  }
 
   /// Recorded so a test can tell "the slider moved" from "the core was told":
   /// the local state changes either way, and only the second one survives a
@@ -184,24 +212,148 @@ class _FixedNotices extends NoticesNotifier {
   ];
 }
 
+/// A screen backend with no platform behind it.
+///
+/// The real one is `flutter_webrtc`, which has nothing to attach to under
+/// `flutter_test`. The entry point needs *a* backend to drive; what is asserted
+/// about is the commands it produces, not the picture.
+class _FakeScreenBackend implements ScreenShareBackend {
+  _FakeScreenBackend({this.available = const []});
+
+  final media = _FakeMedia();
+  final peers = <_FakePeer>[];
+
+  /// What the picker is offered. Empty is the ordinary case for these tests —
+  /// the platform runs its own dialog — and the wizard still has to work.
+  final List<ScreenSource> available;
+
+  @override
+  Future<List<ScreenSource>> sources() async => available;
+
+  /// The fake has no renderer to hand out, so a preview is a media that
+  /// draws nothing — which is all the picker needs to be exercised.
+  @override
+  Future<ScreenMedia> preview(ScreenSource source) async => media;
+
+  @override
+  Future<ScreenMedia> capture(ScreenSource? source, ScreenOptions options) async => media;
+
+  /// Hands back a peer the test can drive.
+  ///
+  /// The negotiation itself is covered in `screen_controller_test.dart`; what
+  /// is being tested here is that a picture, once it exists, gets somewhere to
+  /// be drawn.
+  @override
+  Future<ScreenPeer> peer({
+    required void Function(Map<String, dynamic>) onCandidate,
+    required void Function(ScreenMedia) onMedia,
+    required void Function() onFailed,
+    required ScreenOptions? options,
+  }) async {
+    final peer = _FakePeer(onCandidate, onMedia, onFailed);
+    peers.add(peer);
+    return peer;
+  }
+}
+
+class _FakePeer implements ScreenPeer {
+  _FakePeer(this.onCandidate, this.onMedia, this.onFailed);
+  final void Function(Map<String, dynamic>) onCandidate;
+  final void Function(ScreenMedia) onMedia;
+  final void Function() onFailed;
+
+  /// A second picture this peer can be told to produce — the remote one, as
+  /// opposed to the local capture the backend hands out.
+  final remote = _FakeMedia();
+
+  final List<String> calls = [];
+  int closes = 0;
+
+  @override
+  Future<String> offer(ScreenMedia media) async {
+    calls.add('offer');
+    return 'local-offer';
+  }
+
+  @override
+  Future<String> answer(String sdp) async {
+    calls.add('answer:$sdp');
+    return 'local-answer';
+  }
+
+  @override
+  Future<void> acceptAnswer(String sdp) async => calls.add('accepted:$sdp');
+
+  @override
+  Future<void> candidate(Map<String, dynamic> candidate) async => calls.add('candidate');
+
+  @override
+  Future<void> close() async => closes++;
+
+  /// What the encoder reports while this peer is publishing, or null.
+  ScreenStats? reading;
+
+  @override
+  Future<ScreenStats?> stats() async => reading;
+}
+
+class _FakeMedia implements ScreenMedia {
+  int closes = 0;
+  void Function()? ended;
+
+  @override
+  set onEnded(void Function() callback) => ended = callback;
+
+  @override
+  Future<void> close() async => closes++;
+
+  @override
+  Widget view() => const SizedBox();
+}
+
 /// A server with everything the page can draw: a nested tree, a locked and an
 /// empty channel, an offline section, someone talking, and messages mixing
 /// scripts.
-ServerView _view() {
+///
+/// `screen` switches it to TS6 and lights the capability up, which is the only
+/// way the sharing entry point draws at all — it is gated on the capability,
+/// not on the protocol, so a TS3 view must stay without it.
+ServerView _view({bool screen = false}) {
   final view = ServerView(session: 1);
   void send(ClientEvent event) => view.apply(event);
 
   send(
-    const ConnectedEvent(
+    ConnectedEvent(
       server: Server(
         id: 1,
         name: 'Nightcord 测试服',
         address: '192.168.31.128:9987',
-        protocol: ProtocolKind.ts3,
+        protocol: screen ? ProtocolKind.ts6 : ProtocolKind.ts3,
       ),
-      info: ServerInfo(name: 'Nightcord 测试服'),
+      info: const ServerInfo(name: 'Nightcord 测试服'),
     ),
   );
+  if (screen) {
+    // Decoded from the payload the core actually sends, not built by hand:
+    // constructing `CapabilitiesChangedEvent` here would let the two sides
+    // disagree about the name or the keys and still stay green. The Rust half
+    // is pinned by `the_capability_flags_arrive_under_the_names_the_front_ends_read`
+    // in `ts-events`.
+    send(
+      ClientEvent.fromJson(const {
+        'event': 'capabilities_changed',
+        'payload': {
+          'text_chat': true,
+          'private_chat': true,
+          'voice': true,
+          'whisper': true,
+          'file_transfer': true,
+          'screen_stream': true,
+          'poke': true,
+        },
+      }),
+    );
+  }
   send(const ServerInfoChangedEvent(ServerInfo(name: 'Nightcord 测试服', clientsOnline: 4)));
   send(
     const PermissionsChangedEvent(
@@ -216,7 +368,18 @@ ServerView _view() {
   send(const ChannelCreatedEvent(Channel(id: 4, name: '挂机', parentId: 1)));
 
   send(const ClientJoinedEvent(Client(id: 1, name: 'TsukinoAyaka', channelId: 1, isSelf: true)));
-  send(const ClientJoinedEvent(Client(id: 2, name: '同事二号', channelId: 1)));
+  send(
+    ClientJoinedEvent(
+      Client(
+        id: 2,
+        name: '同事二号',
+        channelId: 1,
+        // The flag the server keeps: it is what the watch button is built
+        // from, so a client who is not marked as streaming must offer nothing.
+        flags: screen ? const ClientFlags(streaming: true) : const ClientFlags(),
+      ),
+    ),
+  );
   send(
     const ClientJoinedEvent(
       Client(
@@ -267,9 +430,11 @@ ProviderContainer _container({
   bool bookmarks = false,
   Settings settings = const Settings(),
   _SilentTransport? transport,
+  ScreenShareBackend? screen,
 }) => ProviderContainer.test(
   overrides: [
     clientTransportProvider.overrideWithValue(transport ?? _SilentTransport()),
+    if (screen != null) screenBackendProvider.overrideWithValue(screen),
     activeSessionProvider.overrideWith(() => _FixedActive()),
     settingsProvider.overrideWith(() => _FixedSettings(settings)),
     audioDevicesProvider.overrideWith(() => _FixedDevices()),
@@ -309,6 +474,35 @@ bool _menuItemEnabled(WidgetTester tester, String label) {
     ),
   );
   return (item as PopupMenuItem<dynamic>).enabled;
+}
+
+
+/// The settings a share starts with, for the tests that only care that *some*
+/// were given. The numbers are the default preset's, so a test that cares about
+/// one of them overrides just that one.
+ScreenOptions screenOptions() => const ScreenOptions(
+  source: ScreenSourceKind.screen,
+  height: 720,
+  fps: 30,
+  videoBitrateKbps: 2500,
+  audio: false,
+  audioBitrateKbps: 128,
+  access: ScreenAccess.public,
+  viewerLimit: 0,
+  mode: ScreenMode.p2p,
+  detail: false,
+);
+
+
+/// Walks the share wizard, which every start goes through: the bar button opens
+/// it, and nothing is published until 开始直播.
+Future<void> startThroughSetup(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('共享屏幕'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('下一个'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('开始直播'));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -1289,6 +1483,352 @@ void main() {
     // The empty branch of `ServerPage` — reached when the user disconnects and
     // the view is dropped, which is the one state no other test draws.
     await tester.pumpWidget(_app(_container(), const ServerPage(session: 99)));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the sharing entry follows the capability, not the server', (tester) async {
+    // TS3 has no stream command family, so the control must not be there at
+    // all: a button that can never work is a promise the server never made.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(), screen: _FakeScreenBackend()),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('共享屏幕'), findsNothing);
+
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(screen: true), screen: _FakeScreenBackend()),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('共享屏幕'), findsOneWidget);
+    // It lives in the voice bar — beside the away button and the microphone,
+    // not in a band of its own above the conversation.
+    expect(
+      find.descendant(of: find.byType(VoiceBar), matching: find.byTooltip('共享屏幕')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sharing runs from the bar to the server and back', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend();
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(screen: true), transport: transport, screen: backend),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('全屏'), findsNothing);
+
+    await startThroughSetup(tester);
+    expect(transport.calls.last, 'screen:start:');
+    // Our own picture is local, so the window opens before the server has
+    // answered — only the stream id has to come back.
+    expect(find.byTooltip('全屏'), findsOneWidget);
+    expect(find.text('观看人数 0'), findsNothing);
+
+    transport.emit(
+      const DomainEvent(
+        session: 1,
+        event: ScreenEvent({
+          'type': 'available',
+          'stream_id': 's',
+          'client_id': 1,
+          'name': '屏幕共享',
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // No limit was chosen, so the count stands alone — "/0" would read as
+    // "nobody may watch", which is the opposite of what zero means here.
+    expect(find.text('观看人数 0'), findsOneWidget);
+    expect(find.textContaining('观看人数 0/'), findsNothing);
+
+    // The same button turns into the way out — the stream id only exists now,
+    // so a stop sent before the answer would name a stream that never was.
+    await tester.tap(find.byIcon(Icons.stop_screen_share));
+    await tester.pumpAndSettle();
+    expect(transport.calls.last, 'screen:stop:s');
+    expect(backend.media.closes, 1);
+    expect(find.byTooltip('共享屏幕'), findsOneWidget);
+    expect(find.byTooltip('全屏'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a share is entered from the row of the person doing it', (tester) async {
+    // The badge is built from the server's streaming flag rather than from a
+    // local guess: a member who is not marked as sharing must offer nothing.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend();
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(screen: true), transport: transport, screen: backend),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('观看 · 同事二号'), findsOneWidget);
+    expect(find.byTooltip('观看 · 远处的人'), findsNothing);
+
+    await tester.tap(find.byTooltip('观看 · 同事二号'));
+    // The row opens a private chat on a double click, so its single taps wait
+    // out the double-tap window before they land — the same ~300ms the connect
+    // page pays for the same reason (AGENTS.md §7).
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(transport.calls.last, 'screen:discover:2');
+    // The same badge turns into the way out, from the press rather than from
+    // the server's answer.
+    expect(find.byTooltip('停止观看 · 同事二号'), findsOneWidget);
+
+    // The server names the stream, we ask to join, the publisher accepts —
+    // and only after that does a picture exist to draw.
+    transport.emit(
+      const DomainEvent(
+        session: 1,
+        event: ScreenEvent({
+          'type': 'available',
+          'stream_id': 's',
+          'client_id': 2,
+          'name': '同事二号的屏幕',
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(transport.calls.last, 'screen:join:2');
+
+    transport.emit(
+      const DomainEvent(
+        session: 1,
+        event: ScreenEvent({
+          'type': 'join_answered',
+          'stream_id': 's',
+          'client_id': 2,
+          'accepted': true,
+          'sdp': 'offer',
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(backend.peers.single.calls, ['answer:offer']);
+    expect(find.byTooltip('全屏'), findsNothing);
+
+    backend.peers.single.onMedia(backend.peers.single.remote);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('全屏'), findsOneWidget);
+    // Whose it is, rather than what the publisher typed: two streams on one
+    // server can carry the same name.
+    expect(find.byTooltip('停止观看'), findsOneWidget);
+
+    // Closing the window is the only way to stop watching, so it has to end
+    // the connection rather than just stop drawing it.
+    await tester.tap(find.byTooltip('停止观看'));
+    await tester.pumpAndSettle();
+    expect(transport.calls.last, 'screen:leave:2');
+    expect(backend.peers.single.closes, 1);
+    expect(find.byTooltip('全屏'), findsNothing);
+    expect(find.byTooltip('观看 · 同事二号'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the window follows the pointer, and only while it is grabbed', (tester) async {
+    // Two things went wrong here at once and both look like "it will not drag":
+    // the strip only answered where its children happened to be, and the
+    // position was rebuilt from a value captured before the previous move.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _FakeScreenBackend();
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(screen: true), screen: backend),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await startThroughSetup(tester);
+    expect(find.byType(ScreenPip), findsOneWidget);
+
+    final window = find.descendant(of: find.byType(ScreenPip), matching: find.byType(Material)).first;
+    final before = tester.getTopLeft(window);
+
+    // A press on the strip's own padding — the place with no child under it —
+    // and a mouse, because that is what a desktop user has. The first version
+    // of this test drove a touch and passed while the app did not.
+    final strip = find.descendant(
+      of: find.byType(ScreenPip),
+      matching: find.byWidgetPredicate((w) => w is Listener && w.onPointerMove != null),
+    );
+    final start = tester.getTopLeft(strip) + const Offset(6, 4);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: start);
+    addTearDown(mouse.removePointer);
+    await mouse.down(start);
+    await mouse.moveTo(start + const Offset(-120, -90));
+    await tester.pump();
+    final moved = tester.getTopLeft(window);
+    // One movement of the pointer, one movement of the window — not half of
+    // it, and not none of it.
+    expect(moved.dx, closeTo(before.dx - 120, 1));
+    expect(moved.dy, closeTo(before.dy - 90, 1));
+
+    await mouse.moveTo(start + const Offset(-160, -90));
+    await tester.pump();
+    expect(tester.getTopLeft(window).dx, closeTo(moved.dx - 40, 1));
+    await mouse.up();
+    await tester.pumpAndSettle();
+
+    // The window stays where it was put.
+    expect(tester.getTopLeft(window).dx, closeTo(moved.dx - 40, 1));
+
+    // Stopping takes it away, and takes the start timeout with it.
+    await tester.tap(find.byIcon(Icons.stop_screen_share));
+    await tester.pumpAndSettle();
+    expect(find.byType(ScreenPip), findsOneWidget);
+    expect(find.byTooltip('全屏'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a window with no room to be kept in still moves', (tester) async {
+    // The area can be smaller than the window — a narrow pane, or a layout
+    // pass that has not produced a real size yet. Clamping against "no room"
+    // pins the window at zero, which is indistinguishable from a broken drag:
+    // an area with nothing to hold it in is not an instruction to stand still.
+    final container = _container(view: _view(screen: true), screen: _FakeScreenBackend());
+    final controller = container.read(screenControllerProvider(1));
+    await controller.start(null, 'Share', screenOptions());
+    const area = Size(200, 150);
+
+    await tester.pumpWidget(
+      _app(
+        container,
+        Center(
+          child: SizedBox(
+            width: area.width,
+            height: area.height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Colors.black),
+                ScreenPip(view: container.read(sessionsProvider)[1]!, bounds: area),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('全屏'), findsOneWidget);
+
+    final window = find.descendant(of: find.byType(ScreenPip), matching: find.byType(Material)).first;
+    final before = tester.getTopLeft(window);
+    final strip = find.descendant(
+      of: find.byType(ScreenPip),
+      matching: find.byWidgetPredicate((w) => w is Listener && w.onPointerMove != null),
+    );
+    final start = tester.getTopLeft(strip) + const Offset(6, 4);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: start);
+    addTearDown(mouse.removePointer);
+    await mouse.down(start);
+    await mouse.moveTo(start + const Offset(-40, -30));
+    await tester.pump();
+    expect(tester.getTopLeft(window).dx, closeTo(before.dx - 40, 1));
+    await mouse.up();
+    await tester.pumpAndSettle();
+
+    await controller.stop();
+    await tester.pumpAndSettle();
+  });
+
+
+  testWidgets('the wizard carries what was chosen into the share', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend(
+      available: const [
+        ScreenSource('win-1', '编辑器', kind: ScreenSourceKind.window),
+        ScreenSource('scr-1', '屏幕 1'),
+      ],
+    );
+    final container = _container(view: _view(screen: true), transport: transport, screen: backend);
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('共享屏幕'));
+    await tester.pumpAndSettle();
+
+    // Opens on the tab the first source is in, not on a fixed one, so a machine
+    // with no camera does not greet anyone with an empty grid.
+    expect(find.text('编辑器'), findsOneWidget);
+    await tester.tap(find.text('编辑器'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('下一个'));
+    await tester.pumpAndSettle();
+
+    // A preset, then the one switch that is not part of one — so the assertion
+    // below covers both halves of the page.
+    await tester.tap(find.text('1440'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('开始直播'));
+    await tester.pumpAndSettle();
+
+    expect(transport.starts, hasLength(1));
+    expect(transport.starts.single, {
+      'source': 'window',
+      'height': 1440,
+      'fps': 30,
+      'video_bitrate_kbps': 6000,
+      'audio': true,
+      'audio_bitrate_kbps': 128,
+      'access': 'public',
+      'viewer_limit': 0,
+      'mode': 'p2p',
+      'detail': false,
+    });
+    // And it was remembered, not just sent: the next share opens where this
+    // one was left, and the file is what remembers it.
+    final saved = container.read(settingsProvider)!.screen;
+    expect(saved.height, 1440);
+    expect(saved.videoBitrateKbps, 6000);
+    expect(saved.audio, isTrue);
+    expect(
+      transport.calls.any((call) => call.startsWith('updateSettings')),
+      isTrue,
+      reason: 'the file is what remembers it, and the file is written through here',
+    );
+
+    // Stopping takes the start timeout with it.
+    await tester.tap(find.byIcon(Icons.stop_screen_share));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

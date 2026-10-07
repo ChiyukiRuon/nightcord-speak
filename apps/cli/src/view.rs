@@ -27,6 +27,7 @@ impl View {
     /// Applies one event.
     pub fn apply(&mut self, event: &ClientEvent) {
         match event {
+            ClientEvent::Screen(_) => {}
             ClientEvent::Connected { info, .. } | ClientEvent::ServerInfoChanged(info) => {
                 self.info = Some(info.clone());
             }

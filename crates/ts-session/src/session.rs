@@ -194,6 +194,21 @@ impl Session {
             .await
     }
 
+    /// Runs one screen-sharing control command.
+    ///
+    /// The command names its own stream and peer, so the session adds nothing
+    /// to it — this is a pass-through to whichever backend owns the protocol
+    /// that carries screen sharing. A backend without it answers
+    /// [`ClientError::Unsupported`] rather than dropping the command.
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend failures, including "this protocol has no screen
+    /// sharing".
+    pub async fn screen(&mut self, command: ts_model::ScreenCommand) -> Result<(), ClientError> {
+        self.backend.screen(command).await
+    }
+
     /// Marks us away, or back at the keyboard.
     ///
     /// `away: true` with no message is a legitimate state — away, with nothing
@@ -286,6 +301,29 @@ mod tests {
         let (backend, handle) = fake_backend(ProtocolKind::Ts3, true);
         let server = fake_server(1, ProtocolKind::Ts3);
         (Session::new(SessionId::new(1), server, backend), handle)
+    }
+
+    #[tokio::test]
+    async fn a_backend_without_screen_sharing_rejects_commands() {
+        let (mut session, _) = session();
+        let result = session
+            .screen(ts_model::ScreenCommand::Start {
+                name: "Screen".into(),
+                options: ts_model::ScreenOptions {
+                    source: ts_model::ScreenSource::Screen,
+                    height: 720,
+                    fps: 30,
+                    video_bitrate_kbps: 2500,
+                    audio: false,
+                    audio_bitrate_kbps: 128,
+                    access: ts_model::ScreenAccess::Public,
+                    viewer_limit: 0,
+                    mode: ts_model::ScreenMode::P2p,
+                    detail: false,
+                },
+            })
+            .await;
+        assert!(matches!(result, Err(ClientError::Unsupported(_))));
     }
 
     #[tokio::test]

@@ -14,6 +14,7 @@
 //! the base protocol with [`ts_model::Capabilities::TS6`] — which is already
 //! true and useful, rather than a stub that refuses to connect (§85).
 
+mod screen;
 use ts_events::EventBus;
 use ts_identity::IdentityStore;
 use ts_model::{ProtocolKind, Server, SessionId};
@@ -35,7 +36,13 @@ pub fn backend(
     identity: Option<(IdentityStore, String)>,
 ) -> Backend {
     server.protocol = ProtocolKind::Ts6;
-    ts_protocol_tsclient::backend(events, session, server, identity)
+    ts_protocol_tsclient::backend_with_screen(
+        events,
+        session,
+        server,
+        identity,
+        std::sync::Arc::new(screen::Screen),
+    )
 }
 
 #[cfg(test)]

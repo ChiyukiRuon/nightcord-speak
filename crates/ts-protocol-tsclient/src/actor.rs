@@ -33,9 +33,9 @@ use tokio::sync::{mpsc, oneshot};
 use ts_events::{ClientEvent, EventBus, SessionEvent};
 use ts_identity::IdentityStore;
 use ts_model::{
-    BanDuration, ChannelId, ClientError, ClientId, ConnectionState, KickScope, Message, MessageId,
-    MessageTarget, NetworkError, PermissionError, Permissions, ProtocolError, ReconnectPolicy,
-    Server, ServerInfo, ServerState, SessionId, Speaking, VoiceError, VoiceState,
+    BanDuration, Capabilities, ChannelId, ClientError, ClientId, ConnectionState, KickScope,
+    Message, MessageId, MessageTarget, NetworkError, PermissionError, Permissions, ProtocolError,
+    ReconnectPolicy, Server, ServerInfo, ServerState, SessionId, Speaking, VoiceError, VoiceState,
 };
 
 use tsclientlib::events::Event as BookEvent;
@@ -169,6 +169,10 @@ fn clamp_client_volume(volume: f32) -> f32 {
 
 /// Work the actor performs against the connection.
 pub(crate) enum Command {
+    Extension {
+        packet: crate::extension::ExtensionCommand,
+        reply: Reply,
+    },
     /// Move ourselves into a channel.
     JoinChannel { channel_id: ChannelId, reply: Reply },
     /// Send a chat message.
@@ -229,7 +233,8 @@ impl Command {
     /// command cannot be added without deciding what happens to its caller.
     fn into_reply(self) -> Reply {
         match self {
-            Self::JoinChannel { reply, .. }
+            Self::Extension { reply, .. }
+            | Self::JoinChannel { reply, .. }
             | Self::SendText { reply, .. }
             | Self::MoveClient { reply, .. }
             | Self::SendVoice { reply, .. }
@@ -249,6 +254,7 @@ impl std::fmt::Debug for Command {
         // Deliberately omits message bodies: chat is user content and does not
         // belong in a trace by default (§44).
         match self {
+            Self::Extension { .. } => f.write_str("Extension(<redacted>)"),
             Self::JoinChannel { channel_id, .. } => f
                 .debug_struct("JoinChannel")
                 .field("channel_id", channel_id)
@@ -356,6 +362,7 @@ impl Default for SharedState {
 
 /// Everything the actor needs besides the connection itself.
 pub(crate) struct Context {
+    pub extension: Option<Arc<dyn crate::extension::ScreenExtension>>,
     /// Which session these events belong to.
     pub session: SessionId,
     /// The server this connection was opened to.
@@ -387,6 +394,7 @@ impl Context {
         Self {
             session,
             server: Mutex::new(server),
+            extension: None,
             events,
             identity_store,
             audio_sink: Mutex::new(None),
@@ -931,6 +939,26 @@ fn handle_item(
     audio: &mut Audio,
 ) {
     match item {
+        StreamItem::UnknownCommand { name, content } => {
+            if let Some(extension) = &context.extension {
+                use tsproto_packets::commands::{CommandItem, CommandParser};
+                let (_, parser) = CommandParser::new(content.as_bytes());
+                let mut args = std::collections::BTreeMap::new();
+                for item in parser {
+                    if let CommandItem::Argument(arg) = item {
+                        if let Ok(value) = arg.value().get_str() {
+                            args.insert(
+                                String::from_utf8_lossy(arg.name()).into_owned(),
+                                value.into_owned(),
+                            );
+                        }
+                    }
+                }
+                if let Some(event) = extension.decode(&name, &args) {
+                    context.publish(ClientEvent::Screen(event));
+                }
+            }
+        }
         StreamItem::Audio(packet) => {
             // `handle_packet` takes ownership, so the sender is read first.
             let Some(from) = sender_of(&packet) else {
@@ -1126,6 +1154,14 @@ fn refresh(
             server: state.server.clone(),
             info: state.info.clone(),
         });
+        // Announced here rather than left for the front-end to ask for, because
+        // it is what a UI gates *features* on (§15): the screen-sharing entry
+        // exists only because TS6 reports `screen_stream`. Publishing it
+        // alongside `Connected` keeps the two from ever disagreeing about
+        // whether the session is up.
+        context.publish(ClientEvent::CapabilitiesChanged(
+            Capabilities::for_protocol(state.server.protocol),
+        ));
     }
 
     // Unblocks `connect()`. This does *not* mean the full tree has arrived: a
@@ -1370,7 +1406,20 @@ fn handle_command(
     pending: &mut HashMap<MessageHandle, Reply>,
     audio: &mut Audio,
 ) {
+    pending.retain(|_, reply| !reply.is_closed());
     match command {
+        Command::Extension { packet, reply } => {
+            let mut wire = OutCommand::new(
+                Direction::C2S,
+                Flags::empty(),
+                PacketType::Command,
+                packet.name,
+            );
+            for (key, value) in packet.arguments {
+                wire.write_arg(&key, &value);
+            }
+            settle(wire.send_with_result(connection), reply, pending);
+        }
         Command::SendText {
             target,
             text,
@@ -1645,7 +1694,10 @@ fn command_error(error: &CommandError) -> ClientError {
             permission: permission.0,
         });
     }
-    ClientError::Protocol(ProtocolError::new(error.error.to_string()))
+    ClientError::Protocol(ProtocolError::from_server(
+        error.error as u32,
+        error.error.to_string(),
+    ))
 }
 
 fn now_millis() -> i64 {
@@ -1659,6 +1711,16 @@ fn now_millis() -> i64 {
 mod tests {
     use super::*;
     use tsproto_packets::packets::Direction as PacketDirection;
+
+    #[test]
+    fn command_refusals_preserve_the_server_code_for_extension_retry_policy() {
+        // Losing the error id turned a recoverable flood refusal into a generic failure.
+        let error = command_error(&CommandError {
+            error: tsclientlib::TsError::ClientIsFlooding,
+            missing_permission: None,
+        });
+        assert!(matches!(error, ClientError::Protocol(error) if error.server_code == Some(0x020c)));
+    }
 
     /// A schedule with §35's numbers, whatever the default may later become.
     fn schedule() -> ReconnectSchedule {

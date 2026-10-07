@@ -18,6 +18,7 @@ import '../../models/connect_request.dart';
 import '../../models/domain.dart';
 import '../../models/events.dart';
 import '../../models/settings.dart';
+import '../../core/screen/screen_providers.dart';
 import '../../providers/providers.dart';
 import '../../state/server_view.dart';
 
@@ -287,6 +288,11 @@ class _ChannelSidebarState extends ConsumerState<ChannelSidebar> {
                   },
             unread: _view.unread.contains(ConversationKey.client(member.id)),
             onMenu: (position) => _openMemberMenu(member, position),
+            session: _view.session,
+            // Watching is something you do from inside the channel: the
+            // controller only tracks the people it can see, and the server
+            // refuses the join anyway.
+            canWatch: !member.isSelf && member.channelId == _view.ownChannelId,
           ),
         );
       }
@@ -700,6 +706,8 @@ class _MemberRow extends StatelessWidget {
     this.onOpen,
     this.unread = false,
     this.onMenu,
+    required this.session,
+    this.canWatch = false,
   });
 
   final Client member;
@@ -722,6 +730,15 @@ class _MemberRow extends StatelessWidget {
   ///
   /// Null for rows that are not a live client — the offline list.
   final ValueChanged<Offset>? onMenu;
+
+  /// The session the badge drives, for the rows that have one.
+  final int session;
+
+  /// Whether this person's share can be watched from here.
+  ///
+  /// False for our own row — we are the one publishing, and for anyone outside
+  /// our channel, which a share does not cross.
+  final bool canWatch;
 
   @override
   Widget build(BuildContext context) {
@@ -788,6 +805,11 @@ class _MemberRow extends StatelessWidget {
                   ),
                 ),
               ),
+              // First among the badges: what someone is *sending* is a bigger
+              // fact than whether they are away, and for anyone in the same
+              // channel it is also the way in.
+              if (member.flags.streaming)
+                _StreamBadge(session: session, member: member, canWatch: canWatch),
               if (member.flags.away)
                 StateBadge(
                   colour: tokens.idle,
@@ -825,6 +847,71 @@ class _MemberRow extends StatelessWidget {
     // The menu is on the secondary button, so the row also has to say what a
     // right-click would open for anyone who cannot perform one.
     return Semantics(label: l10n.memberMenu(member.name), onTap: onOpen, child: row);
+  }
+}
+
+/// The badge that says someone is sharing their screen — and, for anyone who
+/// can watch it, the way to do so.
+///
+/// One badge doing both jobs rather than a badge beside a button: a member row
+/// already means "a fact about this person", and the action is that same fact
+/// seen from where the user is standing. It draws in the *online* colour
+/// because sharing is something the server is carrying for them, not a warning
+/// — the recording badge's red would say otherwise.
+///
+/// It listens to the controller itself, so a share that is connecting — which
+/// notifies on every step — rebuilds one badge rather than the whole tree.
+class _StreamBadge extends ConsumerWidget {
+  const _StreamBadge({required this.session, required this.member, required this.canWatch});
+
+  final int session;
+  final Client member;
+  final bool canWatch;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final tokens = DesignTokens.of(context);
+    final controller = ref.watch(screenControllerProvider(session));
+
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        // Filled while it is the one we are on, so a channel with several
+        // shares says which of them the window is showing — and filled from
+        // the moment it is asked for, not when the picture arrives.
+        final watching = canWatch && controller.watches(member.id);
+        final icon = Icon(
+          watching ? Icons.screen_share : Icons.screen_share_outlined,
+          size: 16,
+          color: watching ? tokens.primary : tokens.online,
+        );
+
+        if (!canWatch) {
+          return StateBadge(
+            icon: Icons.screen_share,
+            colour: tokens.online,
+            tooltip: l10n.memberStreaming,
+          );
+        }
+
+        return Tooltip(
+          // The name is in the tooltip because the row's title is not always
+          // readable — it ellipsizes, and with several shares the badge alone
+          // cannot say whose is whose.
+          message: '${watching ? l10n.screenLeave : l10n.screenWatch} · ${member.name}',
+          child: GestureDetector(
+            onTap: () => watching ? controller.leave() : controller.watch(member.id),
+            child: Padding(
+              // The same inset `StateBadge` uses, so the row's badges stay
+              // evenly spaced whether or not one of them is a control.
+              padding: const EdgeInsets.only(left: AppSpacing.space1),
+              child: SizedBox(width: 20, height: 20, child: Center(child: icon)),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
