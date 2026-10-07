@@ -699,4 +699,32 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get voiceHoldToTalk => '押して話す';
+
+  @override
+  String get settingsAboutSection => 'このアプリについて';
+
+  @override
+  String aboutVersion(String version) {
+    return 'バージョン $version';
+  }
+
+  @override
+  String get aboutDescription =>
+      '本プロジェクトは、非公式のサードパーティ製 TeamSpeak 3 / TeamSpeak 6 クライアントであり、TeamSpeak 公式とは一切の所属関係がありません。\n\nNightcord は、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』に登場する架空のボイスチャットソフトウェアです。本プロジェクトは、Nightcord の名称およびアイコンに関する著作権その他の知的財産権を主張しません。関連する権利は、それぞれの権利者に帰属します。本プロジェクトは SEGA、Colorful Palette、Nuverse と一切の所属・提携・許諾関係がなく、これらの企業の見解を代表するものではありません。';
+
+  @override
+  String get aboutProject => 'プロジェクト';
+
+  @override
+  String get aboutLicense => 'プロジェクトのライセンス';
+
+  @override
+  String get aboutOpenSource => 'オープンソースについて';
+
+  @override
+  String get aboutOpenSourceDescription =>
+      'Flutter、Dart、Riverpod、tsclientlib、Tokio、cpal、Opus などを使用しています。Flutter の依存パッケージ、各プラットフォームの Rust Core とゲートウェイの依存パッケージ、Noto フォントの表記を含みます。各コンポーネントのライセンスと著作権はその権利者に帰属します。';
+
+  @override
+  String get aboutViewLicenses => 'コンポーネントのライセンス';
 }

@@ -697,6 +697,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get voiceHoldToTalk => '按住说话';
+
+  @override
+  String get settingsAboutSection => '关于';
+
+  @override
+  String aboutVersion(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get aboutDescription =>
+      '本项目是第三方 TeamSpeak 3 / TeamSpeak 6 客户端，与 TeamSpeak 官方无任何隶属关系。\n\nNightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对 Nightcord 名称及其图标享有版权或其他知识产权；相关权利归各自权利人所有。本项目与 SEGA、Colorful Palette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。';
+
+  @override
+  String get aboutProject => '项目地址';
+
+  @override
+  String get aboutLicense => '项目许可证';
+
+  @override
+  String get aboutOpenSource => '开源组件声明';
+
+  @override
+  String get aboutOpenSourceDescription =>
+      '本项目使用 Flutter、Dart、Riverpod、tsclientlib、Tokio、cpal、Opus 等开源组件。声明包含 Flutter 依赖、各平台 Rust Core 与网关依赖，以及 Noto 字体；各组件保留其原有许可证与版权。';
+
+  @override
+  String get aboutViewLicenses => '查看组件许可证';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1391,4 +1419,32 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get voiceHoldToTalk => '按住說話';
+
+  @override
+  String get settingsAboutSection => '關於';
+
+  @override
+  String aboutVersion(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get aboutDescription =>
+      '本專案是第三方 TeamSpeak 3 / TeamSpeak 6 用戶端，與 TeamSpeak 官方無任何隸屬關係。\n\nNightcord 是遊戲《世界計畫 繽紛舞台！feat.初音ミク》中虛構的語音聊天軟體。本專案不主張對 Nightcord 名稱及其圖示享有著作權或其他智慧財產權；相關權利歸各自權利人所有。本專案與 SEGA、Colorful Palette、Nuverse 無任何隸屬、合作或授權關係，亦不代表上述公司的立場。';
+
+  @override
+  String get aboutProject => '專案網址';
+
+  @override
+  String get aboutLicense => '專案授權';
+
+  @override
+  String get aboutOpenSource => '開源元件聲明';
+
+  @override
+  String get aboutOpenSourceDescription =>
+      '本專案使用 Flutter、Dart、Riverpod、tsclientlib、Tokio、cpal、Opus 等開源元件。聲明包含 Flutter 相依套件、各平台 Rust Core 與閘道相依套件，以及 Noto 字型；各元件保留原有授權與著作權。';
+
+  @override
+  String get aboutViewLicenses => '查看元件授權';
 }

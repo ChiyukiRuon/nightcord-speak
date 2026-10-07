@@ -747,4 +747,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceHoldToTalk => 'Hold to talk';
+
+  @override
+  String get settingsAboutSection => 'About';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutDescription =>
+      'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in the Nightcord name or its icon; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.';
+
+  @override
+  String get aboutProject => 'Project';
+
+  @override
+  String get aboutLicense => 'Project license';
+
+  @override
+  String get aboutOpenSource => 'Open-source acknowledgements';
+
+  @override
+  String get aboutOpenSourceDescription =>
+      'Built with Flutter, Dart, Riverpod, tsclientlib, Tokio, cpal, Opus and other open-source components. The notices include Flutter dependencies, Rust Core and gateway dependencies across platforms, and Noto fonts. Each component retains its own license and copyright.';
+
+  @override
+  String get aboutViewLicenses => 'View component licenses';
 }

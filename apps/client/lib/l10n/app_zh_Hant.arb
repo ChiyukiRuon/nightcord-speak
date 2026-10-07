@@ -228,5 +228,13 @@
   "webEnableAudio": "啟用語音",
   "webAudioHint": "請允許麥克風權限並啟用語音，加入對話。",
   "navigationChannels": "頻道",
-  "voiceHoldToTalk": "按住說話"
+  "voiceHoldToTalk": "按住說話",
+  "settingsAboutSection": "關於",
+  "aboutVersion": "版本 {version}",
+  "aboutDescription": "本專案是第三方 TeamSpeak 3 / TeamSpeak 6 用戶端，與 TeamSpeak 官方無任何隸屬關係。\n\nNightcord 是遊戲《世界計畫 繽紛舞台！feat.初音ミク》中虛構的語音聊天軟體。本專案不主張對 Nightcord 名稱及其圖示享有著作權或其他智慧財產權；相關權利歸各自權利人所有。本專案與 SEGA、Colorful Palette、Nuverse 無任何隸屬、合作或授權關係，亦不代表上述公司的立場。",
+  "aboutProject": "專案網址",
+  "aboutLicense": "專案授權",
+  "aboutOpenSource": "開源元件聲明",
+  "aboutOpenSourceDescription": "本專案使用 Flutter、Dart、Riverpod、tsclientlib、Tokio、cpal、Opus 等開源元件。聲明包含 Flutter 相依套件、各平台 Rust Core 與閘道相依套件，以及 Noto 字型；各元件保留原有授權與著作權。",
+  "aboutViewLicenses": "查看元件授權"
 }

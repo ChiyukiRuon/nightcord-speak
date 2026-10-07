@@ -1,5 +1,6 @@
 import 'package:nightcord_client/features/server/chat_panel.dart';
 import 'package:nightcord_client/features/settings/sections/audio_section.dart';
+import 'package:nightcord_client/features/settings/sections/about_section.dart';
 import 'package:nightcord_client/features/settings/sections/notifications_section.dart';
 // Every page, built once with plausible data.
 //
@@ -419,6 +420,29 @@ void main() {
   testWidgets('a connected server', (tester) async {
     await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('About opens before the core returns settings', (tester) async {
+    await tester.pumpWidget(_app(_container(), const SettingsPage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关于'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nightcord Speak'), findsOneWidget);
+    expect(find.text('MIT OR Apache-2.0'), findsOneWidget);
+    expect(find.text('查看组件许可证'), findsOneWidget);
+    expect(find.text('正在加载设置…'), findsNothing);
+    // Asset IO must complete outside the widget test's simulated clock.
+    await tester.runAsync(loadBundledLicenses);
+    await tester.ensureVisible(find.text('查看组件许可证'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('查看组件许可证'));
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

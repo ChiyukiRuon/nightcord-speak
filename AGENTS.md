@@ -1155,3 +1155,14 @@ Rust 与 Dart 侧不受影响（§4.1 说注释用英文，这条是同一个方
 - 验证：Flutter analyze、完整 Flutter 测试、ts-ffi 与 ts-gateway 库测试通过；新增自身发言状态、头像圆弧颜色与尺寸、浏览器断流清除状态回归测试。尚未进行真实麦克风与服务器界面验收。
 
 - 同日视觉微调：圆弧由 120° 缩短为 90°，线宽由 2.5 增至 3.5；成员行上下内边距由各 2 增至各 4，行高增加 4；自身昵称由 500 增至 600，同步设置可变字体 wght 轴。头像与页面渲染回归测试通过。
+
+### 2026-10-07：设置页关于栏目
+
+- 新增桌面/移动共用的关于栏目，无连接且设置尚未返回时仍可查看：软件名称、pubspec 版本、用途、项目地址、MIT OR Apache-2.0 许可证及开源声明。五种语言同步生成。
+- 使用 Flutter LicensePage 浏览许可证；在 Flutter 自动收集的声明之外，注册 Rust Core/网关跨平台生产与构建依赖（排除仅 dev 的依赖）、vendored tsclientlib 及其继承许可、audiopus_sys 内嵌 Opus 许可、Noto 字体与项目许可证。注册只做一次。
+- scripts/generate-about.py 从 cargo metadata 与 pubspec 生成 assets/licenses/third_party.json 和 lib/models/app_info.dart；修改版本、Cargo.lock 或依赖后运行 python scripts/generate-about.py。需要本机 Cargo 依赖源码及字体 OFL.txt；资源入仓库，普通客户端构建无需 Python。部分上游包不附带许可正文，保留其 SPDX 标识、作者及仓库地址；脚本输出缺少正文的名单，未宣称完成发行合规审计。
+- 验证：Flutter analyze、关于栏目的设置未就绪入口、许可证页面打开、原生依赖与字体声明、重复注册回归测试通过。
+
+- 收尾验证：完整 Flutter 测试与 Windows debug 构建通过，已启动新版客户端。
+
+- 关于说明按用户提供的五种语言游戏名称更新：声明第三方 TeamSpeak 客户端身份、Nightcord 为游戏内虚构语音软件、不主张其名称及图标知识产权，以及与 TeamSpeak、SEGA、Colorful Palette、Nuverse 无隶属关系。补充相关权利归原权利人、无合作或授权关系、不代表公司立场；五种语言生成文件同步。

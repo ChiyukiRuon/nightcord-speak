@@ -1362,6 +1362,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hold to talk'**
   String get voiceHoldToTalk;
+
+  /// No description provided for @settingsAboutSection.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAboutSection;
+
+  /// Application version shown in About
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// No description provided for @aboutDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in the Nightcord name or its icon; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.'**
+  String get aboutDescription;
+
+  /// No description provided for @aboutProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Project'**
+  String get aboutProject;
+
+  /// No description provided for @aboutLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'Project license'**
+  String get aboutLicense;
+
+  /// No description provided for @aboutOpenSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source acknowledgements'**
+  String get aboutOpenSource;
+
+  /// No description provided for @aboutOpenSourceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Built with Flutter, Dart, Riverpod, tsclientlib, Tokio, cpal, Opus and other open-source components. The notices include Flutter dependencies, Rust Core and gateway dependencies across platforms, and Noto fonts. Each component retains its own license and copyright.'**
+  String get aboutOpenSourceDescription;
+
+  /// No description provided for @aboutViewLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'View component licenses'**
+  String get aboutViewLicenses;
 }
 
 class _AppLocalizationsDelegate

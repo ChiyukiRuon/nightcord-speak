@@ -129,6 +129,7 @@ flutter:
   # asset rather than a font family: it is a text file, and declaring it as a
   # face would have Flutter try to parse it as one.
   assets:
+    - assets/licenses/third_party.json
     - assets/fonts/OFL.txt
 
   # To add custom fonts to your application, add a fonts section here,

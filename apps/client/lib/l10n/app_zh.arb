@@ -228,5 +228,13 @@
   "webEnableAudio": "启用语音",
   "webAudioHint": "请允许麦克风权限并启用语音，加入对话。",
   "navigationChannels": "频道",
-  "voiceHoldToTalk": "按住说话"
+  "voiceHoldToTalk": "按住说话",
+  "settingsAboutSection": "关于",
+  "aboutVersion": "版本 {version}",
+  "aboutDescription": "本项目是第三方 TeamSpeak 3 / TeamSpeak 6 客户端，与 TeamSpeak 官方无任何隶属关系。\n\nNightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对 Nightcord 名称及其图标享有版权或其他知识产权；相关权利归各自权利人所有。本项目与 SEGA、Colorful Palette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。",
+  "aboutProject": "项目地址",
+  "aboutLicense": "项目许可证",
+  "aboutOpenSource": "开源组件声明",
+  "aboutOpenSourceDescription": "本项目使用 Flutter、Dart、Riverpod、tsclientlib、Tokio、cpal、Opus 等开源组件。声明包含 Flutter 依赖、各平台 Rust Core 与网关依赖，以及 Noto 字体；各组件保留其原有许可证与版权。",
+  "aboutViewLicenses": "查看组件许可证"
 }

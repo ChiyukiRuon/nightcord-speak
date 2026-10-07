@@ -21,6 +21,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
 import 'sections/audio_section.dart';
+import 'sections/about_section.dart';
 import 'sections/connection_section.dart';
 import 'sections/interface_section.dart';
 import 'sections/log_section.dart';
@@ -41,7 +42,7 @@ const double _navWidth = 240;
 const double _contentWidth = 640;
 
 /// The page's sections, in the order the navigation column lists them.
-enum _Section { audio, connection, notifications, shortcuts, interface, log }
+enum _Section { audio, connection, notifications, shortcuts, interface, log, about }
 
 extension on _Section {
   /// What the section is called, in the navigation column and as the heading
@@ -54,6 +55,7 @@ extension on _Section {
     _Section.shortcuts => l10n.settingsShortcutsSection,
     _Section.interface => l10n.settingsInterfaceSection,
     _Section.log => l10n.logLabel,
+    _Section.about => l10n.settingsAboutSection,
   };
 
   /// The glyph beside the label. Outlined throughout, like every other icon in
@@ -65,6 +67,7 @@ extension on _Section {
     _Section.shortcuts => Icons.keyboard_outlined,
     _Section.interface => Icons.palette_outlined,
     _Section.log => Icons.article_outlined,
+    _Section.about => Icons.info_outline,
   };
 }
 
@@ -188,7 +191,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // with defaults the user never chose.
               // (`DropdownButtonFormField.initialValue` is read once, so a form
               // built early would not correct itself afterwards.)
-              if (settings == null)
+              if (_section == _Section.about)
+                const AboutSection()
+              else if (settings == null)
                 Text(
                   l10n.settingsLoading,
                   style: Theme.of(context).textTheme.bodyMedium
@@ -210,6 +215,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _Section.shortcuts => ShortcutsSection(settings: settings),
     _Section.interface => InterfaceSection(settings: settings),
     _Section.log => const LogSection(),
+    _Section.about => const AboutSection(),
   };
 }
 
