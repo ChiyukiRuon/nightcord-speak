@@ -334,3 +334,31 @@ Mac mini（Mac16,10 / M4）**不带内置麦克风**。所以：
 
 这个 crate 从没在 macOS 上编译过，所以 Windows 与 Linux 的测试一直是绿的。
 修法见 `AGENTS.md` §6 的 bug 表。
+
+## 7. 首次构建 flutter_webrtc：SwiftPM 的 69 MB 二进制产物（2026-10-08）
+
+屏幕共享引入 `flutter_webrtc` 之后，macOS 侧的第一次构建走了 Swift Package Manager
+集成：插件的 `macos/flutter_webrtc/Package.swift` 声明了一个 `binaryTarget`，
+要从 GitHub release 下载 **`WebRTC.xcframework.zip`（69,079,305 字节）**——
+`https://github.com/webrtc-sdk/Specs/releases/download/150.7871.01/WebRTC.xcframework.zip`，
+清单里写明的 checksum 是 `03815cdf2f6a0ed328c94d74cce8fd1b8d2b6e95e2b37eab66795012fcecfdfa`。
+
+**踩到的坑**：第一次 `flutter build macos --debug` 在解析阶段超时——
+`xcodebuild: error: Could not resolve package dependencies: failed downloading … downloadError("The request timed out.")`。
+网络本身是通的（curl 实测该 URL 约 260 KB/s，HEAD/分段 GET 都正常），是解析器
+自己放弃。**直接重试即成功**：第二次解析在几秒内就完成了下载。
+
+> 这条按「构建节点是不是缺东西」查了一遍——不是，`.app` 没有缺 framework，SPM 的
+> 二进制产物会静态链进可执行文件，`Contents/Frameworks/` 里不会多出
+> `flutter_webrtc.framework`，只会看到 `WebRTC.framework`。别把那当成构建不完整。
+
+**下次再遇到超时、需要兜底时**（存档备查，本轮没用到）：把 zip 用可断点续传的
+`curl -C -` 下到本地，核对 `shasum -a 256` 等于上面那个 checksum，然后放进 SwiftPM
+的共享缓存 `~/Library/Caches/org.swift.swiftpm/artifacts/`。文件名是 **URL 的
+C99 扩展标识符转码**（非字母数字一律变 `_`），这次实际看到的是：
+
+```text
+~/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_webrtc_sdk_Specs_releases_download_150_7871_01_WebRTC_xcframework_zip
+```
+
+放进正确名字后 SwiftPM 会校验 checksum 并直接采用缓存，不再下载。
