@@ -16,12 +16,24 @@ import 'package:nightcord_client/models/screen_options.dart';
 import 'package:nightcord_client/models/connect_request.dart';
 import 'package:nightcord_client/models/domain.dart';
 
-const _options = ScreenOptions(
+int _setting(String name, int fallback) =>
+    int.tryParse(Platform.environment[name] ?? '') ?? fallback;
+
+final _options = ScreenOptions(
   source: ScreenSourceKind.screen,
-  height: 720,
-  fps: 10,
-  videoBitrateKbps: 1500,
-  audio: false,
+  height: _setting(
+    'SCREEN_SMOKE_HEIGHT',
+    const int.fromEnvironment('SCREEN_SMOKE_HEIGHT', defaultValue: 720),
+  ),
+  fps: _setting(
+    'SCREEN_SMOKE_FPS',
+    const int.fromEnvironment('SCREEN_SMOKE_FPS', defaultValue: 10),
+  ),
+  videoBitrateKbps: _setting(
+    'SCREEN_SMOKE_BITRATE',
+    const int.fromEnvironment('SCREEN_SMOKE_BITRATE', defaultValue: 1500),
+  ),
+  audio: Platform.environment['SCREEN_SMOKE_AUDIO'] == '1',
   audioBitrateKbps: 128,
   access: ScreenAccess.public,
   viewerLimit: 4,
@@ -116,9 +128,14 @@ Future<void> main() async {
       exit(0);
     }
     final backend = WebRtcScreenBackend();
-    final source = (await backend.sources()).firstWhere(
-      (s) => s.kind == ScreenSourceKind.screen,
+    final screens = (await backend.sources())
+        .where((s) => s.kind == ScreenSourceKind.screen)
+        .toList();
+    output.writeAsStringSync(
+      'screen ids ${screens.map((s) => s.id).toList()}\n',
+      mode: FileMode.append,
     );
+    final source = screens[_setting('SCREEN_SMOKE_SOURCE', 0)];
     final capture = await backend.capture(source, _options);
     final host = _Publisher(backend, capture, output);
     final controller = ScreenController(
@@ -140,7 +157,13 @@ Future<void> main() async {
       MaterialApp(
         home: ListenableBuilder(
           listenable: controller,
-          builder: (_, _) => controller.remote?.view() ?? const SizedBox(),
+          builder: (_, _) => Column(
+            children: [
+              if (Platform.environment['SCREEN_SMOKE_PREVIEW'] == '1')
+                Expanded(child: capture.view()),
+              Expanded(child: controller.remote?.view() ?? const SizedBox()),
+            ],
+          ),
         ),
       ),
     );
@@ -153,7 +176,20 @@ Future<void> main() async {
     }
     await Future<void>.delayed(const Duration(seconds: 1));
     output.writeAsStringSync('main video received\n', mode: FileMode.append);
-    for (var cycle = 1; cycle <= 2; cycle++) {
+    final sampleSeconds = _setting(
+      'SCREEN_SMOKE_SECONDS',
+      const int.fromEnvironment('SCREEN_SMOKE_SECONDS'),
+    );
+    if (sampleSeconds > 0) {
+      for (var elapsed = 0; elapsed < sampleSeconds; elapsed += 10) {
+        await Future<void>.delayed(const Duration(seconds: 10));
+        output.writeAsStringSync(
+          'sample ${elapsed + 10}s sending ${await host.peer?.stats()}\n',
+          mode: FileMode.append,
+        );
+      }
+    }
+    for (var cycle = 1; cycle <= _setting('SCREEN_SMOKE_CYCLES', 2); cycle++) {
       if (cycle > 1) {
         await controller.watch(2);
         for (var i = 0; controller.remote == null && i < 100; i++) {
@@ -179,6 +215,10 @@ Future<void> main() async {
       );
       if (stats == null || stats.fps <= 0) {
         throw StateError('child $cycle received no video');
+      }
+      if (stats.height <= 0 ||
+          (_options.height > 0 && stats.height > _options.height)) {
+        throw StateError('capture exceeded selected height: $stats');
       }
       await child.close();
       await Future<void>.delayed(const Duration(milliseconds: 500));

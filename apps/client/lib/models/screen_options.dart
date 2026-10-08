@@ -18,8 +18,10 @@ enum ScreenSourceKind {
 
   String get wire => name;
 
-  static ScreenSourceKind fromWire(String? value) =>
-      values.firstWhere((kind) => kind.wire == value, orElse: () => ScreenSourceKind.screen);
+  static ScreenSourceKind fromWire(String? value) => values.firstWhere(
+    (kind) => kind.wire == value,
+    orElse: () => ScreenSourceKind.screen,
+  );
 }
 
 /// Who may watch.
@@ -30,8 +32,10 @@ enum ScreenAccess {
 
   String get wire => name;
 
-  static ScreenAccess fromWire(String? value) =>
-      values.firstWhere((kind) => kind.wire == value, orElse: () => ScreenAccess.public);
+  static ScreenAccess fromWire(String? value) => values.firstWhere(
+    (kind) => kind.wire == value,
+    orElse: () => ScreenAccess.public,
+  );
 }
 
 /// How viewers reach the picture.
@@ -41,8 +45,10 @@ enum ScreenMode {
 
   String get wire => name;
 
-  static ScreenMode fromWire(String? value) =>
-      values.firstWhere((kind) => kind.wire == value, orElse: () => ScreenMode.p2p);
+  static ScreenMode fromWire(String? value) => values.firstWhere(
+    (kind) => kind.wire == value,
+    orElse: () => ScreenMode.p2p,
+  );
 }
 
 /// Everything a publisher decides before going live.
@@ -171,12 +177,15 @@ class ScreenPreset {
   ///
   /// The reference client switches its track's `contentHint` between "motion"
   /// and "detail" for exactly this. `flutter_webrtc` exposes no `contentHint`,
-  /// so this becomes the degradation preference instead — close, not the same,
-  /// and worth knowing when a 「演示」 share does not look like the original's.
+  /// so this requests resolution preservation for camera sources as well.
+  /// Screen and window sources always preserve resolution; their presentation
+  /// preset additionally reduces frame rate to give each frame more detail.
   final bool detail;
 
   bool matches(int height, int fps, int bitrateKbps) =>
-      this.height == height && this.fps == fps && this.bitrateKbps == bitrateKbps;
+      this.height == height &&
+      this.fps == fps &&
+      this.bitrateKbps == bitrateKbps;
 
   /// The presets the picker offers, in the order it offers them.
   static const all = [

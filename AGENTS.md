@@ -394,7 +394,211 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 
 ## 5. 当前进度
 
-**最后更新：2026-10-08**
+**最后更新：2026-10-09**
+
+**屏幕共享修复汇总（2026-10-09）**：本轮包含以下相互独立的修复与诊断：
+
+- Windows RTP 编码参数显式写回 SDK，读回真实 sender 参数；未设置的可选字段不再
+  用零值回传，避免码率/缩放无效及视频暂停。
+- 共享开始前读取原始采集高度，必要时通过首帧测量，确保所选分辨率上限生效；
+  屏幕/窗口保分辨率，摄像头普通模式保帧率，不关闭拥塞控制。
+- Darwin 在 offer 前通过稳定 senderId 区分 transceiver，fmtp 仅匹配调用方指定参数，
+  修正 VP8/RTX + Opus 偏好未生效。原生探针已通过，官方 Windows 客户端黑屏仍待复测。
+- Windows 整屏优先使用 WGC，第二显示器本机回环由约 8 fps 提升至约 60 fps；
+  新增采集健康检查与真实画面变化回归。真实 Windows→Mac 的 1440p/60 fps 仍待复测。
+- 日志按白名单记录发送/采集/远端反馈/ICE 路径统计及原生新帧、送帧计数；不记录
+  ICE 地址、凭据或完整统计包。提供参数、编解码器及多显示器采集冒烟工具。
+
+下面保留分阶段的证据与验证记录，其中“未提交”“待构建”等描述均指当时状态；
+当前状态以本汇总和提交验收记录为准。局域网 bandwidth 波动不等于已定位网络根因，
+跨机稳定性、官方客户端互通仍须用新版日志验收。
+
+**提交验收（2026-10-09）**：用户要求整理文档并提交。Rust 格式按 `scripts/fmt.sh`
+的完整 crate 列表用原生命令检查通过，全工作区 Clippy、422 项 Rust 测试、Flutter
+analyze 与 377 项 Flutter 测试通过。Rust/Flutter 测试需在沙箱外运行以访问应用数据
+目录；沙箱内的访问拒绝不作为代码回归。Windows Debug/Release 构建、第二屏本机
+回环及原生采集回归已通过，Mac 原生协商探针与 Debug 构建的结果见下文。
+提交仅包含源码、回归工具、本文档和子模块引用，不包含下载的 WebRTC 二进制、
+构建产物或用户日志；不推送。上述跨机验收项目继续保留。
+
+**第二显示器低帧率复现与 WGC 修复（2026-10-09）**：用户补充实际共享第二显示器，
+共有两块屏幕、正在播放视频，客户端未最小化。此前回环探针固定选列表第一块屏幕，
+因而没有对齐现场。补齐来源编号后，本机第二屏在原始 4K 和 1440p 输出均复现约
+7–8 fps；第一屏的关闭预览/开启预览/开启音频对照为约 35–42 fps。不能再将问题
+笼统归于预览、音频、4K 编码负担，也不以降低输出分辨率冒充采集修复。
+
+Windows 整屏共享优先使用 Windows Graphics Capture，在显示器所属 DXGI adapter
+上创建 D3D11 设备，以视频处理器完成 BGRA→NV12，再按行拆为 I420 喂给原有 WebRTC
+自定义视频源；编码、连接与音频链路继续复用。窗口来源继续使用现有实现；WGC
+启动不支持或失败时回退原后端。通过 video_capturers_ 纳入既有 track/stream 的
+停止释放流程，停止时同时停止对应的系统音频采集，重复停止安全。采集线程独立管理
+WinRT/帧池/会话/GPU 资源，处理尺寸变化；每次送入的 I420 帧持有独立像素，静态
+画面可重送。日志分别记录原生 freshFrames 与 deliveredFrames，避免把重复帧数量
+当成新画面更新速率。原生运行失败通过健康检查报告错误并结束共享，关闭后迟到的
+健康回包不得再次调用结束回调。
+
+验证：第二屏 WGC 本地回环 4K 与 1440p 的 20 秒采样为约 59–61 fps，1440p
+接收端 dropped/lost=0；带音频的独立窗口切换通过。新增
+`apps/client/tool/screen_capture_smoke.cc` 与其独立 CMake 工程，三轮验证第二/第一
+显示器、显示/隐藏鼠标、停止/重复停止/重新创建、无效来源与帧率。短暂无焦点动画
+验证新采集图像与实际颜色变化，检查红/蓝的 BT.601 I420 值（与 SDK 无色彩空间
+元数据的 I420 转换一致，避免混用矩阵造成偏色）；三轮每 3 秒 fresh
+为 119–160、颜色变化 82–104，证明不只是重复静态帧。DPI 坐标须使用
+PER_MONITOR_AWARE_V2 才能准确定位测试色块。Flutter analyze 无问题，全部 377
+项 Flutter 测试通过，含原生失败结束一次与关闭后迟到回包两项新增回归。正常
+Windows Debug、Release 构建均通过；真实 Windows→Mac 场景仍待用户复测验收。
+
+补证：旧 `run/source-probe` 缺少 RTC_DESKTOP_DEVICE，而该宏改变 factory 的虚函数
+布局；它的崩溃不能证明 CreateCustomVideoSource 未实现。修正宏并链接当前 DLL
+后自定义视频源实际送帧成功。原生回归可运行：
+`cmake -S apps/client/tool/screen_capture_smoke -B run/screen-capture-smoke -G "Visual Studio 16 2019" -A x64`，
+然后 `cmake --build run/screen-capture-smoke --config Release`，运行生成的
+`run/screen-capture-smoke/Release/screen_capture_smoke.exe`（该回归需要两块显示器）。
+
+**Windows→Mac 低帧率发送日志补齐（2026-10-09，01:43–01:45）**：下载目录新增
+`windows_nightcord.2026-10-08.log`。本轮实际发送 3840×2160、7–9 fps，发送参数
+scale=1、10 Mbps、MAINTAIN_RESOLUTION；本机 settings.json 的 screen.height=0、
+fps=60，即保留原始分辨率，不能将这轮当作 2560×1440 的复测。采集源统计 7–10 fps，
+17:43:45–17:44:55 UTC 内源帧数和编码帧数均增加 563（平均 8.04 fps），编码耗时
+增量折合 17.64 ms/帧，qualityLimitationReason 始终 none。可用发送带宽估计
+6.33–20.49 Mbps，即使升至 20.49 Mbps 仍为 8 fps。Mac 同期 decoded 增加 563，
+dropped 始终 0；中间出现累计 114 个视频包丢失，后续保持，发送端有重传；低帧率在
+丢包前已存在。证据指向 Windows 采集到编码输入的供帧路径，不能继续归因于 Mac
+解码丢帧或单纯网络带宽不足；具体原生采集、转换、调度或背压瓶颈仍未测定。本轮
+只核对日志与设置，未修改实现、未构建。
+
+**Windows 发起、Mac 接收仅约 7 fps（2026-10-09，01:29–01:32）**：用户目标
+2560×1440、60 fps。下载目录本轮只有 Mac 接收日志，Windows 发送日志已不在；本机
+默认日志目录也没有本次日期的文件。Mac 在同一 stream 上 decoded 从 47 增至
+1083，稳定十秒增量约 72–78 帧（约 7.4 fps），视频 dropped/lost 始终 0，host→host
+UDP；后段总接收速率约 8–10 Mbps，不是一直没有数据到达。接收侧的 outgoing
+估计 300000 bps 属于反方向，不能用作 Windows 视频发送带宽上限。现有数据未显示
+视频丢包或解码丢帧；仍缺发送侧 source fps、framesEncoded/totalEncodeTime 与限制
+原因，不能将问题直接定为采集器、CPU 或拥塞控制。Windows 采集 fps 参数路径已核对：
+Dart 发送 mandatory.frameRate 的 double，C++ 读取后传入 Start(fps)，没有发现固定
+7 fps 的配置。用户确认 Windows 也是本客户端，未生成发送日志。使用实际 Release
+DLL 在沙箱外启动独立进程，成功解析默认日志目录并落盘诊断行；随后本地视频探针
+也正常记录采集、发送和接收统计。只能确认新进程日志正常，上次文件缺失原因未确定。
+扩展 `screen_video_smoke.dart` 的编译期参数，以便设置高度、帧率、码率和采样时长；
+本机 2160 高度原始屏幕缩放到 2560×1440，60 fps、10 Mbps 配置原生读回成功。
+本地回环 40 秒内诊断发送 37–41 fps，源 fps 为 37–41，平均编码约 5–6 ms/帧，
+qualityLimitationReason=none，接收 lost/dropped=0；未复现固定 7 fps，但采集供帧
+没有达到 60。两轮独立窗口切换检查通过，探针结果 PASS，Flutter analyze 无问题。
+该探针使用当前源码和本地回环，不能替代上次 Windows→Mac 的发送日志。完成后已
+恢复正常入口并成功构建 Windows Debug/Release，Release 同步包含保持共享分辨率策略。
+
+**官方 Windows 客户端有声音、无画面（2026-10-09，01:19–01:22）**：新版 Mac
+向本客户端持续发送 1512×982、43–58 fps、none，Windows 接收 dropped/lost=0。
+官方观看者两次加入均完成 answer/ICE、音频正常，但对应视频统计 framesEncoded=0、
+bytesSent=0、totalEncodeTime=0，只有探测包，不能归因于观看端渲染丢帧。
+读取本机官方客户端日志后发现 offer 仍包含完整编解码器列表、H264 在首位，原本的
+VP8/RTX + Opus 收敛在 Mac 上并未实际生效。定位 Darwin 插件在 offer 前以空 MID
+作为 transceiverId，音视频均查到第一条视频 transceiver；后设音频偏好覆盖视频偏好。
+另外 findCodecCapability 将调用方未提供的 fmtp 当作不匹配，Opus 默认参数因此被
+拒绝，空偏好列表又恢复默认清单。现以稳定 senderId 标识 transceiver，拒绝空 ID，
+兼容协商后的非空 MID 查找；fmtp 只匹配调用方明确提供的参数。common、macOS SPM、
+iOS SPM 三份 Darwin 源码同步修正，iOS 本轮未构建。
+新增 `apps/client/tool/screen_codec_smoke.m`，直接链接真实 Mac 插件对象及 WebRTC
+框架运行，无需图形会话或采集权限：修复前 distinct=0、两个设置均成功却输出完整
+codec 清单；修复后 distinct=1、最终仅 VP8/RTX/Opus，协商后 senderId 与 MID 查找
+均通过。Mac analyze、16 条相关 Flutter 测试、Debug 构建通过，更新至
+`/Users/Shared/Nightcord Speak.app`。修复的是已复现的协商配置错误；官方客户端
+能否收到真实视频仍待用户复测，尚不能宣布黑屏全部解决。本轮未提交/推送。
+
+**旧版补充复测：完整分辨率可以恢复（2026-10-09，01:12–01:15）**：最新 Windows
+日志文件名为 `windwos_nightcord.2026-10-08.log`（另一个 windows 文件仍是上一轮）。
+Mac 本轮仍读回 MAINTAIN_FRAMERATE、10 Mbps 视频上限、256 kbps 音频上限；
+01:12:10 起从 378×244、756×490、1134×732 逐级升档，01:13:10–01:14:30
+连续九个十秒采样为 1512×982、48–57 fps、none，实际视频约 2.74–3.17 Mbps。
+这修正前轮「持续不恢复」的适用范围：旧策略能够恢复，但恢复时机和保持情况不稳定，
+不能将所有运行都归为锁死。01:14:32 第二个观看者加入，随后原连接出现
+756×490/1134×732、none，01:15:00 曾回完整尺寸，01:15:10 后又为
+1134×732、bandwidth；两条连接的统计会交错记录，加入与降档时间相关，因果未证实。
+原 Windows 接收端持续约 49–54 fps，decoded 从 488 增至 10676，dropped 始终 0；
+中途累计视频 packetsLost=67，Mac retransmittedPacketsSent=67、NACK=8、PLI=0。
+重传计数对应并不等于能证明每个丢包均已及时修复。带宽估计大多 5.2–6.3 Mbps，
+有零星 RTT 波动。前一段演示日志确认 1512×982、稳定 5 fps、none。
+本轮为新版测试前的旧版结果，未改变代码或构建；新版需分别观察单观看者及加入
+第二观看者后的分辨率和帧率，避免将旧版完整尺寸误算成新策略验收通过。
+
+**演示模式对照与普通共享策略调整（2026-10-09）**：用户确认 Mac 发起的演示模式
+可以保持 1512×982。该预设同时使用 MAINTAIN_RESOLUTION、5 fps、3 Mbps，结果支持
+排查发送端自适应，但不能单独证明 QP 触发原因。结合普通模式保持约 30 fps 却长期
+发送 378×244 的日志，屏幕/窗口共享统一改为 MAINTAIN_RESOLUTION；普通预设所选
+30/60 fps 与码率不变，仍由 WebRTC 拥塞控制在必要时降帧或暂停，不关闭拥塞控制、
+不强制最低码率。摄像头普通模式继续 MAINTAIN_FRAMERATE，detail=true 时保分辨率。
+回归测试覆盖屏幕/窗口/摄像头在 1440p、30 fps、6 Mbps 下的策略和不放大 982 高度
+的源；Windows analyze、38 条相关测试通过，Mac analyze、16 条相关测试通过。
+Mac Debug 构建通过并更新 `/Users/Shared/Nightcord Speak.app`。普通模式 30 fps 的
+两端真实出流仍待用户复测，不能以演示模式的结果代替验收。本轮未重建 Windows
+接收端，未提交或推送。
+
+**Mac 发起、Windows 接收的同轮日志（2026-10-09，01:00–01:02 本地时间）**：两端
+stream_id 对应一致。Mac 首帧实测高度 982、所选 1440，因此不主动放大，原生
+cap=6000000、scale=null、MAINTAIN_FRAMERATE；源 1512×982、28–30 fps，但所有
+十秒采样输出都只有 378×244、29–30 fps、bandwidth。发送视频约 0.53–0.59 Mbps，
+编码目标约 2.93–5.44 Mbps，网络估计约 3.28–5.95 Mbps；视频 NACK/PLI/丢包均为 0。
+Windows 每十秒解码约 291–295 帧，视频 dropped/lost 始终为 0，确认小尺寸已经由
+Mac 发出，不是观看端丢帧或 UI 缩小导致。Mac 累计编码耗时 10.174 秒/3213 帧，
+平均约 3.17 ms/帧；现有证据不支持持续编码 CPU 饱和。
+这轮与上一轮骤降低帧率不同，主要现象是发送端长期停在低分辨率、带宽恢复后未升档。
+WebRTC 官方 adaptation 文档说明 MAINTAIN_FRAMERATE 启用基于 QP 的质量缩放，
+故 bandwidth 标签本身不能当作网络吞吐不足的证明。质量缩放的触发/恢复阈值是重点
+嫌疑，但现有日志未记录内部 adaptation 事件，不能宣布已定位该具体内部机制。
+可使用现有「演示」预设进行对照（MAINTAIN_RESOLUTION、5 fps），看能否保持原始
+1512×982；该对照同时改变帧率和码率，只能辅助缩小范围，不能单独证明 QP 根因。
+本轮仅检查日志及源码、记录结论，未更改编码策略，未构建、提交或推送。
+
+**再次复测：1080p 上限失效与 Mac 带宽估计波动（2026-10-09）**：用户最新下载目录日志
+显示 Windows 原生参数写回已生效，约 30 秒后限制原因变为 `none`，发送约 3.5–4.1 Mbps；
+但输出仍为 3441×1928，源约 13–15 fps。桌面轨道未提供 `getSettings().height`，原有
+缩放被跳过。现于连接发送者之前用临时渲染器读取首帧原始高度，并据此设置编码缩放；
+读取结束即释放渲染器，超时/无尺寸则清理采集并报错，避免无声绕过用户设定的尺寸上限。
+Windows 真实屏幕回环验证源高度 2160、所选 720、原生读回 scale=3，两轮输出均不超过
+720；该短时探针仍有自适应降档，不能据此宣称 bandwidth 已根治。新增首帧读取、超时
+清理、无尺寸失败清理回归覆盖，offer 测试验证 2160→1080 的 scale=2。
+Mac 本轮已设 6 Mbps，源 1512×982、约 30 fps，但网络带宽估计仍曾从约 6 Mbps 骤降
+至 0.47 Mbps，输出同时跌至 2 fps；两端都是 host→host UDP，未见远端视频丢包，
+Mac 部分 RTT 升至约 60–98 ms。上一轮仅指向 4 Mbps 预算的判断不完整；零丢包不能
+排除时延触发的拥塞控制，具体是链路波动还是接收/反馈调度尚未区分。Windows 源帧率
+偏低也仍待定位。两份日志未覆盖同一时段：Windows 结束于 00:39，Mac 主要波动在
+00:42–00:44，缺少对应观看端统计，不能据此定位解码/反馈端。分析和相关测试通过
+（Windows 35、Mac 13），正常入口 Windows Debug/Release 构建通过，Mac Debug 已更新至
+`/Users/Shared/Nightcord Speak.app`；用户 MacBook 的实际运行表现仍待复测。未提交。
+
+**屏幕共享 bandwidth 复测与 Windows 参数丢失修复（2026-10-09）**：下载目录两端
+新日志表明均为 host→host UDP 直连，远端视频丢包为 0。Mac 源为 1512×982、约 30 fps，
+稳定输出 1134×732、约 3.9 Mbps，编码目标 4 Mbps、网络估计 5.2–7.4 Mbps；证据指向
+客户端码率预算与质量自适应，而非持续网络拥塞。Windows 网络估计 4.9–6.2 Mbps、
+RTT 约 0–1 ms，但目标仅 2–2.5 Mbps，输出升至 2560×1440；源统计约 5–6 fps。
+定位 C++ 插件 `updateRtpParameters` 修改 `encodings()` 的副本后没有 `set_encodings`
+写回，导致成功回包但码率、缩放等均丢失；Dart `sender.parameters` 又是本地缓存，
+此前日志「回读成功」无效。现补原生写回，并通过 `pc.getSenders()` 重新读取 SDK 参数。
+SDK 将缺失可选字段返回为 0/空串，序列化时不再把缺失 SSRC、maxFramerate、
+scalabilityMode 等哨兵值当作有效配置送回。持久化原生回归探针
+`apps/client/tool/screen_parameters_smoke.dart`：修复前 accepted=true、原生码率 0、
+scale=1、maxFramerate=0；修复后原生读回 4000000、2、30。
+验证补充：原样回写及音频 128000 bps 的原生回读均通过，Flutter analyze 与 32 条相关
+测试通过，正常入口 Windows Debug 构建通过。Release 首次因运行中的客户端占用 DLL
+而安装失败；用户关闭后正常 Release 构建通过，并核对安装目录插件 DLL 与 Dart AOT
+产物的 SHA-256 均与编译输出一致，复测使用原 `runner/Release` 目录即可。
+Windows 低源帧率与缺失原始高度导致的 1080p 限制失效仍未解决；Mac 尚未验证提高
+码率预算后的全源尺寸，不将这些问题标为完成。未提交/推送。
+
+**屏幕共享 bandwidth 调查（2026-10-08，尚未定位最终根因）**：用户确认 Windows 与
+macOS 均出现，来源为整个屏幕。用户提供的 Mac 日志在 11:51–11:58 UTC 显示
+`cap=[4000000]`、`MAINTAIN_FRAMERATE`、`scale=[null]`，输出在 1134×732、
+756×490、564×366 之间反复变化，较小尺寸仍有 29–30 fps；确认发生编码自适应降档，
+不能仅凭 `bandwidth` 认定局域网吞吐不足或 4 Mbps 上限就是根因。代码复核发现
+`_scaleFor` 依赖 `track.getSettings().height`，原生桌面轨道可能不提供该字段，
+因此先前「1080p 编码上限六端一致生效」的描述并未成立，尺寸限制仍待修复和真机验证。
+现有日志没有视频实际码率、编码目标码率、网络带宽估计、反馈 RTT，无法区分码率配置、
+质量自适应与真实链路拥塞。新增 `ScreenDiagnostics`：每 10 秒记录视频发送码率、
+编码目标、采集尺寸、远端视频丢包/RTT、实际选中 ICE 路由的类型/协议与带宽估计；
+不记录地址、URL、ICE 凭据或原始统计包，缺失字段标记 unknown。此轮只补诊断，
+未改变编码策略。Windows/macOS analyze、Windows 32 条相关测试、macOS 10 条相关测试、
+Windows Release 与 macOS Debug 构建通过；带宽问题需使用诊断构建在实际两台设备复测，
+构建 Mac 不保存用户 MacBook 的运行日志。未提交。
 
 **屏幕共享输出设备修复（2026-10-08）**：用户提供 Windows、macOS 应用日志与
 `screen-audio.log`。Windows 原先把 WebRTC 枚举第一项当作默认扬声器，现改为原生
@@ -464,7 +668,7 @@ analyze 与全部 367 条测试通过；Windows Release、macOS Debug 构建及�
 |------|--------------------------------|
 | Rust | **25,968 行**，16 crates + CLI + gateway（不含 vendor） |
 | Dart | **25,210 行**，`apps/client/lib/` 下 107 文件（含 l10n 生成文件，不含测试） |
-| 测试 | **422 Rust + 367 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
+| 测试 | **422 Rust + 377 Dart + 5 启动脚本测试**；macOS 本轮仅运行相关 Flutter 测试与原生探针，未重跑 Rust 全量测试 |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。
@@ -885,7 +1089,7 @@ Pages 控制台配置（生产/预览环境各自设置）：
 | 入站命令的透传 | ✅ `StreamItem::UnknownCommand` → `ScreenExtension::decode`，通用层只认领域事件；TS3 后端不装这个扩展，命令回 `Unsupported` |
 | 入口按能力位 | ✅ `capabilities.screen_stream`，不是协议版本号。TS3 上整个面板不出现（有 widget 测试）。**这条一开始是坏的**：后端从没发布过 `CapabilitiesChanged`，见 §6 ⑳ |
 | 能力位真的会到 | ✅ `refresh` 里紧跟 `Connected` 发布 `CapabilitiesChanged`；两侧的名字各有一条测试钉住 |
-| 发布端的码率与降级策略 | ✅ `setLocalDescription` **之后**才读 sender 的 encodings（之前是空的，两个设置都写丢了，见 §6 ㉒）；`degradationPreference` 选 `maintain-framerate`；`setParameters` 的返回值与读回来的参数都进日志 |
+| 发布端的码率与降级策略 | ✅ `setLocalDescription` **之后**才读 sender 的 encodings（之前是空的，两个设置都写丢了，见 §6 ㉒）；2026-10-09 屏幕/窗口改选 `maintain-resolution`，摄像头普通模式仍保帧率；`setParameters` 的返回值与原生读回参数都进日志 |
 | 发布端的读数 | ✅ `getStats()` 每秒轮询显示在浮动小窗标题里（分辨率 · fps · 谁在限制），每 10 秒进一次 `info` 日志；一条控制器测试盯着轮询会随共享起停、同一读数不重复唤醒 |
 | 收端不依赖 `msid` | ⚠️ **只有代码路径**：`streams` 为空时自建 `MediaStream`。要真的验，得和一个不带 msid 的发端连一次（TS6 官方客户端就是），`flutter_test` 里做不到 |
 | 渲染器真的拿到流 | ✅ `renderer.muted` 整个删掉（它会把 `_init` 打断在 `srcObject` 之前，见 §6 ㉓）。同样是**只有代码路径**——`flutter_test` 里没有 `RTCVideoRenderer` |
@@ -959,9 +1163,9 @@ Pages 控制台配置（生产/预览环境各自设置）：
   四条、修掉四个真 bug（§6 ㉑–㉔）；**㉑ ㉒ 与「采窗口会把窗口提到最前」已由用户于
   2026-10-08 确认可用**（置前那条仓库里没有对应改动可核对，按用户实测为准，见 §9 的
   2026-10-08 记录）。第二轮拿到的读数（**发布端自报 `1280x720 5fps (bandwidth)`**，
-  被带宽估计卡住而不是 CPU）仍是 `maintain-framerate` 要不要翻过来的依据——设上了却
-  仍然这样就该换成限制分辨率（参考实现选的就是保分辨率）；下一轮看小窗标题里
-  `limited-by` 写的是 `cpu` 还是 `bandwidth`。
+  曾使我们选择 `maintain-framerate`。2026-10-09 新日志表明普通模式长期缩至
+  378×244、演示模式可保持 1512×982，已将屏幕/窗口改为保分辨率；仍需在所选
+  30/60 fps 下复测实际帧率、尺寸、码率与限制原因，见本节顶部进度。
   **仍未验证**的是 2026-10-08 新加的音频与观看授权在**应用界面里**的样子：探针已在
   真实服务器上端到端证明「带音频的发布能被观看端收到（含音轨）」，但「Windows 发出的
   声音在 Mac 上真的响」「私密共享的批准弹窗对真实服务器走一遍（批准 → 观看者拿到画面；
@@ -1137,8 +1341,10 @@ debug 下对、在测试里也对，唯独 release 下是错的——因为它�
 - [x] 官方客户端语音互通 ——用户于 2026-10-05 确认通过
 - [ ] 不同真实立体声源的听感比较；poke / kick / ban 的真实服务器验证
 - [ ] **屏幕共享的复测**：㉑ ㉒ 与置前一条已由用户确认（2026-10-08，见 §5.4）。剩下要看的
-      ——能不能收到别人（官方客户端）的共享；小窗标题里 `limited-by` 写的是 `cpu` 还是
-      `bandwidth`（**它决定 ㉒ 里 `maintain-framerate` 这个选择要不要翻过来**）；
+      ——能不能收到别人（官方客户端）的共享；2026-10-09 改为保分辨率后，普通模式
+      30/60 fps 的实际尺寸、帧率与 `limited-by`；
+      Windows 第二屏 WGC 的 1440p/60 fps 跨机接收，以及 Mac 发布给官方 Windows
+      客户端在 VP8/RTX + Opus 协商修复后的实际画面；本机回环与原生探针不代替互通验收；
       以及 2026-10-08 新加的音频与观看授权对真实服务器走一遍（见 §5.4）
 - [ ] **屏幕共享的丢包自愈（没做）**：通知是 UDP 一发不补（丢一包
       `notifyrespondjoinstreamrequest` 就是一次「连不上」），目前的恢复只有用户手动重试。

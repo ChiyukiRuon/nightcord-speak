@@ -8,6 +8,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../models/screen_options.dart';
 import '../platform/services.dart';
 import 'screen_share_backend.dart';
+import 'screen_capture_size.dart';
+import 'screen_diagnostics.dart';
 import 'screen_sdp.dart';
 
 /// How often the publisher says what it is actually sending.
@@ -23,10 +25,12 @@ class WebRtcScreenBackend implements ScreenShareBackend {
     Future<RTCPeerConnection> Function(Map<String, dynamic>)? createConnection,
     Future<MediaStream> Function(String)? createStream,
     Future<MediaStream> Function(Map<String, dynamic>)? getDisplayMedia,
+    Future<int?> Function(MediaStream)? measureCaptureHeight,
     this.iceGatherTimeout = const Duration(seconds: 2),
   }) : _createConnection = createConnection ?? createPeerConnection,
        _createStream = createStream ?? createLocalMediaStream,
-       _getDisplayMedia = getDisplayMedia ?? _platformDisplayMedia;
+       _getDisplayMedia = getDisplayMedia ?? _platformDisplayMedia,
+       _measureCaptureHeight = measureCaptureHeight ?? screenCaptureHeight;
 
   final Future<RTCPeerConnection> Function(Map<String, dynamic>)
   _createConnection;
@@ -35,6 +39,7 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   /// The platform's own picker. A seam like the other two injections.
   final Future<MediaStream> Function(Map<String, dynamic>) _getDisplayMedia;
   final Duration iceGatherTimeout;
+  final Future<int?> Function(MediaStream) _measureCaptureHeight;
   bool get _desktop =>
       !kIsWeb &&
       const {
@@ -141,6 +146,13 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   ) async {
     if (_desktop && source == null) throw StateError('Select a screen source');
 
+    logToCore(
+      'info',
+      'screen: capture requested kind=${source?.kind.name ?? options.source.name} '
+          'id=${source?.id ?? 'picker'} height=${options.height} '
+          'fps=${options.fps} audio=${options.audio}',
+    );
+
     // A camera is a different call, not a different constraint: it is a device
     // the browser already knows how to open, with permission of its own.
     final stream = source?.kind == ScreenSourceKind.camera
@@ -157,6 +169,18 @@ class WebRtcScreenBackend implements ScreenShareBackend {
       await stream.dispose();
       throw StateError('No screen video track');
     }
+    Object? captureBackend;
+    try {
+      captureBackend = stream
+          .getVideoTracks()
+          .first
+          .getSettings()['captureBackend'];
+    } catch (_) {
+      // Older SDKs may not expose capture settings.
+    }
+    if (captureBackend is String) {
+      logToCore('info', 'screen: capture backend=$captureBackend');
+    }
     // macOS's screen path is video-only inside the plugin — its
     // ScreenCaptureKit capturer never captures audio — so the sound track
     // comes from the audio device instead: the runner installs a custom
@@ -170,7 +194,33 @@ class WebRtcScreenBackend implements ScreenShareBackend {
         source?.kind != ScreenSourceKind.camera) {
       await _addSystemAudioTrack(stream);
     }
-    return _Media(stream);
+    int? captureHeight;
+    if (!kIsWeb &&
+        options.height > 0 &&
+        (_Peer._trackHeight(stream.getVideoTracks().first) ?? 0) <= 0) {
+      try {
+        captureHeight = await _measureCaptureHeight(stream);
+        if (captureHeight == null || captureHeight <= 0) {
+          throw StateError('Screen capture dimensions are unavailable');
+        }
+        logToCore(
+          'info',
+          'screen: capture height=$captureHeight wanted=${options.height}',
+        );
+      } catch (error) {
+        logToCore('warn', 'screen: could not measure capture height: $error');
+        for (final track in stream.getTracks()) {
+          await track.stop();
+        }
+        await stream.dispose();
+        rethrow;
+      }
+    }
+    return _Media(
+      stream,
+      captureHeight: captureHeight,
+      monitorCapture: captureBackend == 'windows-graphics-capture',
+    );
   }
 
   /// Opens the custom audio device as a track and adds it to the capture.
@@ -312,17 +362,70 @@ class _ThumbnailMedia implements ScreenMedia {
 }
 
 class _Media implements ScreenMedia {
-  _Media(this.stream, {this.ownsTracks = true, this.ownsStream = true});
+  _Media(
+    this.stream, {
+    this.ownsTracks = true,
+    this.ownsStream = true,
+    this.captureHeight,
+    bool monitorCapture = false,
+  }) {
+    if (monitorCapture) {
+      _captureTimer = Timer.periodic(
+        _statsEvery,
+        (_) => unawaited(_checkCapture()),
+      );
+    }
+  }
   final MediaStream stream;
+  final int? captureHeight;
   final bool ownsTracks;
   final bool ownsStream;
   bool closed = false;
+  Timer? _captureTimer;
+  bool _checkingCapture = false;
+  void Function()? _onEnded;
+
+  Future<void> _checkCapture() async {
+    if (closed || _checkingCapture) return;
+    _checkingCapture = true;
+    try {
+      const channel = MethodChannel('FlutterWebRTC.Method');
+      final stats = await channel.invokeMapMethod<String, dynamic>(
+        'getScreenCaptureStats',
+        {'trackId': stream.getVideoTracks().first.id},
+      );
+      if (closed || stats == null) return;
+      logToCore(
+        'info',
+        'screen: native capture running=${stats['running']} '
+            'freshFrames=${stats['freshFrames']} '
+            'deliveredFrames=${stats['deliveredFrames']} error=${stats['error']}',
+      );
+      if (stats['running'] == false) {
+        _captureTimer?.cancel();
+        logToCore(
+          'error',
+          'screen: native capture stopped error=${stats['error']}',
+        );
+        _onEnded?.call();
+      }
+    } catch (error) {
+      _captureTimer?.cancel();
+      if (!closed) {
+        logToCore('warn', 'screen: capture health unavailable: $error');
+      }
+    } finally {
+      _checkingCapture = false;
+    }
+  }
+
   @override
   bool get hasAudio => stream.getAudioTracks().isNotEmpty;
   @override
   Widget view() => _Video(media: this);
   @override
   set onEnded(void Function() callback) {
+    _onEnded = callback;
     for (final track in stream.getVideoTracks()) {
       track.onEnded = callback;
     }
@@ -332,6 +435,8 @@ class _Media implements ScreenMedia {
   Future<void> close() async {
     if (closed) return;
     closed = true;
+    _captureTimer?.cancel();
+    _onEnded = null;
     if (ownsTracks) {
       for (final track in stream.getTracks()) {
         track.onEnded = null;
@@ -416,10 +521,12 @@ class _Peer implements ScreenPeer {
 
   /// Runs only while publishing — a viewer has nothing of its own to report.
   Timer? _stats;
+  final _diagnostics = ScreenDiagnostics();
 
   @override
   Future<String> offer(ScreenMedia media) async {
-    final stream = (media as _Media).stream;
+    final capture = media as _Media;
+    final stream = capture.stream;
     final senders = <RTCRtpSender>[];
     // Everything the capture produced goes on the wire — video first, then
     // sound when the platform gave us any. Adding only the video half is what
@@ -438,7 +545,7 @@ class _Peer implements ScreenPeer {
     });
     final sdp = await localDescription(description);
     for (final sender in senders) {
-      await _steer(sender);
+      await _steer(sender, captureHeight: capture.captureHeight);
     }
     _stats ??= Timer.periodic(_statsEvery, (_) => unawaited(_logStats()));
     return sdp;
@@ -477,7 +584,11 @@ class _Peer implements ScreenPeer {
     RTCRtpCodecCapability(clockRate: 90000, mimeType: 'video/rtx'),
   ];
   static final List<RTCRtpCodecCapability> _audioCodecs = [
-    RTCRtpCodecCapability(clockRate: 48000, mimeType: 'audio/opus', channels: 2),
+    RTCRtpCodecCapability(
+      clockRate: 48000,
+      mimeType: 'audio/opus',
+      channels: 2,
+    ),
   ];
 
   @override
@@ -527,7 +638,9 @@ class _Peer implements ScreenPeer {
     if (closed) return;
     try {
       final lines = <String>[];
-      for (final report in await pc.getStats()) {
+      final reports = await pc.getStats();
+      lines.addAll(_diagnostics.sample(reports, DateTime.now()));
+      for (final report in reports) {
         final values = report.values;
         final kind = values['kind'] ?? values['mediaType'];
         if (report.type == 'outbound-rtp' && kind == 'audio') {
@@ -562,15 +675,14 @@ class _Peer implements ScreenPeer {
   /// which is what this was: the cap and the preference were both being written
   /// into an empty list, and the stream ran on libwebrtc's own defaults.
   ///
-  /// `maintain-framerate` is the opposite of what the reference implementation
-  /// picks (it protects resolution, because a screen share is usually text).
-  /// This one is set the other way round on purpose: the complaint that started
-  /// this was frame rate. Flipping it is one word.
+  /// Screen and window shares preserve readable pixels. With maintain-framerate,
+  /// a Mac source stayed at 378x244 despite a 1512x982 source and recovered
+  /// bandwidth. Camera video can still trade resolution for smooth motion.
   ///
   /// Video and sound get different fields. Only the picture has a resolution to
   /// scale and a side to give way on, so an audio sender is handed nothing but
   /// its bitrate — the same split the reference implementation makes.
-  Future<void> _steer(RTCRtpSender sender) async {
+  Future<void> _steer(RTCRtpSender sender, {int? captureHeight}) async {
     final parameters = sender.parameters;
     final encodings = parameters.encodings;
     if (encodings == null || encodings.isEmpty) {
@@ -602,14 +714,14 @@ class _Peer implements ScreenPeer {
         encoding.maxBitrate = options.audioBitrateKbps * 1000;
       }
     } else {
-      // What to give up when there is not enough room. "Detail" is slides and
-      // code — the reference client hints the track the same way — and the rest
-      // is movement, where a smooth picture matters more than a sharp one.
-      parameters.degradationPreference = options.detail
+      // Keep screen text readable when bandwidth changes. Camera motion can
+      // trade pixels for frame rate unless detail was explicitly requested.
+      parameters.degradationPreference =
+          options.detail || options.source != ScreenSourceKind.camera
           ? RTCDegradationPreference.MAINTAIN_RESOLUTION
           : RTCDegradationPreference.MAINTAIN_FRAMERATE;
 
-      final scale = _scaleFor(sender.track, options.height);
+      final scale = _scaleFor(sender.track, options.height, captureHeight);
       for (final encoding in encodings) {
         encoding.maxBitrate = options.videoBitrateKbps * 1000;
         if (scale != null) encoding.scaleResolutionDownBy = scale;
@@ -617,13 +729,15 @@ class _Peer implements ScreenPeer {
     }
 
     final applied = await sender.setParameters(parameters);
-    // Logged either way, and read back rather than assumed: `setParameters`
-    // can refuse a field it does not know, and a refusal that leaves no trace
-    // is how this went unnoticed the first time.
-    final after = sender.parameters;
+    // The native sender caches the requested values in Dart even when the SDK
+    // drops a field. Re-enumeration reads the SDK instead of that local cache.
+    final after = (await pc.getSenders())
+        .firstWhere((candidate) => candidate.senderId == sender.senderId)
+        .parameters;
     final shape = audio
         ? ''
         : ' scale=${after.encodings?.map((e) => e.scaleResolutionDownBy).toList()}'
+              ' maxFps=${after.encodings?.map((e) => e.maxFramerate).toList()}'
               ' preference=${after.degradationPreference}';
     logToCore(
       applied ? 'info' : 'warn',
@@ -642,9 +756,13 @@ class _Peer implements ScreenPeer {
   /// makes the setting mean the same thing on every platform — and null means
   /// "leave it alone", either because the source resolution was wanted or
   /// because the capture is already at or below it.
-  static double? _scaleFor(MediaStreamTrack? track, int wantedHeight) {
+  static double? _scaleFor(
+    MediaStreamTrack? track,
+    int wantedHeight,
+    int? captureHeight,
+  ) {
     if (wantedHeight <= 0 || track == null) return null;
-    final height = _trackHeight(track);
+    final height = captureHeight?.toDouble() ?? _trackHeight(track);
     if (height == null || height <= wantedHeight) return null;
     return height / wantedHeight;
   }
@@ -653,8 +771,8 @@ class _Peer implements ScreenPeer {
     try {
       return (track.getSettings()['height'] as num?)?.toDouble();
     } catch (_) {
-      // Not every platform answers, and not answering costs the downscale
-      // rather than the stream.
+      // Desktop capture falls back to measuring a frame before attaching any
+      // sender; outbound frames have already been adapted and cannot be used.
       return null;
     }
   }

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:nightcord_client/core/screen/screen_share_backend.dart';
@@ -64,6 +66,8 @@ class _Track implements MediaStreamTrack {
   final String id;
   @override
   final String kind;
+  @override
+  void Function()? onEnded;
   int stops = 0;
   @override
   Future<void> stop() async {
@@ -72,6 +76,14 @@ class _Track implements MediaStreamTrack {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _WgcTrack extends _Track {
+  _WgcTrack() : super('wgc-track', 'video');
+  @override
+  Map<String, dynamic> getSettings() => {
+    'captureBackend': 'windows-graphics-capture',
+  };
 }
 
 class _Stream implements MediaStream {
@@ -83,11 +95,15 @@ class _Stream implements MediaStream {
   @override
   List<MediaStreamTrack> getTracks() => tracks;
   @override
-  List<MediaStreamTrack> getVideoTracks() =>
-      [for (final track in tracks) if (track.kind == 'video') track];
+  List<MediaStreamTrack> getVideoTracks() => [
+    for (final track in tracks)
+      if (track.kind == 'video') track,
+  ];
   @override
-  List<MediaStreamTrack> getAudioTracks() =>
-      [for (final track in tracks) if (track.kind == 'audio') track];
+  List<MediaStreamTrack> getAudioTracks() => [
+    for (final track in tracks)
+      if (track.kind == 'audio') track,
+  ];
   @override
   Future<void> addTrack(
     MediaStreamTrack track, {
@@ -111,6 +127,68 @@ class _Stream implements MediaStream {
 Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  for (final closeBeforeReply in [false, true]) {
+    testWidgets('WGC failure ends capture once; late=$closeBeforeReply', (
+      tester,
+    ) async {
+      // A native capture failure must end the share rather than leave a frozen
+      // last frame. A health reply after disposal must not end a newer share.
+      const channel = MethodChannel('FlutterWebRTC.Method');
+      final reply = Completer<Map<String, dynamic>>();
+      var reads = 0;
+      MethodCall? request;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) {
+        request = call;
+        reads++;
+        return reply.future;
+      });
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        );
+      });
+      final track = _WgcTrack();
+      final stream = _Stream()..tracks.add(track);
+      final backend = WebRtcScreenBackend(getDisplayMedia: (_) async => stream);
+      const options = ScreenOptions(
+        source: ScreenSourceKind.screen,
+        height: 0,
+        fps: 60,
+        videoBitrateKbps: 10000,
+        audio: false,
+        audioBitrateKbps: 128,
+        access: ScreenAccess.public,
+        viewerLimit: 0,
+        mode: ScreenMode.p2p,
+        detail: false,
+      );
+      final media = await backend.capture(null, options);
+      var ended = 0;
+      media.onEnded = () => ended++;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      expect(reads, 1);
+      expect(request?.method, 'getScreenCaptureStats');
+      expect(request?.arguments, {'trackId': 'wgc-track'});
+      if (closeBeforeReply) await media.close();
+      reply.complete({
+        'running': false,
+        'freshFrames': 10,
+        'deliveredFrames': 20,
+        'error': -1,
+      });
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 10));
+      expect(ended, closeBeforeReply ? 0 : 1);
+      expect(reads, 1);
+      await media.close();
+      expect(track.stops, 1);
+      expect(stream.disposes, 1);
+    });
+  }
   test(
     'native original SDP gains routes even when the SDK omits them',
     () async {
@@ -278,6 +356,32 @@ void main() {
     },
   );
 
+  test('unknown capture size fails and releases all captured tracks', () async {
+    // A missing source height must not silently bypass the selected 1080p cap.
+    final stream = _Stream();
+    final video = _Track('video-1', 'video');
+    stream.tracks.add(video);
+    final backend = WebRtcScreenBackend(
+      getDisplayMedia: (_) async => stream,
+      measureCaptureHeight: (_) async => null,
+    );
+    const options = ScreenOptions(
+      source: ScreenSourceKind.screen,
+      height: 1080,
+      fps: 30,
+      videoBitrateKbps: 4000,
+      audio: false,
+      audioBitrateKbps: 128,
+      access: ScreenAccess.public,
+      viewerLimit: 0,
+      mode: ScreenMode.p2p,
+      detail: false,
+    );
+    await expectLater(backend.capture(null, options), throwsStateError);
+    expect(video.stops, 1);
+    expect(stream.disposes, 1);
+  });
+
   test(
     'the offer carries the capture sound and steers it apart from the picture',
     () async {
@@ -292,7 +396,7 @@ void main() {
       stream.tracks.addAll([video, audio]);
       const options = ScreenOptions(
         source: ScreenSourceKind.screen,
-        height: 0,
+        height: 1080,
         fps: 30,
         videoBitrateKbps: 2500,
         audio: true,
@@ -305,6 +409,9 @@ void main() {
       final backend = WebRtcScreenBackend(
         createConnection: (_) async => pc,
         getDisplayMedia: (_) async => stream,
+        // Native desktop track settings omit height. Without measuring the
+        // source before the offer, a 1080p selection sent the full 4K screen.
+        measureCaptureHeight: (_) async => 2160,
       );
       final media = await backend.capture(null, options);
       expect(media.hasAudio, isTrue);
@@ -319,23 +426,78 @@ void main() {
       final picture = pc.made[0].parameters.encodings!.single;
       final sound = pc.made[1].parameters.encodings!.single;
       expect(picture.maxBitrate, 2500 * 1000);
+      expect(picture.scaleResolutionDownBy, 2.0);
       expect(sound.maxBitrate, 96 * 1000);
-      expect(pc.made[0].parameters.degradationPreference, isNotNull);
+      expect(
+        pc.made[0].parameters.degradationPreference,
+        RTCDegradationPreference.MAINTAIN_RESOLUTION,
+      );
       expect(pc.made[1].parameters.degradationPreference, isNull);
       // The codec list is trimmed before the offer is built: the untrimmed one
       // is what pushed a two-track offer past the server's command ceiling and
       // made the whole respond vanish (2026-10-08).
-      expect(
-        pc.codecTargets[0].preferences?.map((c) => c.mimeType),
-        ['video/VP8', 'video/rtx'],
-      );
-      expect(
-        pc.codecTargets[1].preferences?.map((c) => c.mimeType),
-        ['audio/opus'],
-      );
+      expect(pc.codecTargets[0].preferences?.map((c) => c.mimeType), [
+        'video/VP8',
+        'video/rtx',
+      ]);
+      expect(pc.codecTargets[1].preferences?.map((c) => c.mimeType), [
+        'audio/opus',
+      ]);
       await peer.close();
     },
   );
+
+  for (final source in ScreenSourceKind.values) {
+    test('30 fps $source uses the appropriate adaptation preference', () async {
+      // Screen sharing stayed at 378x244 after bandwidth recovered. Preserve
+      // its resolution without changing the user's 30 fps / 6 Mbps settings.
+      final pc = _OfferConnection();
+      final stream = _Stream()..tracks.add(_Track('video-1', 'video'));
+      final backend = WebRtcScreenBackend(
+        createConnection: (_) async => pc,
+        getDisplayMedia: (_) async => stream,
+        measureCaptureHeight: (_) async => 982,
+      );
+      final options = ScreenOptions(
+        source: source,
+        height: 1440,
+        fps: 30,
+        videoBitrateKbps: 6000,
+        audio: false,
+        audioBitrateKbps: 128,
+        access: ScreenAccess.public,
+        viewerLimit: 0,
+        mode: ScreenMode.p2p,
+        detail: false,
+      );
+      // Reuse a captured video track to test sender configuration independently
+      // of platform camera permissions and display pickers.
+      final media = await backend.capture(
+        null,
+        options.copyWith(source: ScreenSourceKind.screen),
+      );
+      final peer = await backend.peer(
+        options: options,
+        onCandidate: (_) {},
+        onMedia: (_) {},
+        onFailed: () {},
+      );
+      await peer.offer(media);
+      expect(
+        pc.made.single.parameters.degradationPreference,
+        source == ScreenSourceKind.camera
+            ? RTCDegradationPreference.MAINTAIN_FRAMERATE
+            : RTCDegradationPreference.MAINTAIN_RESOLUTION,
+      );
+      expect(pc.made.single.parameters.encodings!.single.maxBitrate, 6000000);
+      expect(
+        pc.made.single.parameters.encodings!.single.scaleResolutionDownBy,
+        1.0,
+      );
+      await peer.close();
+      await media.close();
+    });
+  }
 }
 
 class _NativeDescriptionConnection extends _NegotiatingConnection {
@@ -351,12 +513,13 @@ class _Sender implements RTCRtpSender {
   _Sender(this.track);
 
   @override
+  String get senderId => track!.id!;
+
+  @override
   final MediaStreamTrack? track;
 
   @override
-  RTCRtpParameters parameters = RTCRtpParameters(
-    encodings: [RTCRtpEncoding()],
-  );
+  RTCRtpParameters parameters = RTCRtpParameters(encodings: [RTCRtpEncoding()]);
 
   @override
   Future<bool> setParameters(RTCRtpParameters params) async {
@@ -391,6 +554,9 @@ class _OfferConnection extends _NegotiatingConnection {
   final added = <MediaStreamTrack>[];
   final made = <_Sender>[];
   final codecTargets = <_Transceiver>[];
+
+  @override
+  Future<List<RTCRtpSender>> getSenders() async => made;
 
   @override
   Future<RTCRtpSender> addTrack(
