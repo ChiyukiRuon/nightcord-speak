@@ -396,6 +396,33 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 
 **最后更新：2026-10-08**
 
+**屏幕共享输出设备修复（2026-10-08）**：用户提供 Windows、macOS 应用日志与
+`screen-audio.log`。Windows 原先把 WebRTC 枚举第一项当作默认扬声器，现改为原生
+WASAPI `GetDefaultAudioEndpoint(eRender, eConsole)` 解析 `default`，并检查切换返回值。
+macOS 日志出现输出设备匹配失败及引擎启动 `-10867`；保留 C 名称/UID 匹配，切换时
+先设置新引擎的真实输出设备，再建立播放图，替代直接反初始化旧图的输出单元；默认设备
+显式解析为 CoreAudio 默认输出，失败恢复旧图并向 Dart 返回错误。Dart 串行应用输出，
+跳过设置回包造成的重复切换，失败后允许重试及重新选择原设备。
+验证：Windows/macOS Flutter analyze、全部 367 条 Flutter 测试、Windows/macOS debug 构建通过；
+Mac 原生探针三轮内建/默认/不存在设备/恢复及停止后重启通过。构建机没有 AirPods，
+蓝牙耳机与内建扬声器之间的实际出声仍待用户真机验收。详见
+`apps/client/tool/screen_output_smoke.swift`。
+
+**同日真机复测后的补充**：用户 Windows 实际运行 `runner/Release`，上一轮仅构建 Debug，
+新上传日志仍是旧默认设备映射；已补构建 Release。macOS 原先只证明引擎重启成功，未
+验证系统默认改变后的实际硬件路由。新增实际设备读回与双向切换探针后复现：即使监听
+引擎通知并重建，AVAudioEngine 仍会将明确指定的非默认设备改走。最终将播放改为
+Audio Queue，通过 `kAudioQueueProperty_CurrentDevice` 绑定设备 UID，固定 48 kHz
+双声道 S16、三个 10 ms 缓冲；只有选择默认设备才监听并跟随 CoreAudio 默认输出变化。
+日志新增 requested/uid/device/actual。原生探针创建临时聚合输出并切换系统默认，三轮
+验证指定内建与指定非默认设备都保持、默认输出跟随、无效设备恢复，结束恢复系统原设置
+并销毁临时设备。Mac 更新后继续放 `/Users/Shared/Nightcord Speak.app`。
+**用户已确认 Windows 与 macOS 问题均解决，并要求提交**。提交前 Rust 格式（按
+`scripts/fmt.sh` 的 crate 列表直接运行 cargo fmt）、全工作区 clippy 与测试、Flutter
+analyze 与全部 367 条测试通过；Windows Release、macOS Debug 构建及原生切换探针通过。
+本机 WSL 无 `/bin/bash`，故格式检查使用等价的原生命令。仅提交源码与子模块引用，
+下载的 WebRTC 构建依赖不纳入版本控制；未推送。
+
 ### 5.1 里程碑
 
 | 里程碑   | 内容                            | 状态        |
@@ -437,7 +464,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 |------|--------------------------------|
 | Rust | **25,968 行**，16 crates + CLI + gateway（不含 vendor） |
 | Dart | **25,210 行**，`apps/client/lib/` 下 107 文件（含 l10n 生成文件，不含测试） |
-| 测试 | **422 Rust + 360 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
+| 测试 | **422 Rust + 367 Dart + 5 启动脚本测试**；macOS 上一轮为 399 Rust + 272 Dart（差的是 SEH 那条，本轮尚未重跑） |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/platform/services.dart';
 import '../../core/screen/screen_controller.dart';
 import '../../core/screen/screen_providers.dart';
 import '../../core/screen/screen_share_backend.dart';
@@ -124,9 +125,46 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
   /// own picker out of `getDisplayMedia`, and mobile has no capture at all, so
   /// an empty source list means "just ask the platform" and the first step
   /// shows nothing but a Next button.
+  ///
+  /// macOS answers the source question in the system's own picker — the same
+  /// one the official client shows — so the wizard opens straight on the
+  /// settings. Everything else lists sources in the wizard's first step.
   Future<void> _start(ScreenController controller, AppLocalizations l10n) async {
     try {
-      final sources = await controller.backend.sources();
+      ScreenSource? picked;
+      List<ScreenSource>? sources;
+      var skipSourceStep = false;
+      if (await screenPickerAvailable()) {
+        final choice = await pickScreenSource();
+        if (choice == null) return; // the user backed out of the picker
+        final kind = choice.kind == 'window'
+            ? ScreenSourceKind.window
+            : ScreenSourceKind.screen;
+        picked = ScreenSource(choice.id, choice.name, kind: kind);
+        // The plugin resolves an id against its own media list, which only
+        // exists after it has enumerated once — and the picker flow never
+        // asked, where the old grid always did. Enumerating here also lets
+        // the plugin's own spelling of the id win when ours (the raw
+        // window/display number) differs from it.
+        final known = await controller.backend.sources();
+        final chosen = picked;
+        picked = known.firstWhere(
+          (source) => source.kind == kind && source.id == chosen.id,
+          orElse: () => known.firstWhere(
+            (source) => source.kind == kind && source.name == choice.name,
+            orElse: () => chosen,
+          ),
+        );
+        logToCore(
+          'info',
+          'screen: picker chose id=${picked.id} name=${picked.name} '
+          'kind=${picked.kind.name}',
+        );
+        sources = [picked];
+        skipSourceStep = true;
+      } else {
+        sources = await controller.backend.sources();
+      }
       if (!mounted) return;
 
       final settings = ref.read(settingsProvider)?.screen ?? const ScreenSettings();
@@ -135,6 +173,8 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
         backend: controller.backend,
         sources: sources,
         settings: settings,
+        initialSource: picked,
+        skipSourceStep: skipSourceStep,
       );
       if (setup == null || !mounted) return;
 

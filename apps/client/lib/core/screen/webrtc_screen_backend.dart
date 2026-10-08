@@ -157,7 +157,36 @@ class WebRtcScreenBackend implements ScreenShareBackend {
       await stream.dispose();
       throw StateError('No screen video track');
     }
+    // macOS's screen path is video-only inside the plugin — its
+    // ScreenCaptureKit capturer never captures audio — so the sound track
+    // comes from the audio device instead: the runner installs a custom
+    // device whose "microphone" is the shared screen's sound, and this is
+    // what opens a track onto it. Windows captures its own loopback inside
+    // getDisplayMedia, so its stream already has the track.
+    if (options.audio &&
+        stream.getAudioTracks().isEmpty &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.macOS &&
+        source?.kind != ScreenSourceKind.camera) {
+      await _addSystemAudioTrack(stream);
+    }
     return _Media(stream);
+  }
+
+  /// Opens the custom audio device as a track and adds it to the capture.
+  ///
+  /// A failure here is a share without sound, not a failed share: the device
+  /// has sound only while the system picker's filter is set, and the
+  /// permission it needs is the one voice already holds.
+  Future<void> _addSystemAudioTrack(MediaStream stream) async {
+    try {
+      final audio = await navigator.mediaDevices.getUserMedia({'audio': true});
+      for (final track in audio.getAudioTracks()) {
+        await stream.addTrack(track);
+      }
+    } catch (error) {
+      logToCore('warn', 'screen: no system audio track: $error');
+    }
   }
 
   /// The video half of a capture request.
@@ -482,8 +511,48 @@ class _Peer implements ScreenPeer {
   /// answer nothing.
   Future<void> _logStats() async {
     final rate = await stats();
-    if (rate == null) return;
-    logToCore('info', 'screen: sending $rate');
+    if (rate != null) logToCore('info', 'screen: sending $rate');
+    await _logTransport();
+  }
+
+  /// What the connection is actually carrying, both directions.
+  ///
+  /// "The sound is choppy and the pitch is wrong" with a clean capture means
+  /// loss and PLC on the receiving end — or playback trouble after it — and
+  /// nothing in the UI can tell those apart. These are the numbers that can:
+  /// packet counts and loss both ways, the receiver's jitter, and how many
+  /// audio samples Opus had to invent (`concealedSamples` is the choppiness
+  /// itself).
+  Future<void> _logTransport() async {
+    if (closed) return;
+    try {
+      final lines = <String>[];
+      for (final report in await pc.getStats()) {
+        final values = report.values;
+        final kind = values['kind'] ?? values['mediaType'];
+        if (report.type == 'outbound-rtp' && kind == 'audio') {
+          lines.add(
+            'out-audio ${values['packetsSent']}p ${values['bytesSent']}B',
+          );
+        } else if (report.type == 'inbound-rtp' && kind == 'audio') {
+          lines.add(
+            'in-audio ${values['packetsReceived']}p '
+            '${values['bytesReceived']}B lost=${values['packetsLost']} '
+            'jitter=${values['jitter']} concealed=${values['concealedSamples']}',
+          );
+        } else if (report.type == 'inbound-rtp' && kind == 'video') {
+          lines.add(
+            'in-video decoded=${values['framesDecoded']} '
+            'dropped=${values['framesDropped']} lost=${values['packetsLost']}',
+          );
+        }
+      }
+      if (lines.isNotEmpty) {
+        logToCore('info', 'screen: media ${lines.join(' | ')}');
+      }
+    } catch (_) {
+      // Statistics are diagnostics; failing to read them is not a failure.
+    }
   }
 
   /// Caps and steers the encoders.
@@ -603,7 +672,11 @@ class _Peer implements ScreenPeer {
   Future<String> answer(String sdp) async {
     await _remote(sdp, 'offer');
     final description = await pc.createAnswer();
-    return localDescription(description);
+    final local = await localDescription(description);
+    // A viewer has no encoder to report, so without this the receiving side
+    // of a share would log nothing at all.
+    _stats ??= Timer.periodic(_statsEvery, (_) => unawaited(_logStats()));
+    return local;
   }
 
   @override

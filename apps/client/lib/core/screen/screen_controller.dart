@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../models/events.dart';
 import '../../models/screen_options.dart';
+import '../platform/services.dart';
 import 'screen_share_backend.dart';
 
 class SharedScreen {
@@ -148,7 +149,16 @@ class ScreenController extends ChangeNotifier {
       // finds nothing and waits.
       _rateTimer ??= Timer.periodic(_rateEvery, (_) => unawaited(_readRate()));
       _notify();
-    } catch (_) { if (epoch == _epoch) fail('capture'); }
+    } catch (error) {
+      if (epoch == _epoch) {
+        // Swallowed for the user's sake, kept for the log's: "capture
+        // failed" has several causes — permission, an id the backend does
+        // not know, a platform picker that never answered — and without the
+        // exception text they are indistinguishable afterwards (2026-10-08).
+        logToCore('error', 'screen: capture failed: $error');
+        fail('capture');
+      }
+    }
   }
 
   /// Stops publishing our own stream.

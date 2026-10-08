@@ -4,11 +4,14 @@
 // widgets read the store. Nothing here touches FFI directly except through
 // `RustClient`.
 
+import 'dart:async';
+
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/widgets.dart' show Locale, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/screen/screen_audio_output.dart';
 import '../core/transport/client_transport.dart';
 import '../design/tokens/app_palette.dart';
 import '../core/transport/transport_factory.dart';
@@ -477,6 +480,9 @@ class SettingsNotifier extends Notifier<Settings?> {
   void update(Settings settings) {
     state = settings;
     ref.read(clientTransportProvider).updateSettings(settings);
+    // The speaker choice reaches two pipelines; the voice engine hears it
+    // through the core, the share's own WebRTC playback hears it here.
+    unawaited(applyScreenAudioOutput(settings));
   }
 
   /// Asks the core to put one binding back to its default.
@@ -496,7 +502,12 @@ class SettingsNotifier extends Notifier<Settings?> {
     final data = result.data;
     if (data == null) return;
 
-    state = Settings.fromJson(data);
+    final settings = Settings.fromJson(data);
+    state = settings;
+    // Covers the first arrival as well as every stored edit's echo, so a
+    // share started before the settings dialog was ever opened still plays
+    // through the chosen speakers.
+    unawaited(applyScreenAudioOutput(settings));
   }
 }
 

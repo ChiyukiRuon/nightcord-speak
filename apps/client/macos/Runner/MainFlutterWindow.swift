@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import UserNotifications
+import flutter_webrtc
 
 /// The window, and the two things the app has to say to Flutter through it.
 ///
@@ -36,6 +37,10 @@ class MainFlutterWindow: NSWindow {
   /// macOS actually uses; see `docs/notifications.md`.
   private var notificationsChannel: FlutterMethodChannel?
 
+  /// The system screen picker. The other end is `lib/core/platform/`'s
+  /// `pickScreenSource`.
+  private var screenPickerChannel: FlutterMethodChannel?
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -48,6 +53,14 @@ class MainFlutterWindow: NSWindow {
     self.contentMinSize = Self.minimumContentSize
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    // Before any Dart code runs: the peer connection factory is built
+    // around the audio device named here, created lazily on first use.
+    // A screen share needs the factory's "microphone" to be the shared
+    // screen's sound instead — see NightcordSystemAudioDevice.
+    if #available(macOS 13.0, *) {
+      FlutterWebRTCPlugin.setCustomAudioDevice(NightcordSystemAudioDevice.shared)
+    }
 
     super.awakeFromNib()
 
@@ -69,6 +82,43 @@ class MainFlutterWindow: NSWindow {
         self?.showNotification(call, result: result)
       case "status":
         self?.reportStatus(result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // Screen sharing picks its source in the system's own picker rather
+    // than in a grid of ours — see `docs/screen-sharing.md`.
+    screenPickerChannel = FlutterMethodChannel(
+      name: "nightcord/screen_picker", binaryMessenger: messenger)
+    screenPickerChannel?.setMethodCallHandler { call, result in
+      switch call.method {
+      case "available":
+        result(NightcordScreenPicker.isAvailable)
+      case "pick":
+        NightcordScreenPicker.shared.pick { picked in
+          DispatchQueue.main.async {
+            if let picked = picked {
+              result(["id": picked.id, "name": picked.name, "kind": picked.kind])
+            } else {
+              // Cancelled: Dart reads null as "the user backed out".
+              result(nil)
+            }
+          }
+        }
+      case "setOutputDevice":
+        // The settings speaker, aimed at the share audio own playback path.
+        if #available(macOS 13.0, *) {
+          let arguments = call.arguments as? [String: Any] ?? [:]
+          let device = arguments["device"] as? String ?? ""
+          guard NightcordSystemAudioDevice.shared.setOutputDevice(
+            named: device.isEmpty ? nil : device) else {
+            result(FlutterError(code: "screen_audio_output",
+              message: "Could not switch screen audio output; see screen-audio.log", details: nil))
+            return
+          }
+        }
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }

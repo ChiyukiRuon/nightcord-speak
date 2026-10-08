@@ -62,6 +62,16 @@ dependencies:
   # has none of those and defers to this, which is why both arrived together.
   window_manager: ^0.5.2
 
+# The screen-share media stack builds from our fork — a submodule on the
+# `nightcord` branch, whose history is the published 1.6.2+hotfix.4 package
+# plus small patches (currently the macOS custom-audio-device hook). The
+# version above is what the patch base corresponds to. See
+# `docs/screen-sharing.md` and `docs/tsclientlib-fork.md` for the same
+# approach applied to the TeamSpeak library.
+dependency_overrides:
+  flutter_webrtc:
+    path: ../../vendor/flutter-webrtc
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

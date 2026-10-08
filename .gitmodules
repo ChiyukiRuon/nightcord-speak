@@ -2,3 +2,7 @@
 	path = vendor/tsclientlib
 	url = https://github.com/ChiyukiRuon/tsclientlib.git
 	branch = nightcord
+[submodule "vendor/flutter-webrtc"]
+	path = vendor/flutter-webrtc
+	url = https://github.com/ChiyukiRuon/flutter-webrtc.git
+	branch = nightcord

@@ -34,15 +34,26 @@ class ScreenSetup {
 /// A dialog rather than a route, so the app stays visible behind it. Both
 /// questions are about *this* window, and covering it up hides the thing being
 /// chosen from.
+///
+/// On macOS the source half arrives already answered: the system's own picker
+/// chose it, so [initialSource] is set and [skipSourceStep] opens straight on
+/// the settings — the only question left.
 Future<ScreenSetup?> showScreenSetup(
   BuildContext context, {
   required ScreenShareBackend backend,
   required List<ScreenSource> sources,
   required ScreenSettings settings,
+  ScreenSource? initialSource,
+  bool skipSourceStep = false,
 }) => showDialog<ScreenSetup>(
   context: context,
-  builder: (context) =>
-      _SetupDialog(backend: backend, sources: sources, settings: settings),
+  builder: (context) => _SetupDialog(
+    backend: backend,
+    sources: sources,
+    settings: settings,
+    initialSource: initialSource,
+    skipSourceStep: skipSourceStep,
+  ),
 );
 
 class _SetupDialog extends StatefulWidget {
@@ -50,25 +61,29 @@ class _SetupDialog extends StatefulWidget {
     required this.backend,
     required this.sources,
     required this.settings,
+    this.initialSource,
+    this.skipSourceStep = false,
   });
 
   final ScreenShareBackend backend;
   final List<ScreenSource> sources;
   final ScreenSettings settings;
+  final ScreenSource? initialSource;
+  final bool skipSourceStep;
 
   @override
   State<_SetupDialog> createState() => _SetupDialogState();
 }
 
 class _SetupDialogState extends State<_SetupDialog> {
-  var _onSettings = false;
+  late var _onSettings = widget.skipSourceStep;
 
   /// The settings as edited so far. Held here and written only when the share
   /// actually starts: a page someone opened, changed their mind on and closed
   /// should not leave tomorrow's share at 360p because of a click.
   late var _settings = widget.settings;
 
-  ScreenSource? _source;
+  late ScreenSource? _source = widget.initialSource;
 
   /// Which tab is showing. Owned here rather than by the step because the tab
   /// is what decides which captures are open.
