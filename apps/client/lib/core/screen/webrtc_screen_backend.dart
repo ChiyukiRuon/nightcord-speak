@@ -402,6 +402,7 @@ class _Peer implements ScreenPeer {
     for (final track in stream.getAudioTracks()) {
       senders.add(await pc.addTrack(track, stream));
     }
+    await _trimCodecs();
     final description = await pc.createOffer({
       'offerToReceiveAudio': false,
       'offerToReceiveVideo': false,
@@ -413,6 +414,42 @@ class _Peer implements ScreenPeer {
     _stats ??= Timer.periodic(_statsEvery, (_) => unawaited(_logStats()));
     return sdp;
   }
+
+  /// Keeps the offer small enough for the server to carry it.
+  ///
+  /// There is a ceiling on how long a single TS6 command may be — probed on
+  /// 2026-10-08 to sit between 7.7 KB (delivered) and 8.3 KB (silently
+  /// dropped). libwebrtc's default offer advertises every codec it knows:
+  /// video alone measured 7.7 KB on the test machine, and one audio m-line
+  /// pushed it past the ceiling — at which point the whole `respond` vanished:
+  /// no acknowledgement, no offer, no viewer, no error anywhere. Every client
+  /// this project talks to negotiates VP8 and opus, so the rest of the list
+  /// was never earning its bytes.
+  Future<void> _trimCodecs() async {
+    try {
+      for (final transceiver in await pc.getTransceivers()) {
+        final kind = transceiver.sender.track?.kind;
+        if (kind == 'video') {
+          await transceiver.setCodecPreferences(_videoCodecs);
+        } else if (kind == 'audio') {
+          await transceiver.setCodecPreferences(_audioCodecs);
+        }
+      }
+    } catch (error) {
+      // A platform that cannot reorder codecs keeps its default offer — the
+      // browser's own picker is lean enough that the ceiling is not in play.
+      logToCore('warn', 'screen: could not trim the codec list: $error');
+    }
+  }
+
+  static final List<RTCRtpCodecCapability> _videoCodecs = [
+    RTCRtpCodecCapability(clockRate: 90000, mimeType: 'video/VP8'),
+    // Retransmission for the same codec: without it a lost packet is lost.
+    RTCRtpCodecCapability(clockRate: 90000, mimeType: 'video/rtx'),
+  ];
+  static final List<RTCRtpCodecCapability> _audioCodecs = [
+    RTCRtpCodecCapability(clockRate: 48000, mimeType: 'audio/opus', channels: 2),
+  ];
 
   @override
   Future<ScreenStats?> stats() async {

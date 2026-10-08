@@ -322,6 +322,17 @@ void main() {
       expect(sound.maxBitrate, 96 * 1000);
       expect(pc.made[0].parameters.degradationPreference, isNotNull);
       expect(pc.made[1].parameters.degradationPreference, isNull);
+      // The codec list is trimmed before the offer is built: the untrimmed one
+      // is what pushed a two-track offer past the server's command ceiling and
+      // made the whole respond vanish (2026-10-08).
+      expect(
+        pc.codecTargets[0].preferences?.map((c) => c.mimeType),
+        ['video/VP8', 'video/rtx'],
+      );
+      expect(
+        pc.codecTargets[1].preferences?.map((c) => c.mimeType),
+        ['audio/opus'],
+      );
       await peer.close();
     },
   );
@@ -357,11 +368,29 @@ class _Sender implements RTCRtpSender {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _Transceiver implements RTCRtpTransceiver {
+  _Transceiver(this.sender);
+
+  @override
+  final RTCRtpSender sender;
+
+  List<RTCRtpCodecCapability>? preferences;
+
+  @override
+  Future<void> setCodecPreferences(List<RTCRtpCodecCapability> codecs) async {
+    preferences = codecs;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// A connection that hands back a sender per added track, so what the offer
 /// does to each of them can be read back.
 class _OfferConnection extends _NegotiatingConnection {
   final added = <MediaStreamTrack>[];
   final made = <_Sender>[];
+  final codecTargets = <_Transceiver>[];
 
   @override
   Future<RTCRtpSender> addTrack(
@@ -371,8 +400,12 @@ class _OfferConnection extends _NegotiatingConnection {
     added.add(track);
     final sender = _Sender(track);
     made.add(sender);
+    codecTargets.add(_Transceiver(sender));
     return sender;
   }
+
+  @override
+  Future<List<RTCRtpTransceiver>> getTransceivers() async => codecTargets;
 
   @override
   Future<RTCSessionDescription> createOffer([
