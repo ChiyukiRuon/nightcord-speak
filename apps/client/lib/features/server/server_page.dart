@@ -15,6 +15,7 @@ import '../../models/domain.dart';
 import '../../providers/providers.dart';
 import '../voice/voice_bar.dart';
 import '../screen/screen_pip.dart';
+import '../screen/viewer_requests.dart';
 import 'channel_sidebar.dart';
 import 'chat_panel.dart';
 import 'reconnect_banner.dart';
@@ -63,8 +64,11 @@ class ServerPage extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             ChatPanel(view: view),
-            if (view.capabilities.screenStream)
+            if (view.capabilities.screenStream) ...[
               ScreenPip(view: view, bounds: constraints.biggest),
+              // Draws nothing; raises the approval dialog for a private share.
+              ScreenViewerRequests(view: view),
+            ],
           ],
         ),
       ),

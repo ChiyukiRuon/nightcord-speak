@@ -296,6 +296,11 @@
   "screenSetupPreviewNote": "预览使用静态缩略图；窗口不可预览时仍可共享。",
   "screenPopOut": "弹出窗口",
   "screenReturnInline": "回到小窗",
+  "screenRequestTitle": "观看请求",
+  "screenRequestMessage": "{name} 想观看你的共享",
+  "screenRequestSomeone": "某人",
+  "screenRequestAllow": "允许",
+  "screenRequestDeny": "拒绝",
   "settingsShortcutsReset": "恢复默认"
   
 }

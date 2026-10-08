@@ -901,5 +901,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String get screenReturnInline => '小窓に戻す';
 
   @override
+  String get screenRequestTitle => '視聴リクエスト';
+
+  @override
+  String screenRequestMessage(String name) {
+    return '$name さんが画面共有を視聴しようとしています';
+  }
+
+  @override
+  String get screenRequestSomeone => 'だれか';
+
+  @override
+  String get screenRequestAllow => '許可';
+
+  @override
+  String get screenRequestDeny => '拒否';
+
+  @override
   String get settingsShortcutsReset => '既定に戻す';
 }

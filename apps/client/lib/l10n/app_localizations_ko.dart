@@ -912,5 +912,22 @@ class AppLocalizationsKo extends AppLocalizations {
   String get screenReturnInline => '작은 창으로 돌아가기';
 
   @override
+  String get screenRequestTitle => '시청 요청';
+
+  @override
+  String screenRequestMessage(String name) {
+    return '$name 님이 화면 공유를 시청하려고 합니다';
+  }
+
+  @override
+  String get screenRequestSomeone => '누군가';
+
+  @override
+  String get screenRequestAllow => '허용';
+
+  @override
+  String get screenRequestDeny => '거부';
+
+  @override
   String get settingsShortcutsReset => '기본값으로 복원';
 }

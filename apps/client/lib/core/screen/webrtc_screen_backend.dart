@@ -22,13 +22,18 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   WebRtcScreenBackend({
     Future<RTCPeerConnection> Function(Map<String, dynamic>)? createConnection,
     Future<MediaStream> Function(String)? createStream,
+    Future<MediaStream> Function(Map<String, dynamic>)? getDisplayMedia,
     this.iceGatherTimeout = const Duration(seconds: 2),
   }) : _createConnection = createConnection ?? createPeerConnection,
-       _createStream = createStream ?? createLocalMediaStream;
+       _createStream = createStream ?? createLocalMediaStream,
+       _getDisplayMedia = getDisplayMedia ?? _platformDisplayMedia;
 
   final Future<RTCPeerConnection> Function(Map<String, dynamic>)
   _createConnection;
   final Future<MediaStream> Function(String) _createStream;
+
+  /// The platform's own picker. A seam like the other two injections.
+  final Future<MediaStream> Function(Map<String, dynamic>) _getDisplayMedia;
   final Duration iceGatherTimeout;
   bool get _desktop =>
       !kIsWeb &&
@@ -143,7 +148,7 @@ class WebRtcScreenBackend implements ScreenShareBackend {
             'audio': options.audio,
             'video': _video(options, deviceId: source!.id),
           })
-        : await navigator.mediaDevices.getDisplayMedia({
+        : await _getDisplayMedia({
             'audio': options.audio,
             'video': _video(options, deviceId: source?.id),
           });
@@ -251,6 +256,16 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   }
 }
 
+/// The real picker, resolved when it is called rather than when it is named.
+///
+/// A tear-off of this function instead of `navigator.mediaDevices.getDisplayMedia`
+/// written inline: the inline form reaches for the navigator while the backend
+/// is being constructed, and that registers event channels, which a plain
+/// `test()` has no binding for — a test that never captures anything should not
+/// need one.
+Future<MediaStream> _platformDisplayMedia(Map<String, dynamic> constraints) =>
+    navigator.mediaDevices.getDisplayMedia(constraints);
+
 class _ThumbnailMedia implements ScreenMedia {
   _ThumbnailMedia(this.bytes);
   final Uint8List bytes;
@@ -262,6 +277,9 @@ class _ThumbnailMedia implements ScreenMedia {
   set onEnded(void Function() callback) {}
   @override
   Future<void> close() async {}
+  // A still has no sound, and never pretends to be a share to begin with.
+  @override
+  bool get hasAudio => false;
 }
 
 class _Media implements ScreenMedia {
@@ -270,6 +288,8 @@ class _Media implements ScreenMedia {
   final bool ownsTracks;
   final bool ownsStream;
   bool closed = false;
+  @override
+  bool get hasAudio => stream.getAudioTracks().isNotEmpty;
   @override
   Widget view() => _Video(media: this);
   @override
@@ -372,7 +392,14 @@ class _Peer implements ScreenPeer {
   Future<String> offer(ScreenMedia media) async {
     final stream = (media as _Media).stream;
     final senders = <RTCRtpSender>[];
+    // Everything the capture produced goes on the wire — video first, then
+    // sound when the platform gave us any. Adding only the video half is what
+    // "capture audio" silently did before: the setting reached the capture and
+    // the server but never the connection between them.
     for (final track in stream.getVideoTracks()) {
+      senders.add(await pc.addTrack(track, stream));
+    }
+    for (final track in stream.getAudioTracks()) {
       senders.add(await pc.addTrack(track, stream));
     }
     final description = await pc.createOffer({
@@ -422,7 +449,7 @@ class _Peer implements ScreenPeer {
     logToCore('info', 'screen: sending $rate');
   }
 
-  /// Caps and steers the encoder.
+  /// Caps and steers the encoders.
   ///
   /// **After `setLocalDescription`, not before.** A sender reports no encodings
   /// until a local description exists, so an earlier call is silently a no-op —
@@ -433,6 +460,10 @@ class _Peer implements ScreenPeer {
   /// picks (it protects resolution, because a screen share is usually text).
   /// This one is set the other way round on purpose: the complaint that started
   /// this was frame rate. Flipping it is one word.
+  ///
+  /// Video and sound get different fields. Only the picture has a resolution to
+  /// scale and a side to give way on, so an audio sender is handed nothing but
+  /// its bitrate — the same split the reference implementation makes.
   Future<void> _steer(RTCRtpSender sender) async {
     final parameters = sender.parameters;
     final encodings = parameters.encodings;
@@ -448,9 +479,6 @@ class _Peer implements ScreenPeer {
       );
       return;
     }
-    // What to give up when there is not enough room. "Detail" is slides and
-    // code — the reference client hints the track the same way — and the rest
-    // is movement, where a smooth picture matters more than a sharp one.
     final options = this.options;
     if (options == null) {
       // Only a publisher steers an encoder, and a publisher always has
@@ -462,14 +490,24 @@ class _Peer implements ScreenPeer {
       );
       return;
     }
-    parameters.degradationPreference = options.detail
-        ? RTCDegradationPreference.MAINTAIN_RESOLUTION
-        : RTCDegradationPreference.MAINTAIN_FRAMERATE;
+    final audio = sender.track?.kind == 'audio';
+    if (audio) {
+      for (final encoding in encodings) {
+        encoding.maxBitrate = options.audioBitrateKbps * 1000;
+      }
+    } else {
+      // What to give up when there is not enough room. "Detail" is slides and
+      // code — the reference client hints the track the same way — and the rest
+      // is movement, where a smooth picture matters more than a sharp one.
+      parameters.degradationPreference = options.detail
+          ? RTCDegradationPreference.MAINTAIN_RESOLUTION
+          : RTCDegradationPreference.MAINTAIN_FRAMERATE;
 
-    final scale = _scaleFor(sender.track, options.height);
-    for (final encoding in encodings) {
-      encoding.maxBitrate = options.videoBitrateKbps * 1000;
-      if (scale != null) encoding.scaleResolutionDownBy = scale;
+      final scale = _scaleFor(sender.track, options.height);
+      for (final encoding in encodings) {
+        encoding.maxBitrate = options.videoBitrateKbps * 1000;
+        if (scale != null) encoding.scaleResolutionDownBy = scale;
+      }
     }
 
     final applied = await sender.setParameters(parameters);
@@ -477,13 +515,15 @@ class _Peer implements ScreenPeer {
     // can refuse a field it does not know, and a refusal that leaves no trace
     // is how this went unnoticed the first time.
     final after = sender.parameters;
+    final shape = audio
+        ? ''
+        : ' scale=${after.encodings?.map((e) => e.scaleResolutionDownBy).toList()}'
+              ' preference=${after.degradationPreference}';
     logToCore(
       applied ? 'info' : 'warn',
-      'screen: send parameters applied=$applied '
+      'screen: send parameters ${audio ? 'audio' : 'video'} applied=$applied '
       'encodings=${after.encodings?.length} '
-      'cap=${after.encodings?.map((e) => e.maxBitrate).toList()} '
-      'scale=${after.encodings?.map((e) => e.scaleResolutionDownBy).toList()} '
-      'preference=${after.degradationPreference}',
+      'cap=${after.encodings?.map((e) => e.maxBitrate).toList()}$shape',
     );
   }
 

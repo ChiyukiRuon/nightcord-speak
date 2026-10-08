@@ -9,6 +9,11 @@ import 'package:nightcord_client/models/screen_options.dart';
 class Media implements ScreenMedia {
   int closes = 0;
   void Function()? ended;
+
+  /// What the fake capture produced, for the test that watches the wire's
+  /// `audio` flag follow it rather than the request.
+  @override
+  bool hasAudio = false;
   @override
   set onEnded(void Function() callback) => ended = callback;
   @override
@@ -268,5 +273,130 @@ void main() {
     expect(controller.error, 'refused');
     expect(controller.watching, isFalse);
     expect(backend.peers.single.closes, 1);
+  });
+
+  test('the wire claims audio only when the capture produced a track', () async {
+    // "Capture audio" used to reach the capture and the server but never the
+    // offer — and on platforms whose capture has no loopback it claimed sound
+    // that could not exist. The flag follows the capture now.
+    backend.media.hasAudio = true;
+    await controller.start(null, 'Share', screenOptions().copyWith(audio: true));
+    expect((commands.single['options'] as Map)['audio'], isTrue);
+    await controller.stop();
+
+    backend.media.hasAudio = false;
+    await controller.start(null, 'Share', screenOptions().copyWith(audio: true));
+    expect((commands.last['options'] as Map)['audio'], isFalse);
+  });
+
+  test('a private share holds requests until the publisher answers', () async {
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', extra: {'leaving': false});
+    // Waiting is the whole enforcement: nothing answered, nothing opened.
+    expect(controller.pendingViewers, [2]);
+    expect(backend.peers, isEmpty);
+    expect(commands.map((c) => c['action']), ['start']);
+
+    await controller.approveViewer(2);
+    expect(controller.pendingViewers, isEmpty);
+    expect(controller.viewers, 1);
+    expect(backend.peers.single.calls, ['offer']);
+    final respond = commands.where((c) => c['action'] == 'respond').single;
+    expect(respond['accept'], isTrue);
+    expect(respond['sdp'], 'local-offer');
+  });
+
+  test('contacts waits like private, and denying answers without connecting', () async {
+    // This client has no contact list to check against, so contacts behaves
+    // as private — the help text has said so all along; this is the behaviour
+    // catching up to it.
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.contacts),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', extra: {'leaving': false});
+    expect(controller.pendingViewers, [2]);
+
+    await controller.denyViewer(2);
+    expect(controller.pendingViewers, isEmpty);
+    expect(backend.peers, isEmpty);
+    expect(commands.last, {
+      'action': 'respond',
+      'stream_id': 's',
+      'client_id': 2,
+      'accept': false,
+      'sdp': '',
+    });
+  });
+
+  test('a withdrawn request leaves nothing behind and cannot be approved', () async {
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', extra: {'leaving': false});
+    await event('join_requested', extra: {'leaving': true});
+    expect(controller.pendingViewers, isEmpty);
+    // The viewer gave up (its side waits about twenty-five seconds);
+    // approving the dead request must not open a connection.
+    await controller.approveViewer(2);
+    expect(backend.peers, isEmpty);
+    expect(commands.any((c) => c['action'] == 'respond'), isFalse);
+  });
+
+  test('stopping the share drops everything still waiting', () async {
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', extra: {'leaving': false});
+    await controller.stop();
+    expect(controller.pendingViewers, isEmpty);
+  });
+
+  test('someone who leaves the server takes their request with them', () async {
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', extra: {'leaving': false});
+    controller.contextChanged(
+      online: true,
+      client: 1,
+      channel: 10,
+      clients: {1, 3, 4, 5, 6},
+    );
+    expect(controller.pendingViewers, isEmpty);
+  });
+
+  test('an explicit approval admits past the viewer limit', () async {
+    // The limit suppresses *automatic* admission; a publisher who read the
+    // request and said yes has said yes (the reference implementation reads
+    // it the same way).
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private, viewerLimit: 1),
+    );
+    await event('available', client: 1, extra: {'name': 'Share'});
+    await event('join_requested', client: 2, extra: {'leaving': false});
+    await event('join_requested', client: 3, extra: {'leaving': false});
+    await controller.approveViewer(2);
+    await controller.approveViewer(3);
+    expect(controller.viewers, 2);
+    expect(backend.peers.length, 2);
   });
 }

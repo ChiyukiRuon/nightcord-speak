@@ -895,6 +895,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get screenReturnInline => '回到小窗';
 
   @override
+  String get screenRequestTitle => '观看请求';
+
+  @override
+  String screenRequestMessage(String name) {
+    return '$name 想观看你的共享';
+  }
+
+  @override
+  String get screenRequestSomeone => '某人';
+
+  @override
+  String get screenRequestAllow => '允许';
+
+  @override
+  String get screenRequestDeny => '拒绝';
+
+  @override
   String get settingsShortcutsReset => '恢复默认';
 }
 
@@ -1786,6 +1803,23 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get screenReturnInline => '回到小視窗';
+
+  @override
+  String get screenRequestTitle => '觀看請求';
+
+  @override
+  String screenRequestMessage(String name) {
+    return '$name 想觀看你的共享';
+  }
+
+  @override
+  String get screenRequestSomeone => '某人';
+
+  @override
+  String get screenRequestAllow => '允許';
+
+  @override
+  String get screenRequestDeny => '拒絕';
 
   @override
   String get settingsShortcutsReset => '恢復預設';

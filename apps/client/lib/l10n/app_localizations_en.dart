@@ -958,5 +958,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get screenReturnInline => 'Back to small window';
 
   @override
+  String get screenRequestTitle => 'Watch requests';
+
+  @override
+  String screenRequestMessage(String name) {
+    return '$name wants to watch your screen share';
+  }
+
+  @override
+  String get screenRequestSomeone => 'Someone';
+
+  @override
+  String get screenRequestAllow => 'Allow';
+
+  @override
+  String get screenRequestDeny => 'Deny';
+
+  @override
   String get settingsShortcutsReset => 'Restore default';
 }

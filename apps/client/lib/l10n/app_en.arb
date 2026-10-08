@@ -1039,6 +1039,19 @@
   "screenSetupPreviewNote": "Preview uses a snapshot. You can still share a window when its preview is unavailable.",
   "screenPopOut": "Pop out",
   "screenReturnInline": "Back to small window",
+  "screenRequestTitle": "Watch requests",
+  "screenRequestMessage": "{name} wants to watch your screen share",
+  "@screenRequestMessage": {
+    "description": "A viewer waiting for the publisher to admit them",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "screenRequestSomeone": "Someone",
+  "screenRequestAllow": "Allow",
+  "screenRequestDeny": "Deny",
   "settingsShortcutsReset": "Restore default"
   
 }

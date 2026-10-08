@@ -36,6 +36,8 @@ class _Media implements ScreenMedia {
   @override
   set onEnded(void Function() callback) {}
   @override
+  bool get hasAudio => false;
+  @override
   Widget view() => const Text('preview-image');
 }
 

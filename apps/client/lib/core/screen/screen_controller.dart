@@ -36,6 +36,7 @@ class ScreenController extends ChangeNotifier {
   Set<int> _clients = {};
   final Map<String, SharedScreen> available = {};
   final Map<int, _Link> _viewers = {};
+  final List<int> _pending = [];
   _Link? _watch;
   ScreenMedia? preview;
   ScreenMedia? remote;
@@ -62,6 +63,13 @@ class ScreenController extends ChangeNotifier {
   int _epoch = 0;
   Future<void> _events = Future.value();
   int get viewers => _viewers.length;
+
+  /// Who asked to watch and has not been answered yet, in arrival order.
+  ///
+  /// Only a private or contacts share queues anyone — a public one admits on
+  /// arrival and a full one refuses on arrival. [approveViewer] and
+  /// [denyViewer] take the ids this hands out.
+  List<int> get pendingViewers => List.unmodifiable(_pending);
   bool get watching => _requested != null || _watch != null;
   bool get receiving => remote != null && _watch?.ready == true;
 
@@ -107,6 +115,10 @@ class ScreenController extends ChangeNotifier {
     ownClient = client;
     _channel = channel;
     available.removeWhere((_, s) => !clients.contains(s.clientId));
+    // Someone who left the server cannot be let in any more, so their request
+    // expires with them rather than waiting for a decision that would go
+    // nowhere.
+    _pending.removeWhere((id) => !clients.contains(id));
     for (final id in _viewers.keys.toList()) {
       if (!clients.contains(id)) unawaited(_drop(id));
     }
@@ -124,8 +136,13 @@ class ScreenController extends ChangeNotifier {
       if (epoch != _epoch || disposed || !connected) { await media.close(); return; }
       preview = media;
       media.onEnded = () => unawaited(stop());
-      this.options = options;
-      _send({'action': 'start', 'name': name, 'options': options.toJson()});
+      // What the server is told follows what the capture actually produced:
+      // "capture audio" on a platform without a loopback capturer is a setting
+      // that could not be honoured, and the wire says so rather than promising
+      // sound nobody will hear (the reference implementation does the same).
+      final effective = options.copyWith(audio: options.audio && media.hasAudio);
+      this.options = effective;
+      _send({'action': 'start', 'name': name, 'options': effective.toJson()});
       _startTimer = Timer(const Duration(seconds: 20), () => fail('timeout'));
       // Nothing to read until a viewer's connection exists; the loop simply
       // finds nothing and waits.
@@ -151,6 +168,9 @@ class ScreenController extends ChangeNotifier {
     preview = null;
     final links = _viewers.values.toList();
     _viewers.clear();
+    // The share these asked about is over; there is nothing left to admit
+    // anyone to.
+    _pending.clear();
     _notify();
     await Future.wait([if (media != null) media.close(), for (final link in links) if (link.peer != null) link.peer!.close()]);
   }
@@ -253,6 +273,53 @@ class ScreenController extends ChangeNotifier {
     _signal(link, {'type': 'answer', 'sdp': answer});
     _ready(link);
   }
+
+  /// Opens a connection to a viewer whose request has been granted.
+  ///
+  /// Everything a yes consists of: a peer, an offer, and the answer carrying
+  /// it. Its own method because the yes arrives from two places — on the spot
+  /// for a public share, and later from the publisher for the rest.
+  Future<void> _admit(String id, int client) async {
+    final media = preview;
+    if (media == null) return;
+    final link = _Link(id, client);
+    _viewers[client] = link;
+    await _open(link);
+    if (!_live(link)) return;
+    final sdp = await link.peer!.offer(media);
+    if (!_live(link)) return;
+    _send({'action': 'respond', 'stream_id': id, 'client_id': client, 'accept': true, 'sdp': sdp});
+    _ready(link);
+  }
+
+  /// Lets a waiting viewer in.
+  ///
+  /// Anything that happened while the request waited — the share ending, the
+  /// requester giving up — just means there is nothing left to admit, which is
+  /// not an error worth reporting. An explicit yes also wins over the viewer
+  /// limit: the limit suppresses *automatic* admission, and this is not that
+  /// (the reference implementation reads it the same way).
+  Future<void> approveViewer(int client) async {
+    if (!_pending.remove(client)) return;
+    final id = publishing;
+    if (disposed || id == null || preview == null || _viewers.containsKey(client)) {
+      _notify();
+      return;
+    }
+    await _admit(id, client);
+    _notify();
+  }
+
+  /// Turns a waiting viewer down.
+  Future<void> denyViewer(int client) async {
+    if (!_pending.remove(client)) return;
+    final id = publishing;
+    if (id != null) {
+      _send({'action': 'respond', 'stream_id': id, 'client_id': client, 'accept': false, 'sdp': ''});
+    }
+    _notify();
+  }
+
   Future<void> _drop(int client) async {
     final link = _viewers.remove(client);
     _notify();
@@ -291,8 +358,8 @@ class ScreenController extends ChangeNotifier {
         if (_watch?.streamId == id) await leave();
       case 'join_requested':
         if (id != publishing || preview == null || client == ownClient || !_clients.contains(client)) return;
-        if (e['leaving'] == true) { await _drop(client!); return; }
-        if (_viewers.containsKey(client)) return;
+        if (e['leaving'] == true) { _pending.remove(client); await _drop(client!); return; }
+        if (_viewers.containsKey(client) || _pending.contains(client)) return;
         // Zero is the wire's way of saying "as many as the server will carry",
         // so it is not a limit of zero — the gate only exists when a number
         // was actually chosen.
@@ -301,15 +368,16 @@ class ScreenController extends ChangeNotifier {
           _send({'action': 'respond', 'stream_id': id, 'client_id': client, 'accept': false, 'sdp': ''});
           return;
         }
-        final media = preview!;
-        final link = _Link(id, client!);
-        _viewers[client] = link;
-        await _open(link);
-        if (!_live(link)) return;
-        final sdp = await link.peer!.offer(media);
-        if (!_live(link)) return;
-        _send({'action': 'respond', 'stream_id': id, 'client_id': client, 'accept': true, 'sdp': sdp});
-        _ready(link);
+        // A public share admits on arrival; private and contacts wait for the
+        // publisher to answer. That wait is the whole enforcement: the server
+        // stores the privacy setting and then forwards every request along
+        // anyway, so this side is the only gate there is (the same finding the
+        // reference implementation records against a live server).
+        if ((options?.access ?? ScreenAccess.public) != ScreenAccess.public) {
+          _pending.add(client!);
+        } else {
+          await _admit(id, client!);
+        }
       case 'join_answered':
         final link = _watch;
         if (link == null || id != link.streamId || client != link.clientId) return;

@@ -26,6 +26,14 @@ abstract interface class ScreenMedia {
   Widget view();
   set onEnded(void Function() callback);
   Future<void> close();
+
+  /// Whether the capture actually produced a sound track.
+  ///
+  /// The wire's `audio` flag follows this rather than the user's request: on
+  /// platforms without a loopback capturer (macOS, and Linux's stub) a share
+  /// with "capture audio" on carries no audio at all, and claiming otherwise
+  /// would show viewers a control for sound that never comes.
+  bool get hasAudio;
 }
 
 abstract interface class ScreenPeer {

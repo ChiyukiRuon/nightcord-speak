@@ -308,6 +308,11 @@ class _FakeMedia implements ScreenMedia {
   int closes = 0;
   void Function()? ended;
 
+  /// What this capture produced. Off by default: the ordinary fake is a
+  /// picture with no sound, which is what most of these tests want.
+  @override
+  bool hasAudio = false;
+
   @override
   set onEnded(void Function() callback) => ended = callback;
 
@@ -1771,6 +1776,67 @@ void main() {
   });
 
 
+  testWidgets('a private share asks the publisher before anyone is admitted', (tester) async {
+    // The server stores the privacy setting and forwards every request anyway,
+    // so the client is the only gate there is — a private share that admitted
+    // on arrival was open to the whole channel.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend();
+    final container = _container(
+      view: _view(screen: true),
+      transport: transport,
+      screen: backend,
+    );
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    final controller = container.read(screenControllerProvider(1));
+    await controller.start(
+      null,
+      'Share',
+      screenOptions().copyWith(access: ScreenAccess.private),
+    );
+    await controller.receive(
+      const ScreenEvent({
+        'type': 'available',
+        'stream_id': 's',
+        'client_id': 1,
+        'name': 'Share',
+      }),
+    );
+    await controller.receive(
+      const ScreenEvent({
+        'type': 'join_requested',
+        'stream_id': 's',
+        'client_id': 2,
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    // Held, and asked about — nothing opened while the request waits.
+    expect(transport.starts.single['access'], 'private');
+    expect(find.text('同事二号 想观看你的共享'), findsOneWidget);
+    expect(backend.peers, isEmpty);
+
+    await tester.tap(find.text('允许'));
+    await tester.pumpAndSettle();
+    expect(transport.calls, contains('screen:respond:2'));
+    expect(backend.peers.single.calls, ['offer']);
+    // Answered, so the dialog has nothing left to ask about.
+    expect(find.text('同事二号 想观看你的共享'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // Publication polls the encoder while it runs; the test does not end
+    // while a timer is still owed.
+    await controller.stop();
+    await tester.pumpAndSettle();
+  });
+
+
   testWidgets('the wizard carries what was chosen into the share', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
@@ -1784,6 +1850,10 @@ void main() {
         ScreenSource('scr-1', '屏幕 1'),
       ],
     );
+    // A capture that actually produced sound, because the wire follows the
+    // capture and not the switch — a fake without a track would carry
+    // `audio: false` and the assertion below would be about the wrong thing.
+    backend.media.hasAudio = true;
     final container = _container(view: _view(screen: true), transport: transport, screen: backend);
     await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
     await tester.pumpAndSettle();

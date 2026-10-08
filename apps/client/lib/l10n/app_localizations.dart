@@ -1747,6 +1747,36 @@ abstract class AppLocalizations {
   /// **'Back to small window'**
   String get screenReturnInline;
 
+  /// No description provided for @screenRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch requests'**
+  String get screenRequestTitle;
+
+  /// A viewer waiting for the publisher to admit them
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to watch your screen share'**
+  String screenRequestMessage(String name);
+
+  /// No description provided for @screenRequestSomeone.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone'**
+  String get screenRequestSomeone;
+
+  /// No description provided for @screenRequestAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get screenRequestAllow;
+
+  /// No description provided for @screenRequestDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get screenRequestDeny;
+
   /// No description provided for @settingsShortcutsReset.
   ///
   /// In en, this message translates to:

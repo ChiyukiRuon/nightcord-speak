@@ -296,6 +296,11 @@
   "screenSetupPreviewNote": "プレビューは静止画です。表示できないウィンドウも共有できます。",
   "screenPopOut": "ウィンドウに分離",
   "screenReturnInline": "小窓に戻す",
+  "screenRequestTitle": "視聴リクエスト",
+  "screenRequestMessage": "{name} さんが画面共有を視聴しようとしています",
+  "screenRequestSomeone": "だれか",
+  "screenRequestAllow": "許可",
+  "screenRequestDeny": "拒否",
   "settingsShortcutsReset": "既定に戻す"
   
 }
