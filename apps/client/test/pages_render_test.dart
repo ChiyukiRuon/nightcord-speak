@@ -1837,6 +1837,85 @@ void main() {
   });
 
 
+  testWidgets('a stale failed screen command leaves a running share alone', (tester) async {
+    // The 2026-10-08 logs show a leave timing out and killing the share that
+    // had been started three seconds earlier: the server drops commands it
+    // cannot action without a word, and the deadline turned that silence into
+    // a failure that tore down whatever was running.
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend();
+    final container = _container(
+      view: _view(screen: true),
+      transport: transport,
+      screen: backend,
+    );
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    final controller = container.read(screenControllerProvider(1));
+    await controller.start(null, 'Share', screenOptions());
+    await controller.receive(
+      const ScreenEvent({
+        'type': 'available',
+        'stream_id': 's',
+        'client_id': 1,
+        'name': 'Share',
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.active, isTrue);
+
+    transport.emit(
+      const CommandResultEvent(
+        CommandResult(
+          command: 'screen',
+          session: 1,
+          outcome: CommandOutcome(ok: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.active, isTrue, reason: 'the share is established');
+    expect(controller.error, isNull);
+
+    await controller.stop();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a failed screen command while still connecting is fatal', (tester) async {
+    // While nothing is established yet the user is staring at "connecting",
+    // so the error is worth showing now rather than at the timer.
+    final transport = _SilentTransport();
+    final backend = _FakeScreenBackend();
+    final container = _container(
+      view: _view(screen: true),
+      transport: transport,
+      screen: backend,
+    );
+    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+    await tester.pumpAndSettle();
+
+    final controller = container.read(screenControllerProvider(1));
+    await controller.start(null, 'Share', screenOptions());
+    await tester.pump();
+    expect(controller.starting, isTrue);
+
+    transport.emit(
+      const CommandResultEvent(
+        CommandResult(
+          command: 'screen',
+          session: 1,
+          outcome: CommandOutcome(ok: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.error, 'connection');
+    expect(controller.active, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+
   testWidgets('the wizard carries what was chosen into the share', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;

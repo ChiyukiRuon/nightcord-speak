@@ -46,8 +46,27 @@ final screenControllerProvider = Provider.family<ScreenController, int>((ref, se
           '${signal is Map ? '/${signal['type']}' : ''}',
           data['stream_id'] as String?, data['client_id']));
       unawaited(controller.receive(event.event as ScreenEvent));
-    } else if (event is CommandResultEvent && event.result.session == session && event.result.command == 'screen' && !event.result.ok) {
-      if (controller.active || controller.watching) controller.fail('connection');
+    } else if (event is CommandResultEvent &&
+        event.result.session == session &&
+        event.result.command == 'screen' &&
+        !event.result.ok) {
+      // Fatal only while something is still being set up: then the user is
+      // staring at "connecting" and deserves the error now. Afterwards, a
+      // screen command that fails is overwhelmingly a *stale* one — a leave
+      // or a respond whose target the server had already dropped, which it
+      // answers with silence, and the 15-second command deadline turns that
+      // silence into a failure. Tearing a running share down over one of
+      // those is how "stop watching" once killed the very next share
+      // (2026-10-08 logs).
+      if (controller.starting || controller.watchPending) {
+        controller.fail('connection');
+      } else if (controller.active || controller.watching) {
+        logToCore(
+          'warn',
+          'screen sharing: session=$session a stale screen command failed '
+          '(${event.result.error}); the share is left running',
+        );
+      }
     } else if (event is LaggedEvent) {
       controller.fail('connection');
     }

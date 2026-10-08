@@ -266,6 +266,30 @@ void main() {
     expect(commands.last['action'], 'stop');
   });
 
+  test('a stream the server already ended is released without telling it', () async {
+    // A stop for a stream the server has ended goes unanswered, and the
+    // command deadline turns that silence into a failure — which is how a
+    // stale command tore down the next share (2026-10-08 logs).
+    await controller.start(null, 'Share', screenOptions());
+    await event('available', client: 1, extra: {'name': 'Share'});
+    commands.clear();
+    await event('stopped');
+    expect(commands, isEmpty);
+    expect(controller.active, isFalse);
+    expect(backend.media.closes, 1);
+  });
+
+  test('watching a stream the server ended releases without a leave', () async {
+    await controller.watch(2);
+    await event('available', extra: {'name': 'Share'});
+    await event('join_answered', extra: {'accepted': true, 'sdp': 'offer'});
+    commands.clear();
+    await event('stopped');
+    expect(commands, isEmpty);
+    expect(controller.watching, isFalse);
+    expect(backend.peers.single.closes, 1);
+  });
+
   test('refusal closes receiver and exposes an actionable state', () async {
     await controller.watch(2);
     await event('available', extra: {'name': 'Share'});
@@ -273,6 +297,10 @@ void main() {
     expect(controller.error, 'refused');
     expect(controller.watching, isFalse);
     expect(backend.peers.single.closes, 1);
+    // A refusal is not sticky server-side, so no leave goes out either — one
+    // for a request that no longer exists would only earn the same silent
+    // drop and a 15-second timeout.
+    expect(commands.any((c) => c['action'] == 'leave'), isFalse);
   });
 
   test('the wire claims audio only when the capture produced a track', () async {

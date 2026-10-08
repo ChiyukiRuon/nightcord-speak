@@ -151,7 +151,14 @@ class ScreenController extends ChangeNotifier {
     } catch (_) { if (epoch == _epoch) fail('capture'); }
   }
 
-  Future<void> stop() async {
+  /// Stops publishing our own stream.
+  ///
+  /// [tell] is false when the server has already announced the end: a second
+  /// goodbye for a stream the server itself has ended is answered with
+  /// silence, and our 15-second command deadline turns that silence into a
+  /// failure (see `screen_providers.dart` for what a stale failure used to
+  /// cost).
+  Future<void> stop({bool tell = true}) async {
     ++_epoch;
     _startTimer?.cancel();
     // Cleared, not just cancelled: `start` reuses the field with `??=`, and a
@@ -163,7 +170,7 @@ class ScreenController extends ChangeNotifier {
     starting = false;
     rate = null;
     options = null;
-    if (id != null) _send({'action': 'stop', 'stream_id': id});
+    if (tell && id != null) _send({'action': 'stop', 'stream_id': id});
     final media = preview;
     preview = null;
     final links = _viewers.values.toList();
@@ -354,8 +361,12 @@ class ScreenController extends ChangeNotifier {
         }
       case 'stopped':
         available.remove(id);
-        if (publishing == id) await stop();
-        if (_watch?.streamId == id) await leave();
+        // The server has ended the stream, so there is nothing left to tell
+        // it: a `stop`/`leave` for something that no longer exists goes
+        // unanswered, and the command deadline would turn that silence into a
+        // failure. Release locally instead.
+        if (publishing == id) await stop(tell: false);
+        if (_watch?.streamId == id) await _leave(tell: false);
       case 'join_requested':
         if (id != publishing || preview == null || client == ownClient || !_clients.contains(client)) return;
         if (e['leaving'] == true) { _pending.remove(client); await _drop(client!); return; }
@@ -382,7 +393,10 @@ class ScreenController extends ChangeNotifier {
         final link = _watch;
         if (link == null || id != link.streamId || client != link.clientId) return;
         if (e['accepted'] != true || (e['sdp'] as String).isEmpty) {
-          _error('refused'); await leave(); return;
+          // A refusal is not sticky on the server (the requester may simply
+          // ask again), so there is nothing left to remove — telling it so
+          // anyway earns the same silent-drop timeout as above.
+          _error('refused'); await _leave(tell: false); return;
         }
         await _answer(link, e['sdp'] as String);
       case 'peer_left':
