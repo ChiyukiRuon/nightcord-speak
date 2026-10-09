@@ -20,6 +20,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/screen/screen_providers.dart';
 import 'package:nightcord_client/core/screen/screen_share_backend.dart';
@@ -540,9 +541,31 @@ ScreenOptions screenOptions() => const ScreenOptions(
   detail: false,
 );
 
+/// Answers the macOS system-picker probe with "no picker here".
+///
+/// That probe is a platform channel, and under `flutter test` on macOS nobody
+/// answers it: the future it returns never completes, so the share button stops
+/// before the wizard can open. Nothing fails in the app itself — the runner
+/// registers the handler — but these tests drive the in-app wizard, so the
+/// channel has to answer like every other platform does.
+void _useInAppPicker(WidgetTester tester) {
+  const channel = MethodChannel('nightcord/screen_picker');
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    channel,
+    (call) async => call.method == 'available' ? false : null,
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    ),
+  );
+}
+
 /// Walks the share wizard, which every start goes through: the bar button opens
 /// it, and nothing is published until 开始直播.
 Future<void> startThroughSetup(WidgetTester tester) async {
+  _useInAppPicker(tester);
   await tester.tap(find.byTooltip('共享屏幕'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('下一个'));
@@ -2281,6 +2304,7 @@ void main() {
   testWidgets('the wizard carries what was chosen into the share', (
     tester,
   ) async {
+    _useInAppPicker(tester);
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
