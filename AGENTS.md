@@ -2097,6 +2097,20 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
   `cargo test --locked --workspace --all-features` 都通过。**首个 Release 尚未产出**
   （失败在打包之前，没有任何附件公开过），因此按 §3.7 的精神把 `v0.1.0` 改指到含
   修复的提交再推——「不覆盖已公开的 Release」约束的是已经发布的附件，这里没有。
+- **第二次运行挂在两个 macOS 任务的 `flutter test`**：失败的三个用例都在
+  `pages_render_test.dart` 的共享向导上。根因是 macOS 的共享按钮要先问系统选择器
+  （`nightcord/screen_picker` 这条 channel），而在 `flutter test` 里没人应答——
+  **调用既不返回也不抛**（不是 `MissingPluginException`），`_start` 就停在那一行，
+  向导永远不开，测试只在找不到「下一个」时失败。产品侧没有问题
+  （`MainFlutterWindow.swift` 注册了 handler，这条通道只是测试环境里没有对面），
+  但这三个用例本来就要走应用内向导，于是给通道装一个「没有系统选择器」的 mock
+  （`_useInAppPicker`）。**Windows / Linux 不会被它挂住**（`Platform.isMacOS` 先短路），
+  这正是它只在 macOS 上炸的原因。修完在 Mac 节点上跑完整 398 项通过。
+  > 定位手法同上一轮：本机（Windows）不复现、CI 日志读不到，但这次 Mac 节点能复现
+  > ——**同一份源码在构建机上直接跑，比读日志快得多**，代价是要先确认 `target/` 与
+  > `CARGO_TARGET_DIR` 对得上（第一次复现就栽在这上面：把 dylib 建到了别的 target
+  > 目录，凭空多出 19 个「加载不了核心」的假失败）。
+- 第二次改指：`v0.1.0` 移到 `ee7f3f3`（同一理由——仍然没有任何附件发布过）。
 - 另记一条 vendor 事实：**fork 里的提交，父仓库也能按 SHA 取到**（GitHub 的 fork
   对象共享）——实测 `git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f`
   在干净克隆上成功。所以改指 fork 不是为了「CI 才拉得到」，而是为了把补丁留在自己的
