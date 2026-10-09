@@ -2080,4 +2080,25 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
   Flutter analyze 与 398 项 Flutter 测试全绿。
 - 打 `v0.1.0` 并只推送该 tag，由 `.github/workflows/release.yml` 产出 Windows x64
   与 macOS arm64/x64 三个压缩包（版本与平台规则见 §3.7）。**托管构建节点上的完整
-  打包链路这是第一次真跑**，成败以 Actions 运行结果为准。
+  打包链路这是第一次真跑**——第一次果然挂了，见下。
+- **第一次运行挂在 Linux 的 clippy**：`ts-identity` 的 `APP_DIR_DISPLAY_NAME` 只有
+  Windows 与 macOS 的 `app_data_root` 用得到，Linux 走 XDG 分支，于是 `-D warnings`
+  把 rustc 的 `dead_code` 判成错误。`APP_DIR_XDG_NAME` 当初就按「只在用到它的平台上
+  声明」写了，这个常量漏了——**两边各错一半，谁也没报**。修法照抄那条：加
+  `#[cfg(any(target_os = "windows", target_os = "macos"))]`。
+- **定位手法（以后 CI 挂了可以再用）**：本机与 Mac 都不复现（那两个平台都用得到这个
+  常量），而未登录读不到 job 日志（`/actions/jobs/{id}/logs` 要 admin，403）。于是推
+  一条临时分支 `diag/clippy-linux`，用与发布相同的 ubuntu-24.04 步骤跑 clippy 与
+  测试，把失败输出的 `^error` 行回显成 `::error::`，再从 check-run annotations
+  接口匿名读回来——**annotations 是整个 job 里唯一不需要仓库权限就能读到的部分**。
+  查完即删（本地与远端）。Mac 上跑同一条 clippy 命令全绿，顺带证明 `cfg(unix)` 那几
+  段本身没问题。
+- 修复提交 `0f76249` 之后，同一条诊断流水线上 clippy 与
+  `cargo test --locked --workspace --all-features` 都通过。**首个 Release 尚未产出**
+  （失败在打包之前，没有任何附件公开过），因此按 §3.7 的精神把 `v0.1.0` 改指到含
+  修复的提交再推——「不覆盖已公开的 Release」约束的是已经发布的附件，这里没有。
+- 另记一条 vendor 事实：**fork 里的提交，父仓库也能按 SHA 取到**（GitHub 的 fork
+  对象共享）——实测 `git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f`
+  在干净克隆上成功。所以改指 fork 不是为了「CI 才拉得到」，而是为了把补丁留在自己的
+  `nightcord` 分支上、不和上游 `webspeak3` 混在一起（见
+  [`docs/tsclientlib-fork.md`](docs/tsclientlib-fork.md) §5）。

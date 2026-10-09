@@ -89,6 +89,11 @@ submodule 当前 pin 在 `26c9945`。本地的临时补丁已丢弃——改动�
 > 只动 `Book.toml` 就够了：该文件开头写明「高层名字相同的属性会被隐式搬运」，
 > 所以不必再往 `MessagesToBook.toml` 加规则。
 
+改指 fork **不是为了「CI 才拉得到」**：GitHub 在 fork 与其父仓库之间共享对象，
+`git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f` 在干净克隆上也能
+成功（实测）。改指的理由是把这一行补丁留在自己的 `nightcord` 分支上——与另外两个
+fork 同一个约定——而不是让 `webspeak3` 既当上游基线又当我们的补丁分支。
+
 ---
 
 ## 为什么这样改是安全的
