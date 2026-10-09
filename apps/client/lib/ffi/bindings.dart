@@ -47,6 +47,8 @@ typedef _MarkCleanExitDart = bool Function(Handle handle);
 
 // --- commands --------------------------------------------------------------
 
+typedef _GetAvatarC = Void Function(Handle, Uint32, Uint16);
+typedef _GetAvatarDart = void Function(Handle, int, int);
 typedef _ScreenC = Void Function(Handle, Uint32, Pointer<Utf8>);
 typedef _ScreenDart = void Function(Handle, int, Pointer<Utf8>);
 
@@ -59,8 +61,16 @@ typedef _ConnectDart = void Function(Handle handle, Pointer<Utf8> requestJson);
 typedef _DisconnectC = Void Function(Handle handle, Uint32 session);
 typedef _DisconnectDart = void Function(Handle handle, int session);
 
-typedef _JoinChannelC = Void Function(Handle handle, Uint32 session, Uint64 channelId);
-typedef _JoinChannelDart = void Function(Handle handle, int session, int channelId);
+typedef _JoinChannelC = Void Function(
+  Handle handle,
+  Uint32 session,
+  Uint64 channelId,
+);
+typedef _JoinChannelDart = void Function(
+  Handle handle,
+  int session,
+  int channelId,
+);
 
 typedef _LeaveChannelC = Void Function(Handle handle, Uint32 session);
 typedef _LeaveChannelDart = void Function(Handle handle, int session);
@@ -163,7 +173,10 @@ typedef _SetClientVolumeDart = void Function(
 // --- audio -----------------------------------------------------------------
 
 typedef _AudioDevicesC = Void Function(Handle handle, Pointer<Utf8> direction);
-typedef _AudioDevicesDart = void Function(Handle handle, Pointer<Utf8> direction);
+typedef _AudioDevicesDart = void Function(
+  Handle handle,
+  Pointer<Utf8> direction,
+);
 
 typedef _VoiceStartC = Void Function(
   Handle handle,
@@ -203,17 +216,32 @@ typedef _FreeStringDart = void Function(Pointer<Utf8> text);
 typedef _SettingsGetC = Void Function(Handle handle);
 typedef _SettingsGetDart = void Function(Handle handle);
 
-typedef _SettingsUpdateC = Void Function(Handle handle, Pointer<Utf8> settingsJson);
-typedef _SettingsUpdateDart = void Function(Handle handle, Pointer<Utf8> settingsJson);
+typedef _SettingsUpdateC = Void Function(
+  Handle handle,
+  Pointer<Utf8> settingsJson,
+);
+typedef _SettingsUpdateDart = void Function(
+  Handle handle,
+  Pointer<Utf8> settingsJson,
+);
 
 typedef _BookmarksGetC = Void Function(Handle handle);
 typedef _BookmarksGetDart = void Function(Handle handle);
 
-typedef _BookmarksUpdateC = Void Function(Handle handle, Pointer<Utf8> bookmarksJson);
-typedef _BookmarksUpdateDart = void Function(Handle handle, Pointer<Utf8> bookmarksJson);
+typedef _BookmarksUpdateC = Void Function(
+  Handle handle,
+  Pointer<Utf8> bookmarksJson,
+);
+typedef _BookmarksUpdateDart = void Function(
+  Handle handle,
+  Pointer<Utf8> bookmarksJson,
+);
 
 typedef _BookmarkAddC = Void Function(Handle handle, Pointer<Utf8> requestJson);
-typedef _BookmarkAddDart = void Function(Handle handle, Pointer<Utf8> requestJson);
+typedef _BookmarkAddDart = void Function(
+  Handle handle,
+  Pointer<Utf8> requestJson,
+);
 
 /// The bound C functions.
 ///
@@ -221,10 +249,18 @@ typedef _BookmarkAddDart = void Function(Handle handle, Pointer<Utf8> requestJso
 class NightcordBindings {
   /// Wraps a loaded library.
   NightcordBindings(DynamicLibrary library)
-    : create = library.lookupFunction<_CreateC, _CreateDart>('nightcord_create'),
-      destroy = library.lookupFunction<_DestroyC, _DestroyDart>('nightcord_destroy'),
-      version = library.lookupFunction<_VersionC, _VersionDart>('nightcord_version'),
-      logDir = library.lookupFunction<_LogDirC, _LogDirDart>('nightcord_log_dir'),
+    : create = library.lookupFunction<_CreateC, _CreateDart>(
+        'nightcord_create',
+      ),
+      destroy = library.lookupFunction<_DestroyC, _DestroyDart>(
+        'nightcord_destroy',
+      ),
+      version = library.lookupFunction<_VersionC, _VersionDart>(
+        'nightcord_version',
+      ),
+      logDir = library.lookupFunction<_LogDirC, _LogDirDart>(
+        'nightcord_log_dir',
+      ),
       log = library.lookupFunction<_LogC, _LogDart>('nightcord_log'),
       crashStatus = library.lookupFunction<_CrashStatusC, _CrashStatusDart>(
         'nightcord_crash_status',
@@ -232,11 +268,16 @@ class NightcordBindings {
       crashReport = library.lookupFunction<_CrashReportC, _CrashReportDart>(
         'nightcord_crash_report',
       ),
-      markCleanExit = library.lookupFunction<_MarkCleanExitC, _MarkCleanExitDart>(
-        'nightcord_mark_clean_exit',
+      markCleanExit = library
+          .lookupFunction<_MarkCleanExitC, _MarkCleanExitDart>(
+            'nightcord_mark_clean_exit',
+          ),
+      connect = library.lookupFunction<_ConnectC, _ConnectDart>(
+        'nightcord_connect',
       ),
-      connect = library.lookupFunction<_ConnectC, _ConnectDart>('nightcord_connect'),
-      disconnect = library.lookupFunction<_DisconnectC, _DisconnectDart>('nightcord_disconnect'),
+      disconnect = library.lookupFunction<_DisconnectC, _DisconnectDart>(
+        'nightcord_disconnect',
+      ),
       joinChannel = library.lookupFunction<_JoinChannelC, _JoinChannelDart>(
         'nightcord_join_channel',
       ),
@@ -246,38 +287,66 @@ class NightcordBindings {
       sendMessage = library.lookupFunction<_SendMessageC, _SendMessageDart>(
         'nightcord_send_message',
       ),
-      moveClient = library.lookupFunction<_MoveClientC, _MoveClientDart>('nightcord_move_client'),
+      moveClient = library.lookupFunction<_MoveClientC, _MoveClientDart>(
+        'nightcord_move_client',
+      ),
       poke = library.lookupFunction<_PokeC, _PokeDart>('nightcord_poke'),
       kick = library.lookupFunction<_KickC, _KickDart>('nightcord_kick'),
       ban = library.lookupFunction<_BanC, _BanDart>('nightcord_ban'),
-      screen = library.lookupFunction<_ScreenC, _ScreenDart>('nightcord_screen'),
-      setAway = library.lookupFunction<_SetAwayC, _SetAwayDart>('nightcord_set_away'),
-      resetShortcuts = library.lookupFunction<_ResetShortcutsC, _ResetShortcutsDart>(
-        'nightcord_reset_shortcuts',
+      screen = library.lookupFunction<_ScreenC, _ScreenDart>(
+        'nightcord_screen',
       ),
-      setClientVolume = library.lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
-        'nightcord_voice_set_client_volume',
+      getAvatar = library.lookupFunction<_GetAvatarC, _GetAvatarDart>(
+        'nightcord_get_avatar',
       ),
+      setNickname = library.lookupFunction<_ScreenC, _ScreenDart>(
+        'nightcord_set_nickname',
+      ),
+      setAvatarEdit = library.lookupFunction<_ScreenC, _ScreenDart>(
+        'nightcord_set_avatar_edit',
+      ),
+      setAvatar = library.lookupFunction<_ScreenC, _ScreenDart>(
+        'nightcord_set_avatar',
+      ),
+      setAway = library.lookupFunction<_SetAwayC, _SetAwayDart>(
+        'nightcord_set_away',
+      ),
+      resetShortcuts = library
+          .lookupFunction<_ResetShortcutsC, _ResetShortcutsDart>(
+            'nightcord_reset_shortcuts',
+          ),
+      setClientVolume = library
+          .lookupFunction<_SetClientVolumeC, _SetClientVolumeDart>(
+            'nightcord_voice_set_client_volume',
+          ),
       audioDevices = library.lookupFunction<_AudioDevicesC, _AudioDevicesDart>(
         'nightcord_audio_devices',
       ),
-      voiceStart = library.lookupFunction<_VoiceStartC, _VoiceStartDart>('nightcord_voice_start'),
-      voiceStop = library.lookupFunction<_VoiceStopC, _VoiceStopDart>('nightcord_voice_stop'),
-      voiceSetInputMuted = library.lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
-        'nightcord_voice_set_input_muted',
+      voiceStart = library.lookupFunction<_VoiceStartC, _VoiceStartDart>(
+        'nightcord_voice_start',
       ),
-      voiceSetOutputMuted = library.lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
-        'nightcord_voice_set_output_muted',
+      voiceStop = library.lookupFunction<_VoiceStopC, _VoiceStopDart>(
+        'nightcord_voice_stop',
       ),
-      voicePushToTalk = library.lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
-        'nightcord_voice_push_to_talk',
-      ),
+      voiceSetInputMuted = library
+          .lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
+            'nightcord_voice_set_input_muted',
+          ),
+      voiceSetOutputMuted = library
+          .lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
+            'nightcord_voice_set_output_muted',
+          ),
+      voicePushToTalk = library
+          .lookupFunction<_VoiceSetBoolC, _VoiceSetBoolDart>(
+            'nightcord_voice_push_to_talk',
+          ),
       voiceStatus = library.lookupFunction<_VoiceStatusC, _VoiceStatusDart>(
         'nightcord_voice_status',
       ),
-      voiceTestOutput = library.lookupFunction<_VoiceTestOutputC, _VoiceTestOutputDart>(
-        'nightcord_voice_test_output',
-      ),
+      voiceTestOutput = library
+          .lookupFunction<_VoiceTestOutputC, _VoiceTestOutputDart>(
+            'nightcord_voice_test_output',
+          ),
       pollEvents = library.lookupFunction<_PollEventsC, _PollEventsDart>(
         'nightcord_poll_events',
       ),
@@ -287,13 +356,17 @@ class NightcordBindings {
       settingsGet = library.lookupFunction<_SettingsGetC, _SettingsGetDart>(
         'nightcord_settings',
       ),
-      settingsUpdate = library.lookupFunction<_SettingsUpdateC, _SettingsUpdateDart>(
-        'nightcord_update_settings',
+      settingsUpdate = library
+          .lookupFunction<_SettingsUpdateC, _SettingsUpdateDart>(
+            'nightcord_update_settings',
+          ),
+      bookmarksGet = library.lookupFunction<_BookmarksGetC, _BookmarksGetDart>(
+        'nightcord_bookmarks',
       ),
-      bookmarksGet = library.lookupFunction<_BookmarksGetC, _BookmarksGetDart>('nightcord_bookmarks'),
-      bookmarksUpdate = library.lookupFunction<_BookmarksUpdateC, _BookmarksUpdateDart>(
-        'nightcord_update_bookmarks',
-      ),
+      bookmarksUpdate = library
+          .lookupFunction<_BookmarksUpdateC, _BookmarksUpdateDart>(
+            'nightcord_update_bookmarks',
+          ),
       bookmarkAdd = library.lookupFunction<_BookmarkAddC, _BookmarkAddDart>(
         'nightcord_add_bookmark',
       );
@@ -366,6 +439,10 @@ class NightcordBindings {
   /// Runs one screen-sharing command; the argument is serialised
   /// `ScreenCommand` JSON.
   final void Function(Handle, int, Pointer<Utf8>) screen;
+  final void Function(Handle, int, int) getAvatar;
+  final void Function(Handle, int, Pointer<Utf8>) setNickname;
+  final void Function(Handle, int, Pointer<Utf8>) setAvatar;
+  final void Function(Handle, int, Pointer<Utf8>) setAvatarEdit;
 
   /// Marks us away or back; `message` is what to say, and is ignored when
   /// `away` is false.

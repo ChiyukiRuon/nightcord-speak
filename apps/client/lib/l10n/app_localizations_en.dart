@@ -976,4 +976,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShortcutsReset => 'Restore default';
+
+  @override
+  String get avatarUpload => 'Upload avatar';
+
+  @override
+  String get avatarRemove => 'Remove avatar';
+
+  @override
+  String get avatarTitle => 'My avatar';
+
+  @override
+  String get avatarEdit => 'Edit avatar';
+
+  @override
+  String get avatarEditHint =>
+      'Drag to reposition the image and zoom to crop your avatar.';
+
+  @override
+  String get avatarZoom => 'Zoom';
+
+  @override
+  String get avatarRotate => 'Rotate';
+
+  @override
+  String get avatarReset => 'Reset';
+
+  @override
+  String get avatarInvalidImage =>
+      'Could not read the image. Choose a PNG, JPEG or WebP image up to 10 MB.';
+
+  @override
+  String get avatarOriginalMissing =>
+      'This avatar has no saved original. Select the original image to edit it again.';
+
+  @override
+  String get profileTitle => 'My profile';
 }

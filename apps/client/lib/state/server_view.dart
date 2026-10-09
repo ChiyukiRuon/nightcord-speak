@@ -30,13 +30,14 @@ abstract final class ConversationKey {
   /// marked unread on our own row in the tree. The thread belongs to the other
   /// party, so that is what this resolves to, and `ownClientId` is what tells
   /// the two directions apart.
-  static String of(Message message, int? ownClientId) => switch (message.target) {
-    ServerTarget() => server,
-    ChannelTarget(:final channelId) => channel(channelId),
-    ClientTarget(:final clientId) => client(
-      clientId == ownClientId ? (message.sender ?? clientId) : clientId,
-    ),
-  };
+  static String of(Message message, int? ownClientId) =>
+      switch (message.target) {
+        ServerTarget() => server,
+        ChannelTarget(:final channelId) => channel(channelId),
+        ClientTarget(:final clientId) => client(
+          clientId == ownClientId ? (message.sender ?? clientId) : clientId,
+        ),
+      };
 }
 
 /// A retry the core has scheduled, while a dropped session recovers.
@@ -68,7 +69,11 @@ class ReconnectProgress {
 
 /// One channel with the depth it sits at, ready to render as a flat list.
 class TreeRow {
-  const TreeRow({required this.depth, required this.channel, required this.hasChildren});
+  const TreeRow({
+    required this.depth,
+    required this.channel,
+    required this.hasChildren,
+  });
 
   /// Zero for a root channel.
   final int depth;
@@ -153,16 +158,21 @@ class ServerView {
 
   /// Local speech comes from the audio gate, since servers do not echo it.
   bool isSpeaking(int clientId) =>
-      isConnected && (clientId == ownClientId ? voice.transmitting : speaking.contains(clientId));
+      isConnected &&
+      (clientId == ownClientId
+          ? voice.transmitting
+          : speaking.contains(clientId));
 
   /// The channel we are in.
-  Channel? get ownChannel => ownChannelId == null ? null : channels[ownChannelId];
+  Channel? get ownChannel =>
+      ownChannelId == null ? null : channels[ownChannelId];
 
   /// The channels in tree order, for a picker that has no room for depht.
   ///
   /// Flat rather than nested because every consumer so far is a dropdown; a
   /// tree would be the right shape for a tree control, and there is not one.
-  List<Channel> get channelsInTreeOrder => tree().map((row) => row.channel).toList(growable: false);
+  List<Channel> get channelsInTreeOrder =>
+      tree().map((row) => row.channel).toList(growable: false);
 
   /// Per-person playback gains the user has set this session.
   ///
@@ -195,7 +205,8 @@ class ServerView {
     final children = <int?, List<Channel>>{};
     for (final channel in channels.values) {
       // A dangling parent is treated as no parent, so the channel stays visible.
-      final parent = (channel.parentId != null && channels.containsKey(channel.parentId))
+      final parent =
+          (channel.parentId != null && channels.containsKey(channel.parentId))
           ? channel.parentId
           : null;
       children.putIfAbsent(parent, () => []).add(channel);
@@ -213,8 +224,11 @@ class ServerView {
     final rows = <TreeRow>[];
     void visit(int? parent, int depth) {
       for (final channel in children[parent] ?? const <Channel>[]) {
-        final hasChildren = (children[channel.id] ?? const <Channel>[]).isNotEmpty;
-        rows.add(TreeRow(depth: depth, channel: channel, hasChildren: hasChildren));
+        final hasChildren =
+            (children[channel.id] ?? const <Channel>[]).isNotEmpty;
+        rows.add(
+          TreeRow(depth: depth, channel: channel, hasChildren: hasChildren),
+        );
 
         if (hasChildren && (isCollapsed?.call(channel) ?? false)) continue;
         visit(channel.id, depth + 1);
@@ -234,18 +248,25 @@ class ServerView {
   List<Client> clientsIn(int channelId) {
     final members =
         clients.values
-            .where((c) => c.clientType == ClientType.voice && c.channelId == channelId)
+            .where(
+              (c) =>
+                  c.clientType == ClientType.voice && c.channelId == channelId,
+            )
             .toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
     return members;
   }
 
   /// The messages in one thread, oldest first.
-  List<Message> messagesIn(String conversation) => conversations[conversation] ?? const <Message>[];
+  List<Message> messagesIn(String conversation) =>
+      conversations[conversation] ?? const <Message>[];
 
   /// The thread the UI should be showing: the channel we are in.
-  String get activeConversation =>
-      ownChannelId == null ? ConversationKey.server : ConversationKey.channel(ownChannelId!);
+  String get activeConversation => ownChannelId == null
+      ? ConversationKey.server
+      : ConversationKey.channel(ownChannelId!);
 
   /// The thread the user opened by hand, or null to follow [activeConversation].
   ///
@@ -294,7 +315,9 @@ class ServerView {
     for (final id in unread) {
       if (!id.startsWith('client:')) continue;
       final clientId = int.tryParse(id.substring('client:'.length));
-      if (clientId != null && clients[clientId]?.channelId == channelId) return true;
+      if (clientId != null && clients[clientId]?.channelId == channelId) {
+        return true;
+      }
     }
     return false;
   }
@@ -341,13 +364,15 @@ class ServerView {
         // space it takes.
         reconnect = ReconnectProgress(attempt: attempt, delayMs: delayMs);
 
-      case ChannelCreatedEvent(:final channel) || ChannelUpdatedEvent(:final channel):
+      case ChannelCreatedEvent(:final channel) ||
+          ChannelUpdatedEvent(:final channel):
         channels[channel.id] = channel;
 
       case ChannelRemovedEvent(:final channelId):
         channels.remove(channelId);
 
-      case ClientJoinedEvent(:final client) || ClientUpdatedEvent(:final client):
+      case ClientJoinedEvent(:final client) ||
+          ClientUpdatedEvent(:final client):
         clients[client.id] = client;
 
       case ClientLeftEvent(:final clientId):
@@ -382,7 +407,9 @@ class ServerView {
         }
 
       case MessageReceivedEvent(:final message):
-        conversations.putIfAbsent(ConversationKey.of(message, ownClientId), () => []).add(message);
+        conversations
+            .putIfAbsent(ConversationKey.of(message, ownClientId), () => [])
+            .add(message);
 
       case PermissionsChangedEvent(:final permissions):
         this.permissions = permissions;
@@ -424,6 +451,7 @@ class ServerView {
 
       // Not part of the rendered state.
       case ErrorEvent():
+      case OwnAvatarChangedEvent():
       case ScreenEvent():
       case UnknownEvent():
         break;

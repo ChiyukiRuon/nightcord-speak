@@ -919,4 +919,38 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsShortcutsReset => '既定に戻す';
+
+  @override
+  String get avatarUpload => 'アバターをアップロード';
+
+  @override
+  String get avatarRemove => 'アバターを削除';
+
+  @override
+  String get avatarTitle => '自分のアバター';
+
+  @override
+  String get avatarEdit => 'アバターを編集';
+
+  @override
+  String get avatarEditHint => '画像をドラッグして位置を調整し、拡大して切り抜きます。';
+
+  @override
+  String get avatarZoom => '拡大';
+
+  @override
+  String get avatarRotate => '回転';
+
+  @override
+  String get avatarReset => 'リセット';
+
+  @override
+  String get avatarInvalidImage =>
+      '画像を読み込めません。10 MB以下のPNG、JPEG、WebP画像を選択してください。';
+
+  @override
+  String get avatarOriginalMissing => '元の画像が保存されていません。再編集するには元の画像を選択してください。';
+
+  @override
+  String get profileTitle => 'プロフィール';
 }

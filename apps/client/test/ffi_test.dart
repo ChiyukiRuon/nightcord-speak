@@ -42,7 +42,9 @@ Future<Settings> readSettings(RustClient client) async {
   client.requestSettings();
   final result = await pending;
   if (!result.ok) {
-    throw StateError('the core refused to report settings: ${result.error?.debugMessage}');
+    throw StateError(
+      'the core refused to report settings: ${result.error?.debugMessage}',
+    );
   }
   return Settings.fromJson((result.data as Map).cast<String, dynamic>());
 }
@@ -53,7 +55,9 @@ Future<BookmarkList> readBookmarks(RustClient client) async {
   client.requestBookmarks();
   final result = await pending;
   if (!result.ok) {
-    throw StateError('the core refused to report bookmarks: ${result.error?.debugMessage}');
+    throw StateError(
+      'the core refused to report bookmarks: ${result.error?.debugMessage}',
+    );
   }
   return BookmarkList.fromJson((result.data as Map).cast<String, dynamic>());
 }
@@ -125,6 +129,7 @@ void main() {
       addTearDown(client.dispose);
 
       final calls = <String, void Function()>{
+        'set_nickname': () => client.setNickname(99, 'New Name'),
         'poke': () => client.poke(99, 2, 'hello'),
         'kick': () => client.kick(99, 2, KickScope.server, null),
         'ban': () => client.ban(99, 2, BanDuration.seconds(60), 'because'),
@@ -139,7 +144,8 @@ void main() {
         expect(
           result.ok,
           isFalse,
-          reason: '${entry.key} against a missing session should report failure',
+          reason:
+              '${entry.key} against a missing session should report failure',
         );
       }
     });
@@ -173,7 +179,11 @@ void main() {
 
       expect(result.ok, isFalse);
       expect(result.error?.debugMessage, contains('sideways'));
-      expect(result.session, isNull, reason: 'device queries are not session-scoped');
+      expect(
+        result.session,
+        isNull,
+        reason: 'device queries are not session-scoped',
+      );
     });
 
     test('a device list arrives as data on a successful result', () async {
@@ -216,7 +226,11 @@ void main() {
       // Null is a legitimate answer where the platform gives no writable root,
       // but this build targets desktops, where there always is one — and if
       // that ever stopped being true the UI's button would silently vanish.
-      expect(directory, isNotNull, reason: 'no log directory on a desktop platform');
+      expect(
+        directory,
+        isNotNull,
+        reason: 'no log directory on a desktop platform',
+      );
       expect(
         Directory(directory!).existsSync(),
         isTrue,
@@ -224,19 +238,25 @@ void main() {
       );
     });
 
-    test('a line forwarded from Dart reaches the file the UI points at', () async {
-      // The whole chain, across the ABI. Without it the UI could offer a path
-      // to a file that never receives anything the app forwards to it — which
-      // is worse than no path at all, because it looks like an answer.
-      final directory = coreLogDirectory();
-      expect(directory, isNotNull);
+    test(
+      'a line forwarded from Dart reaches the file the UI points at',
+      () async {
+        // The whole chain, across the ABI. Without it the UI could offer a path
+        // to a file that never receives anything the app forwards to it — which
+        // is worse than no path at all, because it looks like an answer.
+        final directory = coreLogDirectory();
+        expect(directory, isNotNull);
 
-      final marker = 'dart-forwarded-${DateTime.now().microsecondsSinceEpoch}';
-      logToCore('error', marker);
+        final marker =
+            'dart-forwarded-${DateTime.now().microsecondsSinceEpoch}';
+        logToCore('error', marker);
 
-      final found = await _pollUntil(() => _logFilesContain(Directory(directory!), marker));
-      expect(found, isTrue, reason: '$marker never reached $directory');
-    });
+        final found = await _pollUntil(
+          () => _logFilesContain(Directory(directory!), marker),
+        );
+        expect(found, isTrue, reason: '$marker never reached $directory');
+      },
+    );
 
     test('an awkward line is accepted rather than thrown', () {
       // Called from error handlers, where raising a second error would replace
@@ -279,8 +299,16 @@ void main() {
       final back = await readSettings(client);
       expect(back.connection.nickname, 'Round Trip');
       expect(back.notifications.presence, isFalse);
-      expect(back.notifications.directMessage, isTrue, reason: 'one switch, not all');
-      expect(back.ui.language, 'en', reason: 'the language must not vanish on the way back');
+      expect(
+        back.notifications.directMessage,
+        isTrue,
+        reason: 'one switch, not all',
+      );
+      expect(
+        back.ui.language,
+        'en',
+        reason: 'the language must not vanish on the way back',
+      );
     });
 
     test('the core answers with settings this build can read', () async {
@@ -371,10 +399,16 @@ void main() {
         reason: 'the entry the edit superseded is gone',
       );
 
-      final moved = saved.where((b) => b.host == '192.168.31.129' && b.port == 9999);
+      final moved = saved.where(
+        (b) => b.host == '192.168.31.129' && b.port == 9999,
+      );
       expect(moved, hasLength(1));
       expect(moved.single.name, 'After');
-      expect(moved.single.nickname, 'Someone', reason: 'the rest of the edit came with it');
+      expect(
+        moved.single.nickname,
+        'Someone',
+        reason: 'the rest of the edit came with it',
+      );
     });
 
     test('editing without moving the address does not reorder the list', () async {
@@ -409,7 +443,11 @@ void main() {
 
       final after = (await readBookmarks(client)).bookmarks;
       expect(after, hasLength(before.length));
-      expect(after.indexWhere((b) => b.port == 9998), at, reason: 'same position');
+      expect(
+        after.indexWhere((b) => b.port == 9998),
+        at,
+        reason: 'same position',
+      );
       expect(after[at].name, 'Renamed');
     });
 
@@ -478,7 +516,11 @@ void main() {
       addTearDown(client.dispose);
 
       final status = client.crashStatus();
-      expect(status.available, isTrue, reason: 'the desktop always has a data root');
+      expect(
+        status.available,
+        isTrue,
+        reason: 'the desktop always has a data root',
+      );
 
       // A sibling of `logs/`, not a child of it: the first version of this
       // wiring reused the log helper, which appends `logs`, and the `contains`

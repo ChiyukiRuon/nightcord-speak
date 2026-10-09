@@ -58,7 +58,8 @@ import 'package:nightcord_client/util/gain.dart';
 /// core. `noSuchMethod` rather than 20 stubs — the interface is wide and this
 /// test only cares that the calls do not throw.
 class _SilentTransport implements ClientTransport {
-  final StreamController<FfiEvent> _events = StreamController<FfiEvent>.broadcast();
+  final StreamController<FfiEvent> _events =
+      StreamController<FfiEvent>.broadcast();
 
   /// The commands this transport was asked to perform.
   ///
@@ -73,10 +74,14 @@ class _SilentTransport implements ClientTransport {
   @override
   void disconnect(int session) => calls.add('disconnect:$session');
   @override
+  void setNickname(int session, String nickname) =>
+      calls.add('nickname:$session:$nickname');
+  @override
   void setPushToTalk(bool held) => calls.add('ptt:$held');
 
   @override
-  void connect(ConnectRequest request) => calls.add('connect:${request.address}');
+  void connect(ConnectRequest request) =>
+      calls.add('connect:${request.address}');
 
   /// Pushes one event as if the core had reported it.
   ///
@@ -88,7 +93,8 @@ class _SilentTransport implements ClientTransport {
   /// chooses, and with which arguments — a menu that wired "kick from server"
   /// to the channel scope would be invisible otherwise.
   @override
-  void poke(int session, int clientId, String message) => calls.add('poke:$clientId:$message');
+  void poke(int session, int clientId, String message) =>
+      calls.add('poke:$clientId:$message');
 
   @override
   void kick(int session, int clientId, KickScope scope, String? message) =>
@@ -131,7 +137,8 @@ class _SilentTransport implements ClientTransport {
   /// reset all three from one of them would look identical from the outside.
   /// Only ever *asked* — the defaults are the core's to know.
   @override
-  void resetShortcut(ShortcutAction action) => calls.add('resetShortcut:${action.wire}');
+  void resetShortcut(ShortcutAction action) =>
+      calls.add('resetShortcut:${action.wire}');
 
   /// Recorded so a test can tell "the slider moved" from "the core was told":
   /// the local state changes either way, and only the second one survives a
@@ -148,7 +155,8 @@ class _SilentTransport implements ClientTransport {
   BookmarkList bookmarks = const BookmarkList();
 
   @override
-  void addBookmark(NewBookmark bookmark) => calls.add('addBookmark:${bookmark.address}');
+  void addBookmark(NewBookmark bookmark) =>
+      calls.add('addBookmark:${bookmark.address}');
 
   @override
   void updateBookmarks(BookmarkList value) {
@@ -214,7 +222,12 @@ class _FixedBookmarks extends BookmarksNotifier {
 class _FixedNotices extends NoticesNotifier {
   @override
   List<Notice> build() => const [
-    Notice(kind: NoticeKind.directMessage, session: 1, title: '同事二号', body: '你那边听得到吗？'),
+    Notice(
+      kind: NoticeKind.directMessage,
+      session: 1,
+      title: '同事二号',
+      body: '你那边听得到吗？',
+    ),
     Notice(kind: NoticeKind.presence, session: 1, title: '新来的', body: '加入了服务器'),
   ];
 }
@@ -243,7 +256,10 @@ class _FakeScreenBackend implements ScreenShareBackend {
   Future<ScreenMedia> preview(ScreenSource source) async => media;
 
   @override
-  Future<ScreenMedia> capture(ScreenSource? source, ScreenOptions options) async => media;
+  Future<ScreenMedia> capture(
+    ScreenSource? source,
+    ScreenOptions options,
+  ) async => media;
 
   /// Hands back a peer the test can drive.
   ///
@@ -292,7 +308,8 @@ class _FakePeer implements ScreenPeer {
   Future<void> acceptAnswer(String sdp) async => calls.add('accepted:$sdp');
 
   @override
-  Future<void> candidate(Map<String, dynamic> candidate) async => calls.add('candidate');
+  Future<void> candidate(Map<String, dynamic> candidate) async =>
+      calls.add('candidate');
 
   @override
   Future<void> close() async => closes++;
@@ -366,20 +383,36 @@ ServerView _view({bool screen = false}) {
       }),
     );
   }
-  send(const ServerInfoChangedEvent(ServerInfo(name: 'Nightcord 测试服', clientsOnline: 4)));
+  send(
+    const ServerInfoChangedEvent(
+      ServerInfo(name: 'Nightcord 测试服', clientsOnline: 4),
+    ),
+  );
   send(
     const PermissionsChangedEvent(
-      Permissions(canJoinChannel: true, canSendChannelMessage: true, canSendPrivateMessage: true),
+      Permissions(
+        canJoinChannel: true,
+        canSendChannelMessage: true,
+        canSendPrivateMessage: true,
+      ),
     ),
   );
   send(const OwnClientIdentifiedEvent(clientId: 1, channelId: 1));
 
   send(const ChannelCreatedEvent(Channel(id: 1, name: '大厅', isDefault: true)));
   send(const ChannelCreatedEvent(Channel(id: 2, name: '游戏区', parentId: 1)));
-  send(const ChannelCreatedEvent(Channel(id: 3, name: 'CS2', parentId: 2, hasPassword: true)));
+  send(
+    const ChannelCreatedEvent(
+      Channel(id: 3, name: 'CS2', parentId: 2, hasPassword: true),
+    ),
+  );
   send(const ChannelCreatedEvent(Channel(id: 4, name: '挂机', parentId: 1)));
 
-  send(const ClientJoinedEvent(Client(id: 1, name: 'TsukinoAyaka', channelId: 1, isSelf: true)));
+  send(
+    const ClientJoinedEvent(
+      Client(id: 1, name: 'TsukinoAyaka', channelId: 1, isSelf: true),
+    ),
+  );
   send(
     ClientJoinedEvent(
       Client(
@@ -388,7 +421,9 @@ ServerView _view({bool screen = false}) {
         channelId: 1,
         // The flag the server keeps: it is what the watch button is built
         // from, so a client who is not marked as streaming must offer nothing.
-        flags: screen ? const ClientFlags(streaming: true) : const ClientFlags(),
+        flags: screen
+            ? const ClientFlags(streaming: true)
+            : const ClientFlags(),
       ),
     ),
   );
@@ -451,7 +486,8 @@ ProviderContainer _container({
     settingsProvider.overrideWith(() => _FixedSettings(settings)),
     audioDevicesProvider.overrideWith(() => _FixedDevices()),
     voiceStatusProvider.overrideWith(() => _FixedVoiceStatus()),
-    if (view != null) sessionsProvider.overrideWith(() => _FixedSessions({1: view})),
+    if (view != null)
+      sessionsProvider.overrideWith(() => _FixedSessions({1: view})),
     if (notices) noticesProvider.overrideWith(() => _FixedNotices()),
     if (bookmarks) bookmarksProvider.overrideWith(() => _FixedBookmarks()),
   ],
@@ -488,7 +524,6 @@ bool _menuItemEnabled(WidgetTester tester, String label) {
   return (item as PopupMenuItem<dynamic>).enabled;
 }
 
-
 /// The settings a share starts with, for the tests that only care that *some*
 /// were given. The numbers are the default preset's, so a test that cares about
 /// one of them overrides just that one.
@@ -505,7 +540,6 @@ ScreenOptions screenOptions() => const ScreenOptions(
   detail: false,
 );
 
-
 /// Walks the share wizard, which every start goes through: the bar button opens
 /// it, and nothing is published until 开始直播.
 Future<void> startThroughSetup(WidgetTester tester) async {
@@ -518,87 +552,194 @@ Future<void> startThroughSetup(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'the bottom avatar opens viewing and editing actions on desktop and mobile',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final size in [const Size(1200, 800), const Size(320, 700)]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(
+          _app(
+            _container(view: _view(screen: true)),
+            const ServerPage(session: 1),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final entry = find.byKey(const ValueKey('own-avatar-button'));
+        expect(
+          find.descendant(of: find.byType(VoiceBar), matching: entry),
+          findsOneWidget,
+        );
+        await tester.tap(entry);
+        await tester.pumpAndSettle();
+        expect(find.text('个人资料'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('profile-nickname-field')),
+          findsOneWidget,
+        );
+        expect(find.text('上传头像'), findsOneWidget);
+        expect(find.text('编辑头像'), findsOneWidget);
+        expect(find.text('移除头像'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('own-profile-name')));
+        await tester.pumpAndSettle();
+        expect(find.text('个人资料'), findsOneWidget);
+        expect(find.textContaining('所有服务器使用同一个头像'), findsNothing);
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        // Avatar management no longer lives in the member context menu.
+        final self = find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('TsukinoAyaka'),
+        );
+        await tester.longPress(self);
+        await tester.pumpAndSettle();
+        expect(find.text('上传头像'), findsNothing);
+        expect(find.text('移除头像'), findsNothing);
+        await tester.tapAt(const Offset(5, 5));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    },
+  );
+
+  testWidgets('profile saves a nonblank name to the current session', (
+    tester,
+  ) async {
+    final transport = _SilentTransport();
+    await tester.pumpWidget(
+      _app(
+        _container(view: _view(), transport: transport),
+        const ServerPage(session: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('own-profile-name')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('profile-nickname-field'));
+    await tester.tap(field);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    expect(
+      transport.calls.where((call) => call.startsWith('nickname:')),
+      isEmpty,
+    );
+    await tester.enterText(field, '   ');
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('profile-save-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.enterText(field, ' New Name ');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('profile-save-button')));
+    await tester.pumpAndSettle();
+    expect(transport.calls, contains('nickname:1:New Name'));
+    expect(find.text('个人资料'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   setUp(() {
     // A window rather than the test's default 800x600, so a page that only
     // overflows when it has room to lay out is not silently skipped.
     TestWidgetsFlutterBinding.ensureInitialized();
   });
 
-  testWidgets('touch PTT releases on cancellation and when the app loses focus', (tester) async {
-    // A touch interface cannot rely on the desktop keyboard, and losing the
-    // pointer or page focus must never leave the transmit gate held open.
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final transport = _SilentTransport();
-    final settings = const Settings().copyWith(
-      audio: const AudioSettings().copyWith(mode: VoiceActivationMode.pushToTalk),
-    );
-    await tester.pumpWidget(
-      _app(
-        _container(view: _view(), transport: transport, settings: settings),
-        const ServerPage(session: 1),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final button = find.text('按住说话');
-    final gesture = await tester.startGesture(tester.getCenter(button));
-    expect(transport.calls.last, 'ptt:true');
-    await gesture.cancel();
-    expect(transport.calls.last, 'ptt:false');
-    final next = await tester.startGesture(tester.getCenter(button));
-    expect(transport.calls.last, 'ptt:true');
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pump();
-    expect(transport.calls.last, 'ptt:false');
-    await next.up();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'touch PTT releases on cancellation and when the app loses focus',
+    (tester) async {
+      // A touch interface cannot rely on the desktop keyboard, and losing the
+      // pointer or page focus must never leave the transmit gate held open.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final transport = _SilentTransport();
+      final settings = const Settings().copyWith(
+        audio: const AudioSettings().copyWith(
+          mode: VoiceActivationMode.pushToTalk,
+        ),
+      );
+      await tester.pumpWidget(
+        _app(
+          _container(view: _view(), transport: transport, settings: settings),
+          const ServerPage(session: 1),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.text('按住说话');
+      final gesture = await tester.startGesture(tester.getCenter(button));
+      expect(transport.calls.last, 'ptt:true');
+      await gesture.cancel();
+      expect(transport.calls.last, 'ptt:false');
+      final next = await tester.startGesture(tester.getCenter(button));
+      expect(transport.calls.last, 'ptt:true');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(transport.calls.last, 'ptt:false');
+      await next.up();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('a narrow desktop window uses the mobile shell without overflow', (tester) async {
-    // The old fixed sidebar left less than 100px for chat on a phone.
-    tester.view.physicalSize = const Size(360, 780);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final container = _container(view: _view());
-    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
-    await tester.pumpAndSettle();
-    expect(find.byType(MobileShell), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    expect(find.byType(Drawer), findsNothing);
-    expect(find.byType(ChannelSidebar), findsOneWidget);
-    expect(find.byType(ChatPanel), findsNothing);
-    await tester.tap(find.text('大厅').first);
-    await tester.pumpAndSettle();
-    expect(find.byType(ChatPanel), findsOneWidget);
-    expect(find.byType(ChannelSidebar), findsNothing);
-    await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
-    expect(find.byType(ChannelSidebar), findsOneWidget);
-    await tester.tap(find.text('同事二号').first);
-    await tester.pumpAndSettle();
-    expect(find.byType(ChatPanel), findsOneWidget);
-    expect(container.read(sessionsProvider)[1]!.shownConversation, ConversationKey.client(2));
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(find.byType(ChannelSidebar), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    tester.view.physicalSize = const Size(1200, 800);
-    await tester.pumpAndSettle();
-    expect(find.byType(DesktopShell), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'a narrow desktop window uses the mobile shell without overflow',
+    (tester) async {
+      // The old fixed sidebar left less than 100px for chat on a phone.
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = _container(view: _view());
+      await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileShell), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Drawer), findsNothing);
+      expect(find.byType(ChannelSidebar), findsOneWidget);
+      expect(find.byType(ChatPanel), findsNothing);
+      await tester.tap(find.text('大厅').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatPanel), findsOneWidget);
+      expect(find.byType(ChannelSidebar), findsNothing);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChannelSidebar), findsOneWidget);
+      await tester.tap(find.text('同事二号').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatPanel), findsOneWidget);
+      expect(
+        container.read(sessionsProvider)[1]!.shownConversation,
+        ConversationKey.client(2),
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(ChannelSidebar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      tester.view.physicalSize = const Size(1200, 800);
+      await tester.pumpAndSettle();
+      expect(find.byType(DesktopShell), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('mobile settings navigation keeps the audio form usable', (tester) async {
+  testWidgets('mobile settings navigation keeps the audio form usable', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 700);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(_app(_container(view: _view()), const SettingsPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const SettingsPage(session: 1)),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(MobileShell), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -624,7 +765,9 @@ void main() {
   });
 
   testWidgets('a connected server', (tester) async {
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -652,25 +795,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a short channel name keeps its topic close in the desktop header', (tester) async {
-    final view = _view();
-    view.channels[1] = const Channel(id: 1, name: 'Default Channel', topic: 'Channel topic');
-    await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
-    await tester.pumpAndSettle();
-    // Regression: Expanded reserved half the header for even a short name.
-    final name = tester.getRect(
-      find.descendant(of: find.byType(ChatPanel), matching: find.text('Default Channel')),
-    );
-    final topic = tester.getRect(find.text('Channel topic'));
-    expect(topic.left - name.right, lessThan(40));
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'a short channel name keeps its topic close in the desktop header',
+    (tester) async {
+      final view = _view();
+      view.channels[1] = const Channel(
+        id: 1,
+        name: 'Default Channel',
+        topic: 'Channel topic',
+      );
+      await tester.pumpWidget(
+        _app(_container(view: view), const ServerPage(session: 1)),
+      );
+      await tester.pumpAndSettle();
+      // Regression: Expanded reserved half the header for even a short name.
+      final name = tester.getRect(
+        find.descendant(
+          of: find.byType(ChatPanel),
+          matching: find.text('Default Channel'),
+        ),
+      );
+      final topic = tester.getRect(find.text('Channel topic'));
+      expect(topic.left - name.right, lessThan(40));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('online count stays at the right edge with or without a topic', (tester) async {
+  testWidgets('online count stays at the right edge with or without a topic', (
+    tester,
+  ) async {
     final view = _view();
     for (final topic in [null, 'Channel topic']) {
       view.channels[1] = Channel(id: 1, name: 'Lobby', topic: topic);
-      await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
+      await tester.pumpWidget(
+        _app(_container(view: view), const ServerPage(session: 1)),
+      );
       await tester.pumpAndSettle();
       final panel = tester.getRect(find.byType(ChatPanel));
       final count = tester.getRect(find.text('4 人在线'));
@@ -682,7 +841,9 @@ void main() {
   testWidgets('the settings page', (tester) async {
     // Built as the home route rather than pushed: the page is whole without a
     // Navigator behind it, which is also what the other pages' tests do.
-    await tester.pumpWidget(_app(_container(view: _view()), const SettingsPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const SettingsPage(session: 1)),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -690,10 +851,16 @@ void main() {
   testWidgets('the navigation column switches sections', (tester) async {
     // The point of the left-right layout: six sections that used to be one
     // scroller are now one at a time, and the navigation is what chooses.
-    await tester.pumpWidget(_app(_container(view: _view()), const SettingsPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const SettingsPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('麦克风增益'), findsOneWidget, reason: 'audio is the section it opens on');
+    expect(
+      find.text('麦克风增益'),
+      findsOneWidget,
+      reason: 'audio is the section it opens on',
+    );
 
     // The label, not the widget: the user picks a section by the word on it.
     await tester.tap(find.text('通知'));
@@ -715,7 +882,10 @@ void main() {
     await tester.pumpWidget(
       _app(
         _container(view: _view(), notices: true),
-        const Stack(fit: StackFit.expand, children: [ServerPage(session: 1), NoticeStack()]),
+        const Stack(
+          fit: StackFit.expand,
+          children: [ServerPage(session: 1), NoticeStack()],
+        ),
       ),
     );
     // `pump`, not `pumpAndSettle`: a notice dismisses itself on a four-second
@@ -747,7 +917,10 @@ void main() {
 
     // Backing out leaves everything where it was.
     await tester.tap(
-      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextButton)),
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextButton),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -766,7 +939,10 @@ void main() {
     await tester.tap(find.byIcon(Icons.logout));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)),
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(FilledButton),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -795,7 +971,9 @@ void main() {
     expect(transport.calls, contains('away:yes:'));
   });
 
-  testWidgets('an away client shows the filled glyph and comes back on a tap', (tester) async {
+  testWidgets('an away client shows the filled glyph and comes back on a tap', (
+    tester,
+  ) async {
     final transport = _SilentTransport();
     final view = _view();
     // Ourselves, away: the same event path a `notifyclientupdated` takes.
@@ -823,9 +1001,19 @@ void main() {
     // Scoped to the bar: the member list draws the same glyph for the away
     // client it is already showing, and an unqualified finder matches both.
     final bar = find.byType(VoiceBar);
-    final filled = find.descendant(of: bar, matching: find.byIcon(Icons.snooze));
-    expect(filled, findsOneWidget, reason: 'away should not look the same as here');
-    expect(find.descendant(of: bar, matching: find.byIcon(Icons.snooze_outlined)), findsNothing);
+    final filled = find.descendant(
+      of: bar,
+      matching: find.byIcon(Icons.snooze),
+    );
+    expect(
+      filled,
+      findsOneWidget,
+      reason: 'away should not look the same as here',
+    );
+    expect(
+      find.descendant(of: bar, matching: find.byIcon(Icons.snooze_outlined)),
+      findsNothing,
+    );
 
     await tester.tap(filled);
     await tester.pumpAndSettle();
@@ -833,49 +1021,66 @@ void main() {
     expect(transport.calls, contains('away:no:'));
   });
 
-  testWidgets('right-clicking the away button asks for a message and remembers it', (tester) async {
-    // The one gesture that is not discoverable by looking, so it gets a test:
-    // what it must do is prefill the remembered message, go away saying the new
-    // one, and write it down.
-    final transport = _SilentTransport();
-    final container = _container(
-      view: _view(),
-      settings: const Settings(presence: PresenceSettings(awayMessage: '在开会')),
-      transport: transport,
-    );
+  testWidgets(
+    'right-clicking the away button asks for a message and remembers it',
+    (tester) async {
+      // The one gesture that is not discoverable by looking, so it gets a test:
+      // what it must do is prefill the remembered message, go away saying the new
+      // one, and write it down.
+      final transport = _SilentTransport();
+      final container = _container(
+        view: _view(),
+        settings: const Settings(
+          presence: PresenceSettings(awayMessage: '在开会'),
+        ),
+        transport: transport,
+      );
 
-    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.snooze_outlined), buttons: kSecondaryButton);
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byIcon(Icons.snooze_outlined),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsOneWidget);
-    // Scoped to the dialog: the page behind it has text fields of its own
-    // (the chat composer), and an unqualified finder matches those too.
-    final field = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
-    expect(
-      tester.widget<TextField>(field).controller?.text,
-      '在开会',
-      reason: 'the field should start from the remembered message',
-    );
+      expect(find.byType(AlertDialog), findsOneWidget);
+      // Scoped to the dialog: the page behind it has text fields of its own
+      // (the chat composer), and an unqualified finder matches those too.
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      expect(
+        tester.widget<TextField>(field).controller?.text,
+        '在开会',
+        reason: 'the field should start from the remembered message',
+      );
 
-    await tester.enterText(field, '午饭时间');
-    await tester.tap(
-      find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)),
-    );
-    await tester.pumpAndSettle();
+      await tester.enterText(field, '午饭时间');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(transport.calls, contains('away:yes:午饭时间'));
-    expect(container.read(settingsProvider)?.presence.awayMessage, '午饭时间');
-  });
+      expect(transport.calls, contains('away:yes:午饭时间'));
+      expect(container.read(settingsProvider)?.presence.awayMessage, '午饭时间');
+    },
+  );
 
   testWidgets('the away button does nothing without a session', (tester) async {
     // Same rule as the mute buttons: a control with nothing behind it must not
     // queue a command the core would refuse, and the tap must not look like it
     // worked.
     final transport = _SilentTransport();
-    final container = _container(view: ServerView(session: 1), transport: transport);
+    final container = _container(
+      view: ServerView(session: 1),
+      transport: transport,
+    );
 
     await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
     await tester.pumpAndSettle();
@@ -884,7 +1089,10 @@ void main() {
     // command either way, so an enabled button that silently did nothing would
     // pass a calls-only check while looking perfectly clickable.
     final button = tester.widget<IconButton>(
-      find.ancestor(of: find.byIcon(Icons.snooze_outlined), matching: find.byType(IconButton)),
+      find.ancestor(
+        of: find.byIcon(Icons.snooze_outlined),
+        matching: find.byType(IconButton),
+      ),
     );
     expect(button.onPressed, isNull);
 
@@ -894,7 +1102,9 @@ void main() {
     expect(transport.calls, isEmpty);
   });
 
-  testWidgets('a long press opens the same dialog, for fingers', (tester) async {
+  testWidgets('a long press opens the same dialog, for fingers', (
+    tester,
+  ) async {
     // The same door as the right-click, because a touch screen has no second
     // button — and because an `IconButton` inside a `GestureDetector` is
     // exactly the case where a gesture can be swallowed by the wrong
@@ -910,40 +1120,49 @@ void main() {
     expect(find.byType(AlertDialog), findsOneWidget);
   });
 
-  testWidgets('resting on the microphone shows the gain, and moving away hides it', (tester) async {
-    // The first hover test in this file, and the reason the flyout is worth
-    // one: an `OverlayPortal` panel is invisible to every other kind of test —
-    // it is not in the page's subtree, and only a pointer that really moves
-    // will open it.
-    final container = _container(view: _view());
+  testWidgets(
+    'resting on the microphone shows the gain, and moving away hides it',
+    (tester) async {
+      // The first hover test in this file, and the reason the flyout is worth
+      // one: an `OverlayPortal` panel is invisible to every other kind of test —
+      // it is not in the page's subtree, and only a pointer that really moves
+      // will open it.
+      final container = _container(view: _view());
 
-    await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
+      await tester.pumpAndSettle();
 
-    // The panel holds a reading and a slider and no words of its own — the
-    // button above it is what says what it adjusts — so the reading is what
-    // this looks for.
-    expect(find.text('0 dB'), findsNothing);
+      // The panel holds a reading and a slider and no words of its own — the
+      // button above it is what says what it adjusts — so the reading is what
+      // this looks for.
+      expect(find.text('0 dB'), findsNothing);
 
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.addPointer(location: Offset.zero);
-    addTearDown(mouse.removePointer);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
 
-    await mouse.moveTo(tester.getCenter(find.byIcon(Icons.mic)));
-    await tester.pumpAndSettle();
+      await mouse.moveTo(tester.getCenter(find.byIcon(Icons.mic)));
+      await tester.pumpAndSettle();
 
-    expect(find.text('0 dB'), findsOneWidget, reason: 'unity until it is moved');
+      expect(
+        find.text('0 dB'),
+        findsOneWidget,
+        reason: 'unity until it is moved',
+      );
 
-    // Leaving closes it — after the grace period that lets the pointer cross
-    // from the button into the panel.
-    await mouse.moveTo(const Offset(60, 400));
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle();
+      // Leaving closes it — after the grace period that lets the pointer cross
+      // from the button into the panel.
+      await mouse.moveTo(const Offset(60, 400));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
 
-    expect(find.text('0 dB'), findsNothing);
-  });
+      expect(find.text('0 dB'), findsNothing);
+    },
+  );
 
-  testWidgets('dragging the flyout writes the gain the settings keep', (tester) async {
+  testWidgets('dragging the flyout writes the gain the settings keep', (
+    tester,
+  ) async {
     final transport = _SilentTransport();
     final container = _container(view: _view(), transport: transport);
 
@@ -968,7 +1187,11 @@ void main() {
 
     final written = container.read(settingsProvider)!.audio.inputGainDb;
     expect(written, lessThan(0.0), reason: 'dragging down should attenuate');
-    expect(written, greaterThan(gainMinAudibleDb), reason: 'and not jump to silence');
+    expect(
+      written,
+      greaterThan(gainMinAudibleDb),
+      reason: 'and not jump to silence',
+    );
 
     // All the way down really is silence — the reason the curve spends its
     // travel on the audible range instead of on the whole decibel range.
@@ -978,7 +1201,10 @@ void main() {
     expect(container.read(settingsProvider)!.audio.inputGainDb, gainSilenceDb);
 
     // What the core is told is the same value the UI now shows.
-    expect(transport.calls.where((call) => call.startsWith('updateSettings')), isNotEmpty);
+    expect(
+      transport.calls.where((call) => call.startsWith('updateSettings')),
+      isNotEmpty,
+    );
   });
 
   testWidgets('the settings page carries the same slider', (tester) async {
@@ -997,10 +1223,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('麦克风增益'), findsOneWidget);
-    expect(find.text('+6 dB'), findsOneWidget, reason: 'the stored value is what is drawn');
+    expect(
+      find.text('+6 dB'),
+      findsOneWidget,
+      reason: 'the stored value is what is drawn',
+    );
 
     final slider = find.descendant(
-      of: find.ancestor(of: find.text('麦克风增益'), matching: find.byType(Column)).first,
+      of: find
+          .ancestor(of: find.text('麦克风增益'), matching: find.byType(Column))
+          .first,
       matching: find.byType(Slider),
     );
     // The dialog scrolls, and in the test's window this one starts below the
@@ -1042,7 +1274,9 @@ void main() {
     expect(find.text('远处的人 (吃饭去了)'), findsOneWidget);
   });
 
-  testWidgets('the name in the voice bar is lifted off its own line box', (tester) async {
+  testWidgets('the name in the voice bar is lifted off its own line box', (
+    tester,
+  ) async {
     // Regression, and the third attempt at it. Reported twice as "the name is
     // not centred" after two changes to its line height — neither of which was
     // the cause.
@@ -1058,12 +1292,17 @@ void main() {
     // the text ends up above the middle. That is what this checks, because it
     // is the part a widget test can see: the test font has no real glyph
     // metrics, so the size of the lift can only be measured on screen.
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
     // Scoped to the bar: the member list shows the same name.
     final name = tester.getRect(
-      find.descendant(of: find.byType(VoiceBar), matching: find.text('TsukinoAyaka')),
+      find.descendant(
+        of: find.byType(VoiceBar),
+        matching: find.text('TsukinoAyaka'),
+      ),
     );
     final bar = tester.getRect(find.byType(VoiceBar));
     expect(
@@ -1073,7 +1312,9 @@ void main() {
     );
   });
 
-  testWidgets('a saved server fills the form on one click, connects on two', (tester) async {
+  testWidgets('a saved server fills the form on one click, connects on two', (
+    tester,
+  ) async {
     // The connect page's row has both gestures: one click fills the form, so
     // the details can still be changed; two connect straight away, for someone
     // who already knows which server they want.
@@ -1118,7 +1359,10 @@ void main() {
     // apart — including a click, a minute of typing, and another click.
     final transport = _SilentTransport();
     await tester.pumpWidget(
-      _app(_container(bookmarks: true, transport: transport), const ConnectPage()),
+      _app(
+        _container(bookmarks: true, transport: transport),
+        const ConnectPage(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -1146,14 +1390,18 @@ void main() {
     await tester.pumpWidget(_app(container, const AppShell()));
     await tester.pumpAndSettle();
 
-    container.read(lastErrorProvider.notifier).report(const ClientError(kind: 'timeout'));
+    container
+        .read(lastErrorProvider.notifier)
+        .report(const ClientError(kind: 'timeout'));
     await tester.pumpAndSettle();
 
     // The `SnackBar` widget itself is stretched over the Scaffold's whole
     // bottom slot, so its rect is not the bar anyone sees. The content row is:
     // the bar's padding is zero and the row fills it.
     final content = tester.getRect(
-      find.descendant(of: find.byType(SnackBar), matching: find.byType(Row)).first,
+      find
+          .descendant(of: find.byType(SnackBar), matching: find.byType(Row))
+          .first,
     );
 
     // Both buttons and the close glyph, against the bar's own centre line.
@@ -1166,7 +1414,9 @@ void main() {
     }
   });
 
-  testWidgets('the permissions panel claims only what the server answered', (tester) async {
+  testWidgets('the permissions panel claims only what the server answered', (
+    tester,
+  ) async {
     // Regression: every bit reads as allowed when the server sends no permission
     // hints — which is right for deciding whether to grey out a button and wrong
     // for telling the user what they may do. On a server that reports nothing,
@@ -1175,15 +1425,24 @@ void main() {
     view.apply(
       const PermissionsChangedEvent(
         // The fixture's own permissions: granted, but nobody confirmed them.
-        Permissions(canJoinChannel: true, canSendChannelMessage: true, canSendPrivateMessage: true),
+        Permissions(
+          canJoinChannel: true,
+          canSendChannelMessage: true,
+          canSendPrivateMessage: true,
+        ),
       ),
     );
 
-    await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: view), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.descendant(of: find.byType(ChannelSidebar), matching: find.text('Nightcord 测试服')),
+      find.descendant(
+        of: find.byType(ChannelSidebar),
+        matching: find.text('Nightcord 测试服'),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('我的权限'));
@@ -1195,11 +1454,17 @@ void main() {
       reason: 'the server said nothing, so the panel says so',
     );
     for (final label in ['加入频道', '发频道消息', '发私聊消息', '移出成员', '封禁']) {
-      expect(find.text(label), findsNothing, reason: '(label) was never confirmed');
+      expect(
+        find.text(label),
+        findsNothing,
+        reason: '(label) was never confirmed',
+      );
     }
   });
 
-  testWidgets('the permissions panel lists the granted and known ones', (tester) async {
+  testWidgets('the permissions panel lists the granted and known ones', (
+    tester,
+  ) async {
     final view = _view();
     view.apply(
       const PermissionsChangedEvent(
@@ -1213,11 +1478,16 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(_app(_container(view: view), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: view), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.descendant(of: find.byType(ChannelSidebar), matching: find.text('Nightcord 测试服')),
+      find.descendant(
+        of: find.byType(ChannelSidebar),
+        matching: find.text('Nightcord 测试服'),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('我的权限'));
@@ -1245,7 +1515,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.descendant(of: find.byType(ChannelSidebar), matching: find.text('Nightcord 测试服')),
+      find.descendant(
+        of: find.byType(ChannelSidebar),
+        matching: find.text('Nightcord 测试服'),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('收藏服务器'));
@@ -1257,20 +1530,29 @@ void main() {
     expect(transport.calls, contains('addBookmark:192.168.31.128:9987'));
   });
 
-  testWidgets('a server already saved offers to be unsaved instead', (tester) async {
+  testWidgets('a server already saved offers to be unsaved instead', (
+    tester,
+  ) async {
     // The same row, decided by whether the address is in the book — the entry
     // is the address, so that is what the match is on.
     //
     // The fixture's address book already holds 192.168.31.128:9987, which is
     // the server the fixture is connected to.
     final transport = _SilentTransport();
-    final container = _container(view: _view(), bookmarks: true, transport: transport);
+    final container = _container(
+      view: _view(),
+      bookmarks: true,
+      transport: transport,
+    );
 
     await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.descendant(of: find.byType(ChannelSidebar), matching: find.text('Nightcord 测试服')),
+      find.descendant(
+        of: find.byType(ChannelSidebar),
+        matching: find.text('Nightcord 测试服'),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -1281,7 +1563,9 @@ void main() {
     expect(transport.calls, contains('updateBookmarks:0'));
   });
 
-  testWidgets('add server reaches the connect screen with a session running', (tester) async {
+  testWidgets('add server reaches the connect screen with a session running', (
+    tester,
+  ) async {
     // Regression, and it was invisible from the outside: "add server" cleared
     // the selection and left the connection alone, exactly as intended — and
     // then the shell's own fallback put the session straight back, so the
@@ -1300,7 +1584,10 @@ void main() {
 
     // Open the switcher from the server header: its title is the sheet's handle.
     await tester.tap(
-      find.descendant(of: find.byType(ChannelSidebar), matching: find.text('Nightcord 测试服')),
+      find.descendant(
+        of: find.byType(ChannelSidebar),
+        matching: find.text('Nightcord 测试服'),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加服务器'));
@@ -1317,10 +1604,15 @@ void main() {
   testWidgets('a private conversation opens on a double click', (tester) async {
     // One click must not: opening a conversation is visible to the other
     // person, and it is the same gesture a channel row uses.
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
-    final row = find.descendant(of: find.byType(ChannelSidebar), matching: find.text('同事二号'));
+    final row = find.descendant(
+      of: find.byType(ChannelSidebar),
+      matching: find.text('同事二号'),
+    );
 
     await tester.tap(row);
     await tester.pump(const Duration(milliseconds: 400));
@@ -1372,17 +1664,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the member menu offers only what the server allows', (tester) async {
+  testWidgets('the member menu offers only what the server allows', (
+    tester,
+  ) async {
     // The fixture's permissions grant joining and messaging and nothing else,
     // which is what an ordinary user on a server looks like. Moderation items
     // must be present but dead, not missing: a missing item reads as "this
     // client cannot do that" rather than "you may not".
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tapAt(
       tester.getCenter(
-        find.descendant(of: find.byType(ChannelSidebar), matching: find.text('同事二号')),
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('同事二号'),
+        ),
       ),
       buttons: kSecondaryMouseButton,
     );
@@ -1392,11 +1691,17 @@ void main() {
     expect(find.text('封禁…'), findsOneWidget);
 
     for (final label in ['移出频道', '移出服务器', '移动到频道…', '封禁…']) {
-      expect(_menuItemEnabled(tester, label), isFalse, reason: '(label) should be greyed out');
+      expect(
+        _menuItemEnabled(tester, label),
+        isFalse,
+        reason: '(label) should be greyed out',
+      );
     }
   });
 
-  testWidgets('a permitted kick sends the scope that was chosen', (tester) async {
+  testWidgets('a permitted kick sends the scope that was chosen', (
+    tester,
+  ) async {
     // The two kick items differ only by the scope they carry, so a menu that
     // wired both to the same value would look right and behave wrongly.
     final transport = _SilentTransport();
@@ -1413,13 +1718,19 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _app(_container(view: view, transport: transport), const ServerPage(session: 1)),
+      _app(
+        _container(view: view, transport: transport),
+        const ServerPage(session: 1),
+      ),
     );
     await tester.pumpAndSettle();
 
     await tester.tapAt(
       tester.getCenter(
-        find.descendant(of: find.byType(ChannelSidebar), matching: find.text('同事二号')),
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('同事二号'),
+        ),
       ),
       buttons: kSecondaryMouseButton,
     );
@@ -1437,12 +1748,17 @@ void main() {
   testWidgets('the menu offers nothing to do to yourself', (tester) async {
     // Kicking yourself is not a moderation action, it is a way to lose a
     // connection by accident.
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tapAt(
       tester.getCenter(
-        find.descendant(of: find.byType(ChannelSidebar), matching: find.text('TsukinoAyaka')),
+        find.descendant(
+          of: find.byType(ChannelSidebar),
+          matching: find.text('TsukinoAyaka'),
+        ),
       ),
       buttons: kSecondaryMouseButton,
     );
@@ -1473,7 +1789,9 @@ void main() {
     expect(find.byType(AppLogo), findsOneWidget);
     expect(find.byIcon(Icons.bubble_chart), findsNothing);
 
-    await tester.pumpWidget(_app(_container(view: _view()), const ServerPage(session: 1)));
+    await tester.pumpWidget(
+      _app(_container(view: _view()), const ServerPage(session: 1)),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(AppLogo), findsOneWidget);
     expect(find.byIcon(Icons.bubble_chart), findsNothing);
@@ -1485,9 +1803,15 @@ void main() {
     // judging it means looking at it, which is what `scripts/make-app-icon.py`
     // exists to make possible.
     for (final size in [16.0, 24.0, 32.0, 256.0]) {
-      await tester.pumpWidget(_app(_container(), Center(child: AppLogo(size: size))));
+      await tester.pumpWidget(
+        _app(_container(), Center(child: AppLogo(size: size))),
+      );
       await tester.pump();
-      expect(tester.takeException(), isNull, reason: 'failed to draw at ${size}px');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'failed to draw at ${size}px',
+      );
     }
   });
 
@@ -1499,7 +1823,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the sharing entry follows the capability, not the server', (tester) async {
+  testWidgets('the sharing entry follows the capability, not the server', (
+    tester,
+  ) async {
     // TS3 has no stream command family, so the control must not be there at
     // all: a button that can never work is a promise the server never made.
     tester.view.physicalSize = const Size(1200, 800);
@@ -1527,13 +1853,18 @@ void main() {
     // It lives in the voice bar — beside the away button and the microphone,
     // not in a band of its own above the conversation.
     expect(
-      find.descendant(of: find.byType(VoiceBar), matching: find.byTooltip('共享屏幕')),
+      find.descendant(
+        of: find.byType(VoiceBar),
+        matching: find.byTooltip('共享屏幕'),
+      ),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('sharing runs from the bar to the server and back', (tester) async {
+  testWidgets('sharing runs from the bar to the server and back', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1542,7 +1873,11 @@ void main() {
     final backend = _FakeScreenBackend();
     await tester.pumpWidget(
       _app(
-        _container(view: _view(screen: true), transport: transport, screen: backend),
+        _container(
+          view: _view(screen: true),
+          transport: transport,
+          screen: backend,
+        ),
         const ServerPage(session: 1),
       ),
     );
@@ -1584,7 +1919,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a share is entered from the row of the person doing it', (tester) async {
+  testWidgets('a share is entered from the row of the person doing it', (
+    tester,
+  ) async {
     // The badge is built from the server's streaming flag rather than from a
     // local guess: a member who is not marked as sharing must offer nothing.
     tester.view.physicalSize = const Size(1200, 800);
@@ -1595,7 +1932,11 @@ void main() {
     final backend = _FakeScreenBackend();
     await tester.pumpWidget(
       _app(
-        _container(view: _view(screen: true), transport: transport, screen: backend),
+        _container(
+          view: _view(screen: true),
+          transport: transport,
+          screen: backend,
+        ),
         const ServerPage(session: 1),
       ),
     );
@@ -1664,7 +2005,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the window follows the pointer, and only while it is grabbed', (tester) async {
+  testWidgets('the window follows the pointer, and only while it is grabbed', (
+    tester,
+  ) async {
     // Two things went wrong here at once and both look like "it will not drag":
     // the strip only answered where its children happened to be, and the
     // position was rebuilt from a value captured before the previous move.
@@ -1683,7 +2026,9 @@ void main() {
     await startThroughSetup(tester);
     expect(find.byType(ScreenPip), findsOneWidget);
 
-    final window = find.descendant(of: find.byType(ScreenPip), matching: find.byType(Material)).first;
+    final window = find
+        .descendant(of: find.byType(ScreenPip), matching: find.byType(Material))
+        .first;
     final before = tester.getTopLeft(window);
 
     // A press on the strip's own padding — the place with no child under it —
@@ -1691,7 +2036,9 @@ void main() {
     // of this test drove a touch and passed while the app did not.
     final strip = find.descendant(
       of: find.byType(ScreenPip),
-      matching: find.byWidgetPredicate((w) => w is Listener && w.onPointerMove != null),
+      matching: find.byWidgetPredicate(
+        (w) => w is Listener && w.onPointerMove != null,
+      ),
     );
     final start = tester.getTopLeft(strip) + const Offset(6, 4);
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -1723,12 +2070,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a window with no room to be kept in still moves', (tester) async {
+  testWidgets('a window with no room to be kept in still moves', (
+    tester,
+  ) async {
     // The area can be smaller than the window — a narrow pane, or a layout
     // pass that has not produced a real size yet. Clamping against "no room"
     // pins the window at zero, which is indistinguishable from a broken drag:
     // an area with nothing to hold it in is not an instruction to stand still.
-    final container = _container(view: _view(screen: true), screen: _FakeScreenBackend());
+    final container = _container(
+      view: _view(screen: true),
+      screen: _FakeScreenBackend(),
+    );
     final controller = container.read(screenControllerProvider(1));
     await controller.start(null, 'Share', screenOptions());
     const area = Size(200, 150);
@@ -1744,7 +2096,10 @@ void main() {
               fit: StackFit.expand,
               children: [
                 const ColoredBox(color: Colors.black),
-                ScreenPip(view: container.read(sessionsProvider)[1]!, bounds: area),
+                ScreenPip(
+                  view: container.read(sessionsProvider)[1]!,
+                  bounds: area,
+                ),
               ],
             ),
           ),
@@ -1754,11 +2109,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('全屏'), findsOneWidget);
 
-    final window = find.descendant(of: find.byType(ScreenPip), matching: find.byType(Material)).first;
+    final window = find
+        .descendant(of: find.byType(ScreenPip), matching: find.byType(Material))
+        .first;
     final before = tester.getTopLeft(window);
     final strip = find.descendant(
       of: find.byType(ScreenPip),
-      matching: find.byWidgetPredicate((w) => w is Listener && w.onPointerMove != null),
+      matching: find.byWidgetPredicate(
+        (w) => w is Listener && w.onPointerMove != null,
+      ),
     );
     final start = tester.getTopLeft(strip) + const Offset(6, 4);
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -1775,8 +2134,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-
-  testWidgets('a private share asks the publisher before anyone is admitted', (tester) async {
+  testWidgets('a private share asks the publisher before anyone is admitted', (
+    tester,
+  ) async {
     // The server stores the privacy setting and forwards every request anyway,
     // so the client is the only gate there is — a private share that admitted
     // on arrival was open to the whole channel.
@@ -1836,8 +2196,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-
-  testWidgets('a stale failed screen command leaves a running share alone', (tester) async {
+  testWidgets('a stale failed screen command leaves a running share alone', (
+    tester,
+  ) async {
     // The 2026-10-08 logs show a leave timing out and killing the share that
     // had been started three seconds earlier: the server drops commands it
     // cannot action without a word, and the deadline turned that silence into
@@ -1882,7 +2243,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('a failed screen command while still connecting is fatal', (tester) async {
+  testWidgets('a failed screen command while still connecting is fatal', (
+    tester,
+  ) async {
     // While nothing is established yet the user is staring at "connecting",
     // so the error is worth showing now rather than at the timer.
     final transport = _SilentTransport();
@@ -1915,8 +2278,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-
-  testWidgets('the wizard carries what was chosen into the share', (tester) async {
+  testWidgets('the wizard carries what was chosen into the share', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1933,7 +2297,11 @@ void main() {
     // capture and not the switch — a fake without a track would carry
     // `audio: false` and the assertion below would be about the wrong thing.
     backend.media.hasAudio = true;
-    final container = _container(view: _view(screen: true), transport: transport, screen: backend);
+    final container = _container(
+      view: _view(screen: true),
+      transport: transport,
+      screen: backend,
+    );
     await tester.pumpWidget(_app(container, const ServerPage(session: 1)));
     await tester.pumpAndSettle();
 
@@ -1980,7 +2348,8 @@ void main() {
     expect(
       transport.calls.any((call) => call.startsWith('updateSettings')),
       isTrue,
-      reason: 'the file is what remembers it, and the file is written through here',
+      reason:
+          'the file is what remembers it, and the file is written through here',
     );
 
     // Stopping takes the start timeout with it.
@@ -1989,13 +2358,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('restoring the shortcuts asks the core rather than guessing', (tester) async {
+  testWidgets('restoring the shortcuts asks the core rather than guessing', (
+    tester,
+  ) async {
     // The defaults differ by platform — Command on macOS, Control everywhere
     // else — and only `ts-settings` knows which. A page that filled them in
     // itself would be right on one platform and wrong on the other, silently.
     final transport = _SilentTransport();
     await tester.pumpWidget(
-      _app(_container(view: _view(), transport: transport), const SettingsPage(session: 1)),
+      _app(
+        _container(view: _view(), transport: transport),
+        const SettingsPage(session: 1),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('快捷键'));
@@ -2033,7 +2407,11 @@ void main() {
         const SettingsPage(session: 1),
       ]) {
         await tester.pumpWidget(
-          _app(_container(view: _view(), notices: true), home, palette: palette),
+          _app(
+            _container(view: _view(), notices: true),
+            home,
+            palette: palette,
+          ),
         );
         await tester.pump();
         expect(

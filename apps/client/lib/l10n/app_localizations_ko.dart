@@ -930,4 +930,39 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get settingsShortcutsReset => '기본값으로 복원';
+
+  @override
+  String get avatarUpload => '아바타 업로드';
+
+  @override
+  String get avatarRemove => '아바타 삭제';
+
+  @override
+  String get avatarTitle => '내 아바타';
+
+  @override
+  String get avatarEdit => '아바타 편집';
+
+  @override
+  String get avatarEditHint => '이미지를 드래그하여 위치를 조정하고 확대하여 자르세요.';
+
+  @override
+  String get avatarZoom => '확대';
+
+  @override
+  String get avatarRotate => '회전';
+
+  @override
+  String get avatarReset => '초기화';
+
+  @override
+  String get avatarInvalidImage =>
+      '이미지를 읽을 수 없습니다. 10 MB 이하의 PNG, JPEG 또는 WebP 이미지를 선택하세요.';
+
+  @override
+  String get avatarOriginalMissing =>
+      '원본 이미지가 저장되어 있지 않습니다. 다시 편집하려면 원본 이미지를 선택하세요.';
+
+  @override
+  String get profileTitle => '내 프로필';
 }

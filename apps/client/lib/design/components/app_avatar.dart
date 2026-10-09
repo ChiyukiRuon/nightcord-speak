@@ -1,7 +1,7 @@
 // A user's avatar.
 //
-// TeamSpeak has no avatar service for a plain client, so this is a generated
-// mark: a colour derived from the name, and its first character. Deriving the
+// Images arrive from the client avatar capability; absent or broken images
+// fall back to a generated mark: a colour derived from the name, and its first character. Deriving the
 // colour from the name means the same person keeps the same colour across
 // sessions and machines, which is the only thing that makes it useful.
 //
@@ -18,6 +18,7 @@
 // generated identity mark is not chrome.
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -32,11 +33,14 @@ class Avatar extends StatelessWidget {
     this.size = 28,
     this.dimmed = false,
     this.speaking = false,
+    this.image,
     super.key,
   });
 
   /// Side arcs distinguish speech from the avatar's persistent presence.
   final bool speaking;
+
+  final Uint8List? image;
 
   /// The display name the mark is derived from.
   final String name;
@@ -65,7 +69,12 @@ class Avatar extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             HSLColor.fromAHSL(1, hue, 0.45, dimmed ? 0.32 : 0.55).toColor(),
-            HSLColor.fromAHSL(1, (hue + 40) % 360, 0.45, dimmed ? 0.26 : 0.42).toColor(),
+            HSLColor.fromAHSL(
+              1,
+              (hue + 40) % 360,
+              0.45,
+              dimmed ? 0.26 : 0.42,
+            ).toColor(),
           ],
         ),
       ),
@@ -83,7 +92,19 @@ class Avatar extends StatelessWidget {
     );
     return CustomPaint(
       foregroundPainter: speaking ? SpeakingArcsPainter(tokens.online) : null,
-      child: avatar,
+      child: image == null
+          ? avatar
+          : ClipOval(
+              child: Image.memory(
+                image!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                cacheWidth: (size * MediaQuery.devicePixelRatioOf(context))
+                    .ceil(),
+                errorBuilder: (_, error, stack) => avatar,
+              ),
+            ),
     );
   }
 
@@ -119,5 +140,6 @@ class SpeakingArcsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(SpeakingArcsPainter oldDelegate) => color != oldDelegate.color;
+  bool shouldRepaint(SpeakingArcsPainter oldDelegate) =>
+      color != oldDelegate.color;
 }

@@ -301,6 +301,16 @@
   "screenRequestSomeone": "某人",
   "screenRequestAllow": "允许",
   "screenRequestDeny": "拒绝",
-  "settingsShortcutsReset": "恢复默认"
-  
+  "settingsShortcutsReset": "恢复默认",
+  "avatarUpload": "上传头像",
+  "avatarRemove": "移除头像",
+  "avatarTitle": "我的头像",
+  "avatarEdit": "编辑头像",
+  "avatarEditHint": "拖动图片调整位置，缩放后裁剪为头像。",
+  "avatarZoom": "缩放",
+  "avatarRotate": "旋转",
+  "avatarReset": "重置",
+  "avatarInvalidImage": "无法读取图片，请选择不超过 10 MB 的 PNG、JPEG 或 WebP 图片。",
+  "avatarOriginalMissing": "此头像未保存原图，编辑时请重新选择原图。",
+  "profileTitle": "个人资料"
 }

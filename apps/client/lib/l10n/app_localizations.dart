@@ -1782,6 +1782,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restore default'**
   String get settingsShortcutsReset;
+
+  /// No description provided for @avatarUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload avatar'**
+  String get avatarUpload;
+
+  /// No description provided for @avatarRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove avatar'**
+  String get avatarRemove;
+
+  /// No description provided for @avatarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My avatar'**
+  String get avatarTitle;
+
+  /// No description provided for @avatarEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit avatar'**
+  String get avatarEdit;
+
+  /// No description provided for @avatarEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reposition the image and zoom to crop your avatar.'**
+  String get avatarEditHint;
+
+  /// No description provided for @avatarZoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom'**
+  String get avatarZoom;
+
+  /// No description provided for @avatarRotate.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get avatarRotate;
+
+  /// No description provided for @avatarReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get avatarReset;
+
+  /// No description provided for @avatarInvalidImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the image. Choose a PNG, JPEG or WebP image up to 10 MB.'**
+  String get avatarInvalidImage;
+
+  /// No description provided for @avatarOriginalMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This avatar has no saved original. Select the original image to edit it again.'**
+  String get avatarOriginalMissing;
+
+  /// No description provided for @profileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My profile'**
+  String get profileTitle;
 }
 
 class _AppLocalizationsDelegate

@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+
 import '../models/shortcuts.dart';
 
 import '../core/transport/client_transport.dart';
@@ -157,7 +158,10 @@ class RustClient implements ClientTransport {
   void sendMessage(int session, MessageTarget target, String text) {
     _withJson(
       target.toJson(),
-      (json) => _withText(text, (body) => _bindings.sendMessage(_handle, session, json, body)),
+      (json) => _withText(
+        text,
+        (body) => _bindings.sendMessage(_handle, session, json, body),
+      ),
     );
   }
 
@@ -179,23 +183,25 @@ class RustClient implements ClientTransport {
   /// means "none": the core reads a zero-length string as absent, which is the
   /// same thing the ABI cannot say with a null pointer without another helper.
   @override
-  void kick(int session, int clientId, KickScope scope, String? message) => _withText(
-    jsonEncode(scope.wire),
-    (json) => _withText(
-      message ?? '',
-      (text) => _bindings.kick(_handle, session, clientId, json, text),
-    ),
-  );
+  void kick(int session, int clientId, KickScope scope, String? message) =>
+      _withText(
+        jsonEncode(scope.wire),
+        (json) => _withText(
+          message ?? '',
+          (text) => _bindings.kick(_handle, session, clientId, json, text),
+        ),
+      );
 
   /// Bans another client. See [kick] for the empty-string convention.
   @override
-  void ban(int session, int clientId, BanDuration duration, String? reason) => _withText(
-    jsonEncode(duration.encoded),
-    (json) => _withText(
-      reason ?? '',
-      (text) => _bindings.ban(_handle, session, clientId, json, text),
-    ),
-  );
+  void ban(int session, int clientId, BanDuration duration, String? reason) =>
+      _withText(
+        jsonEncode(duration.encoded),
+        (json) => _withText(
+          reason ?? '',
+          (text) => _bindings.ban(_handle, session, clientId, json, text),
+        ),
+      );
 
   /// Runs one screen-sharing control command.
   ///
@@ -203,8 +209,10 @@ class RustClient implements ClientTransport {
   /// signalling. The picture never crosses this boundary, so the map is small
   /// even while a share is running.
   @override
-  void screen(int session, Map<String, dynamic> command) =>
-      _withText(jsonEncode(command), (text) => _bindings.screen(_handle, session, text));
+  void screen(int session, Map<String, dynamic> command) => _withText(
+    jsonEncode(command),
+    (text) => _bindings.screen(_handle, session, text),
+  );
 
   /// Marks us away, or back at the keyboard.
   ///
@@ -212,6 +220,32 @@ class RustClient implements ClientTransport {
   /// false. An empty message is still an away message — "away, nothing to say"
   /// is a state of its own on the server — which is why [away] is an argument
   /// of its own rather than "no message means here".
+  @override
+  void getAvatar(int session, int clientId) =>
+      _bindings.getAvatar(_handle, session, clientId);
+
+  @override
+  void setNickname(int session, String nickname) => _withText(
+    nickname,
+    (text) => _bindings.setNickname(_handle, session, text),
+  );
+
+  @override
+  void setAvatar(int session, String? image, {Map<String, dynamic>? edit}) {
+    if (edit != null) {
+      _withText(
+        jsonEncode({'configured': true, 'image': image, 'edit': edit}),
+        (text) => _bindings.setAvatarEdit(_handle, session, text),
+      );
+      return;
+    }
+    if (image == null) {
+      _bindings.setAvatar(_handle, session, nullptr);
+    } else {
+      _withText(image, (text) => _bindings.setAvatar(_handle, session, text));
+    }
+  }
+
   @override
   void setAway(int session, {required bool away, String? message}) => _withText(
     message ?? '',
@@ -244,11 +278,13 @@ class RustClient implements ClientTransport {
 
   /// Mutes or unmutes the microphone.
   @override
-  void setInputMuted(bool muted) => _bindings.voiceSetInputMuted(_handle, muted);
+  void setInputMuted(bool muted) =>
+      _bindings.voiceSetInputMuted(_handle, muted);
 
   /// Mutes or unmutes the speakers.
   @override
-  void setOutputMuted(bool muted) => _bindings.voiceSetOutputMuted(_handle, muted);
+  void setOutputMuted(bool muted) =>
+      _bindings.voiceSetOutputMuted(_handle, muted);
 
   /// Push-to-talk key down or up (§30).
   @override
@@ -288,8 +324,10 @@ class RustClient implements ClientTransport {
   /// The whole object, not a patch: the caller has the current settings and
   /// edits them. The answer arrives as `settings_update`.
   @override
-  void updateSettings(Settings settings) =>
-      _withJson(settings.toJson(), (json) => _bindings.settingsUpdate(_handle, json));
+  void updateSettings(Settings settings) => _withJson(
+    settings.toJson(),
+    (json) => _bindings.settingsUpdate(_handle, json),
+  );
 
   /// Asks for the saved servers. The answer arrives as a `bookmarks`
   /// [CommandResult] whose `data` is the list.
@@ -302,8 +340,10 @@ class RustClient implements ClientTransport {
   /// comes back from [requestBookmarks] — is a credential. It goes no further
   /// than the core's file.
   @override
-  void updateBookmarks(BookmarkList bookmarks) =>
-      _withJson(bookmarks.toJson(), (json) => _bindings.bookmarksUpdate(_handle, json));
+  void updateBookmarks(BookmarkList bookmarks) => _withJson(
+    bookmarks.toJson(),
+    (json) => _bindings.bookmarksUpdate(_handle, json),
+  );
 
   /// Saves a server, from what the connect screen collected.
   ///
@@ -331,7 +371,8 @@ class RustClient implements ClientTransport {
   CrashStatus crashStatus() {
     final raw = _bindings.crashStatus();
     try {
-      final json = (jsonDecode(raw.toDartString()) as Map).cast<String, dynamic>();
+      final json = (jsonDecode(raw.toDartString()) as Map)
+          .cast<String, dynamic>();
       return CrashStatus.fromJson(json);
     } on Object catch (error) {
       // A library that cannot answer this is a library that has bigger
@@ -351,7 +392,8 @@ class RustClient implements ClientTransport {
   ({String? path, String? error}) buildCrashReport() {
     final raw = _bindings.crashReport();
     try {
-      final json = (jsonDecode(raw.toDartString()) as Map).cast<String, dynamic>();
+      final json = (jsonDecode(raw.toDartString()) as Map)
+          .cast<String, dynamic>();
       return (path: json['path'] as String?, error: json['error'] as String?);
     } on Object catch (error) {
       return (path: null, error: '$error');
@@ -379,7 +421,10 @@ class RustClient implements ClientTransport {
       if (text == '[]' || text.isEmpty) return const [];
       final decoded = jsonDecode(text) as List<dynamic>;
       return decoded
-          .map((entry) => FfiEvent.fromJson((entry as Map).cast<String, dynamic>()))
+          .map(
+            (entry) =>
+                FfiEvent.fromJson((entry as Map).cast<String, dynamic>()),
+          )
           .toList(growable: false);
     } on FormatException catch (error) {
       // The core produced something we cannot read, which is a bug in the core
@@ -392,7 +437,10 @@ class RustClient implements ClientTransport {
             session: null,
             outcome: CommandOutcome(
               ok: false,
-              error: ClientError(kind: 'unparsable', detail: {'message': '$error'}),
+              error: ClientError(
+                kind: 'unparsable',
+                detail: {'message': '$error'},
+              ),
             ),
           ),
         ),
@@ -432,7 +480,10 @@ class RustClient implements ClientTransport {
   }
 
   /// Passes a JSON string to `call` and frees it afterwards.
-  void _withJson(Map<String, dynamic> value, void Function(Pointer<Utf8>) call) {
+  void _withJson(
+    Map<String, dynamic> value,
+    void Function(Pointer<Utf8>) call,
+  ) {
     _withText(jsonEncode(value), call);
   }
 

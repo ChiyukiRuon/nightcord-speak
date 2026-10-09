@@ -30,6 +30,7 @@ extension ClientErrorText on ClientError {
 
     if (detail == null) {
       return switch (kind) {
+        'avatar_image' => l10n.avatarInvalidImage,
         'timeout' => l10n.errorTimeout,
         'command_failed' => l10n.errorCommandFailed,
         'join_denied' => l10n.errorJoinDenied,

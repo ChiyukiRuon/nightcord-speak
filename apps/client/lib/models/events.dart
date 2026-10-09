@@ -32,8 +32,10 @@ class ClientError {
   /// Whether trying again could plausibly work.
   bool get isRetryable => kind == 'network' || kind == 'timeout';
 
-  factory ClientError.fromJson(Map<String, dynamic> json) =>
-      ClientError(kind: json['kind'] as String? ?? 'unknown', detail: json['detail']);
+  factory ClientError.fromJson(Map<String, dynamic> json) => ClientError(
+    kind: json['kind'] as String? ?? 'unknown',
+    detail: json['detail'],
+  );
 
   /// The core's own words when it sent any — for logs and tests, not the UI.
   ///
@@ -42,7 +44,8 @@ class ClientError {
   /// sentence instead (`l10n/errors.dart`).
   String get debugMessage => switch (detail) {
     final String text => text,
-    final Map<Object?, Object?> map when map['message'] is String => map['message']! as String,
+    final Map<Object?, Object?> map when map['message'] is String =>
+      map['message']! as String,
     _ => kind,
   };
 
@@ -66,10 +69,15 @@ sealed class ClientEvent {
         (value as Map?)?.cast<String, dynamic>() ?? const {};
 
     return switch (name) {
+      'own_avatar_changed' => OwnAvatarChangedEvent(map(payload)),
       'screen' => ScreenEvent(map(payload)),
       'connected' => ConnectedEvent(
-        server: Server.fromJson(map(payload)['server'] as Map<String, dynamic>? ?? const {}),
-        info: ServerInfo.fromJson(map(payload)['info'] as Map<String, dynamic>? ?? const {}),
+        server: Server.fromJson(
+          map(payload)['server'] as Map<String, dynamic>? ?? const {},
+        ),
+        info: ServerInfo.fromJson(
+          map(payload)['info'] as Map<String, dynamic>? ?? const {},
+        ),
       ),
       'disconnected' => const DisconnectedEvent(),
       'connection_state_changed' => ConnectionStateChangedEvent(
@@ -83,9 +91,15 @@ sealed class ClientEvent {
         clientId: map(payload)['client_id'] as int? ?? 0,
         channelId: map(payload)['channel_id'] as int? ?? 0,
       ),
-      'server_info_changed' => ServerInfoChangedEvent(ServerInfo.fromJson(map(payload))),
-      'permissions_changed' => PermissionsChangedEvent(Permissions.fromJson(map(payload))),
-      'capabilities_changed' => CapabilitiesChangedEvent(Capabilities.fromJson(map(payload))),
+      'server_info_changed' => ServerInfoChangedEvent(
+        ServerInfo.fromJson(map(payload)),
+      ),
+      'permissions_changed' => PermissionsChangedEvent(
+        Permissions.fromJson(map(payload)),
+      ),
+      'capabilities_changed' => CapabilitiesChangedEvent(
+        Capabilities.fromJson(map(payload)),
+      ),
       'channel_created' => ChannelCreatedEvent(Channel.fromJson(map(payload))),
       'channel_updated' => ChannelUpdatedEvent(Channel.fromJson(map(payload))),
       'channel_removed' => ChannelRemovedEvent(payload as int),
@@ -96,7 +110,9 @@ sealed class ClientEvent {
         clientId: map(payload)['client_id'] as int? ?? 0,
         channelId: map(payload)['channel_id'] as int? ?? 0,
       ),
-      'message_received' => MessageReceivedEvent(Message.fromJson(map(payload))),
+      'message_received' => MessageReceivedEvent(
+        Message.fromJson(map(payload)),
+      ),
       'poked' => PokedEvent(
         clientId: map(payload)['client_id'] as int? ?? 0,
         senderName: map(payload)['sender_name'] as String? ?? '',
@@ -106,7 +122,9 @@ sealed class ClientEvent {
         clientId: map(payload)['client_id'] as int? ?? 0,
         speaking: map(payload)['speaking'] as bool? ?? false,
       ),
-      'voice_state_changed' => VoiceStateChangedEvent(VoiceState.fromJson(map(payload))),
+      'voice_state_changed' => VoiceStateChangedEvent(
+        VoiceState.fromJson(map(payload)),
+      ),
       'error' => ErrorEvent(ClientError.fromJson(map(payload))),
       _ => UnknownEvent(name ?? 'unknown'),
     };
@@ -153,9 +171,18 @@ class ReconnectScheduledEvent extends ClientEvent {
   final int delayMs;
 }
 
+/// Shared by all sessions; the enclosing session only identifies its origin.
+class OwnAvatarChangedEvent extends ClientEvent {
+  const OwnAvatarChangedEvent(this.data);
+  final Map<String, dynamic> data;
+}
+
 /// The server told us which client and channel are ours.
 class OwnClientIdentifiedEvent extends ClientEvent {
-  const OwnClientIdentifiedEvent({required this.clientId, required this.channelId});
+  const OwnClientIdentifiedEvent({
+    required this.clientId,
+    required this.channelId,
+  });
   final int clientId;
   final int channelId;
 }
@@ -317,7 +344,8 @@ sealed class FfiEvent {
           ),
         );
       case 'command_result':
-        final outcome = (json['outcome'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final outcome =
+            (json['outcome'] as Map?)?.cast<String, dynamic>() ?? const {};
         final status = outcome['status'] as String?;
         return CommandResultEvent(
           CommandResult(
@@ -327,7 +355,9 @@ sealed class FfiEvent {
               ok: status == 'ok',
               error: outcome['error'] == null
                   ? null
-                  : ClientError.fromJson((outcome['error'] as Map).cast<String, dynamic>()),
+                  : ClientError.fromJson(
+                      (outcome['error'] as Map).cast<String, dynamic>(),
+                    ),
             ),
             data: (json['data'] as Map?)?.cast<String, dynamic>(),
           ),

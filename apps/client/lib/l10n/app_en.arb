@@ -1052,6 +1052,16 @@
   "screenRequestSomeone": "Someone",
   "screenRequestAllow": "Allow",
   "screenRequestDeny": "Deny",
-  "settingsShortcutsReset": "Restore default"
-  
+  "settingsShortcutsReset": "Restore default",
+  "avatarUpload": "Upload avatar",
+  "avatarRemove": "Remove avatar",
+  "avatarTitle": "My avatar",
+  "avatarEdit": "Edit avatar",
+  "avatarEditHint": "Drag to reposition the image and zoom to crop your avatar.",
+  "avatarZoom": "Zoom",
+  "avatarRotate": "Rotate",
+  "avatarReset": "Reset",
+  "avatarInvalidImage": "Could not read the image. Choose a PNG, JPEG or WebP image up to 10 MB.",
+  "avatarOriginalMissing": "This avatar has no saved original. Select the original image to edit it again.",
+  "profileTitle": "My profile"
 }

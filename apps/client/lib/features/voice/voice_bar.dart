@@ -9,6 +9,7 @@ import '../../design/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/domain.dart';
 import '../../providers/providers.dart';
+import '../avatar/own_avatar_button.dart';
 import '../screen/screen_share_button.dart';
 import '../settings/settings_page.dart';
 import 'mic_gain_flyout.dart';
@@ -75,110 +76,146 @@ class VoiceBar extends ConsumerWidget {
         horizontal: tokens.space3,
         vertical: tokens.space2,
       ),
-      child: Row(
-        children: [
-          // The name and the disconnect button travel together: the button sits
-          // immediately to the right of the name, and the rest of the expanded
-          // space is empty, which is what keeps the voice controls pinned to the
-          // right edge. A plain `Expanded(Text)` with the button after it would
-          // put the button out at the right-hand cluster instead, a whole bar's
-          // width away from the thing it belongs to.
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Padding(
-                    // The label sitting on the bar's centre, rather than the
-                    // line box that contains it — see `_opticalLift`.
-                    padding: const EdgeInsets.only(bottom: _opticalLift * 2),
-                    child: Text(
-                      name,
-                      overflow: TextOverflow.ellipsis,
-                      // §12.2's `bodyMedium` — 14/500, the level it names for
-                      // emphasised body text. One's own name in a control bar
-                      // is exactly that.
-                      style: Theme.of(context).textTheme.titleMedium,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Theme(
+          // Material's padded 48px targets do not fit alongside an avatar on
+          // narrow bars. Keep the design system's 36px controls there.
+          data: constraints.maxWidth < 400
+              ? Theme.of(context).copyWith(
+                  iconButtonTheme: IconButtonThemeData(
+                    style: Theme.of(context).iconButtonTheme.style?.copyWith(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      fixedSize: const WidgetStatePropertyAll(Size(36, 36)),
                     ),
                   ),
+                )
+              : Theme.of(context),
+          child: Row(
+            children: [
+              OwnAvatarButton(session: session),
+              SizedBox(width: tokens.space1),
+              // The name and the disconnect button travel together: the button sits
+              // immediately to the right of the name, and the rest of the expanded
+              // space is empty, which is what keeps the voice controls pinned to the
+              // right edge. A plain `Expanded(Text)` with the button after it would
+              // put the button out at the right-hand cluster instead, a whole bar's
+              // width away from the thing it belongs to.
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: InkWell(
+                        key: const ValueKey('own-profile-name'),
+                        onTap: online && view?.ownClient != null
+                            ? () => openOwnProfile(context, session)
+                            : null,
+                        child: Padding(
+                          // The label sitting on the bar's centre, rather than the
+                          // line box that contains it — see `_opticalLift`.
+                          padding: const EdgeInsets.only(
+                            bottom: _opticalLift * 2,
+                          ),
+                          child: Text(
+                            name,
+                            overflow: TextOverflow.ellipsis,
+                            // §12.2's `bodyMedium` — 14/500, the level it names for
+                            // emphasised body text. One's own name in a control bar
+                            // is exactly that.
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: tokens.space1),
+                    // Ends the session, so it asks first — `disconnect` also
+                    // forgets the view, and the channel tree and the conversation
+                    // go with it. That is more than a stray click should cost, even
+                    // beside a button this deliberately placed.
+                    VoiceBarButton(
+                      // A door with an arrow out of it: the same 「leaving」 a
+                      // sign-in screen draws, rather than a broken chain, which
+                      // reads as "this link is broken" — a fault, not a choice.
+                      icon: Icons.logout,
+                      tooltip: l10n.voiceDisconnect,
+                      // Nothing to disconnect from while the core is still
+                      // retrying, and the banner already offers it for that case.
+                      enabled: online,
+                      onPressed: () => _confirmDisconnect(context, ref),
+                    ),
+                  ],
                 ),
-                SizedBox(width: tokens.space1),
-                // Ends the session, so it asks first — `disconnect` also
-                // forgets the view, and the channel tree and the conversation
-                // go with it. That is more than a stray click should cost, even
-                // beside a button this deliberately placed.
-                VoiceBarButton(
-                  // A door with an arrow out of it: the same 「leaving」 a
-                  // sign-in screen draws, rather than a broken chain, which
-                  // reads as "this link is broken" — a fault, not a choice.
-                  icon: Icons.logout,
-                  tooltip: l10n.voiceDisconnect,
-                  // Nothing to disconnect from while the core is still
-                  // retrying, and the banner already offers it for that case.
+              ),
+              // Screen sharing stands beside away for the same reason away stands
+              // beside the microphone: both are states of *ours* that the server
+              // publishes, rather than something about sound. It is absent
+              // entirely on a protocol that cannot carry it — see the widget.
+              if (view?.capabilities.screenStream ?? false)
+                ScreenShareButton(session: session),
+              // Away sits to the left of the microphone because it is about us
+              // rather than about sound: it says whether we are here at all. The
+              // glyph is the one the member list already draws for an away client,
+              // so the button and the badge read as the same fact.
+              VoiceBarButton(
+                // An alarm clock with a Z on its face — the closest the Material
+                // set comes to the ZZZ of falling asleep, and the reason the away
+                // button no longer looks like a clock you could set.
+                icon: away ? Icons.snooze : Icons.snooze_outlined,
+                tooltip: away ? l10n.voiceBackOnline : l10n.voiceAway,
+                active: away,
+                colour: tokens.idle,
+                enabled: online,
+                onPressed: () =>
+                    ref.read(sessionsProvider.notifier).toggleAway(session),
+                // The message is set once and then reused, so it lives behind a
+                // secondary gesture rather than in a control of its own: a
+                // permanent button for it would spend a slot in a 288px bar on
+                // something nobody presses twice.
+                onSecondaryTap: () => _editAwayMessage(context, ref),
+                onLongPress: () => _editAwayMessage(context, ref),
+              ),
+              // The microphone keeps its click (mute) and gains a hover panel on
+              // top: how loud we are is the microphone's business, and the button
+              // is where a hand already is when someone wants to change it.
+              MicGainFlyout(
+                child: VoiceBarButton(
+                  icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
+                  tooltip: voice.inputMuted
+                      ? l10n.voiceUnmuteMic
+                      : l10n.voiceMuteMic,
+                  active: voice.inputMuted,
+                  colour: tokens.error,
                   enabled: online,
-                  onPressed: () => _confirmDisconnect(context, ref),
+                  // The shortcut system calls the same method, so there is one
+                  // definition of what muting does.
+                  onPressed: () => ref
+                      .read(sessionsProvider.notifier)
+                      .toggleInputMuted(session),
                 ),
-              ],
-            ),
+              ),
+              VoiceBarButton(
+                icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
+                tooltip: voice.outputMuted
+                    ? l10n.voiceUndeafen
+                    : l10n.voiceDeafen,
+                active: voice.outputMuted,
+                colour: tokens.error,
+                enabled: online,
+                onPressed: () => ref
+                    .read(sessionsProvider.notifier)
+                    .toggleOutputMuted(session),
+              ),
+              VoiceBarButton(
+                icon: Icons.settings,
+                tooltip: l10n.settingsTitle,
+                // Unlike the two buttons above, settings do not need a live
+                // connection — and the log folder it offers is most wanted exactly
+                // when the connection is not working. The session is still passed:
+                // the audio section's microphone test and device swap act on it.
+                onPressed: () => SettingsPage.open(context, session: session),
+              ),
+            ],
           ),
-          // Screen sharing stands beside away for the same reason away stands
-          // beside the microphone: both are states of *ours* that the server
-          // publishes, rather than something about sound. It is absent
-          // entirely on a protocol that cannot carry it — see the widget.
-          if (view?.capabilities.screenStream ?? false) ScreenShareButton(session: session),
-          // Away sits to the left of the microphone because it is about us
-          // rather than about sound: it says whether we are here at all. The
-          // glyph is the one the member list already draws for an away client,
-          // so the button and the badge read as the same fact.
-          VoiceBarButton(
-            // An alarm clock with a Z on its face — the closest the Material
-            // set comes to the ZZZ of falling asleep, and the reason the away
-            // button no longer looks like a clock you could set.
-            icon: away ? Icons.snooze : Icons.snooze_outlined,
-            tooltip: away ? l10n.voiceBackOnline : l10n.voiceAway,
-            active: away,
-            colour: tokens.idle,
-            enabled: online,
-            onPressed: () => ref.read(sessionsProvider.notifier).toggleAway(session),
-            // The message is set once and then reused, so it lives behind a
-            // secondary gesture rather than in a control of its own: a
-            // permanent button for it would spend a slot in a 288px bar on
-            // something nobody presses twice.
-            onSecondaryTap: () => _editAwayMessage(context, ref),
-            onLongPress: () => _editAwayMessage(context, ref),
-          ),
-          // The microphone keeps its click (mute) and gains a hover panel on
-          // top: how loud we are is the microphone's business, and the button
-          // is where a hand already is when someone wants to change it.
-          MicGainFlyout(
-            child: VoiceBarButton(
-              icon: voice.inputMuted ? Icons.mic_off : Icons.mic,
-              tooltip: voice.inputMuted ? l10n.voiceUnmuteMic : l10n.voiceMuteMic,
-              active: voice.inputMuted,
-              colour: tokens.error,
-              enabled: online,
-              // The shortcut system calls the same method, so there is one
-              // definition of what muting does.
-              onPressed: () => ref.read(sessionsProvider.notifier).toggleInputMuted(session),
-            ),
-          ),
-          VoiceBarButton(
-            icon: voice.outputMuted ? Icons.headset_off : Icons.headset,
-            tooltip: voice.outputMuted ? l10n.voiceUndeafen : l10n.voiceDeafen,
-            active: voice.outputMuted,
-            colour: tokens.error,
-            enabled: online,
-            onPressed: () => ref.read(sessionsProvider.notifier).toggleOutputMuted(session),
-          ),
-          VoiceBarButton(
-            icon: Icons.settings,
-            tooltip: l10n.settingsTitle,
-            // Unlike the two buttons above, settings do not need a live
-            // connection — and the log folder it offers is most wanted exactly
-            // when the connection is not working. The session is still passed:
-            // the audio section's microphone test and device swap act on it.
-            onPressed: () => SettingsPage.open(context, session: session),
-          ),
-        ],
+        ),
       ),
     );
   }

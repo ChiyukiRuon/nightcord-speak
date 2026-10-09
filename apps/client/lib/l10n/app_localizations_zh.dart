@@ -913,6 +913,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsShortcutsReset => '恢复默认';
+
+  @override
+  String get avatarUpload => '上传头像';
+
+  @override
+  String get avatarRemove => '移除头像';
+
+  @override
+  String get avatarTitle => '我的头像';
+
+  @override
+  String get avatarEdit => '编辑头像';
+
+  @override
+  String get avatarEditHint => '拖动图片调整位置，缩放后裁剪为头像。';
+
+  @override
+  String get avatarZoom => '缩放';
+
+  @override
+  String get avatarRotate => '旋转';
+
+  @override
+  String get avatarReset => '重置';
+
+  @override
+  String get avatarInvalidImage => '无法读取图片，请选择不超过 10 MB 的 PNG、JPEG 或 WebP 图片。';
+
+  @override
+  String get avatarOriginalMissing => '此头像未保存原图，编辑时请重新选择原图。';
+
+  @override
+  String get profileTitle => '个人资料';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1823,4 +1856,37 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settingsShortcutsReset => '恢復預設';
+
+  @override
+  String get avatarUpload => '上傳頭像';
+
+  @override
+  String get avatarRemove => '移除頭像';
+
+  @override
+  String get avatarTitle => '我的頭像';
+
+  @override
+  String get avatarEdit => '編輯頭像';
+
+  @override
+  String get avatarEditHint => '拖動圖片調整位置，縮放後裁切為頭像。';
+
+  @override
+  String get avatarZoom => '縮放';
+
+  @override
+  String get avatarRotate => '旋轉';
+
+  @override
+  String get avatarReset => '重設';
+
+  @override
+  String get avatarInvalidImage => '無法讀取圖片，請選擇不超過 10 MB 的 PNG、JPEG 或 WebP 圖片。';
+
+  @override
+  String get avatarOriginalMissing => '此頭像未儲存原圖，編輯時請重新選擇原圖。';
+
+  @override
+  String get profileTitle => '個人資料';
 }

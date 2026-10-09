@@ -26,7 +26,8 @@ import 'package:nightcord_client/state/server_view.dart';
 /// also a statement: nothing else may be needed to run the stores.
 class _RecordingTransport implements ClientTransport {
   final List<String> calls = [];
-  final StreamController<FfiEvent> _events = StreamController<FfiEvent>.broadcast();
+  final StreamController<FfiEvent> _events =
+      StreamController<FfiEvent>.broadcast();
 
   @override
   Stream<FfiEvent> get events => _events.stream;
@@ -42,7 +43,8 @@ class _RecordingTransport implements ClientTransport {
   void setOutputMuted(bool muted) => calls.add('setOutputMuted:$muted');
 
   @override
-  void connect(ConnectRequest request) => calls.add('connect:${request.address}');
+  void connect(ConnectRequest request) =>
+      calls.add('connect:${request.address}');
 
   @override
   void disconnect(int session) => calls.add('disconnect:$session');
@@ -59,8 +61,9 @@ class _RecordingTransport implements ClientTransport {
   void dispose() => calls.add('dispose');
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not part of this test');
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    '${invocation.memberName} is not part of this test',
+  );
 }
 
 /// A [SettingsNotifier] that answers with a fixed object, without a core.
@@ -132,10 +135,12 @@ void main() {
     addTearDown(subscription.close);
 
     // A session has to exist before there is a view to open anything in.
-    transport._events.add(const DomainEvent(
-      session: 7,
-      event: ConnectionStateChangedEvent(ConnectionState.connected),
-    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ConnectionStateChangedEvent(ConnectionState.connected),
+      ),
+    );
     await pumpEventQueue();
     notifications = 0;
 
@@ -174,10 +179,12 @@ void main() {
 
     // A connected session, so the mute toggle has something to act on.
     container.read(activeSessionProvider.notifier).select(7);
-    transport._events.add(const DomainEvent(
-      session: 7,
-      event: ConnectionStateChangedEvent(ConnectionState.connected),
-    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ConnectionStateChangedEvent(ConnectionState.connected),
+      ),
+    );
     await pumpEventQueue();
 
     container.read(sessionsProvider.notifier).toggleInputMuted(7);
@@ -211,10 +218,12 @@ void main() {
     final subscription = container.listen(sessionsProvider, (_, _) {});
     addTearDown(subscription.close);
 
-    transport._events.add(const DomainEvent(
-      session: 7,
-      event: ConnectionStateChangedEvent(ConnectionState.connected),
-    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ConnectionStateChangedEvent(ConnectionState.connected),
+      ),
+    );
     transport._events.add(
       const DomainEvent(
         session: 7,
@@ -271,10 +280,12 @@ void main() {
     final subscription = container.listen(sessionsProvider, (_, _) {});
     addTearDown(subscription.close);
 
-    transport._events.add(const DomainEvent(
-      session: 7,
-      event: ConnectionStateChangedEvent(ConnectionState.connected),
-    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 7,
+        event: ConnectionStateChangedEvent(ConnectionState.connected),
+      ),
+    );
     await pumpEventQueue();
 
     container.read(sessionsProvider.notifier).goAwayWith(7, '午饭时间');
@@ -297,38 +308,43 @@ void main() {
     final subscription = container.listen(sessionsProvider, (_, _) {});
     addTearDown(subscription.close);
 
-    transport._events.add(const DomainEvent(
-      session: 3,
-      event: ConnectionStateChangedEvent(ConnectionState.connected),
-    ));
+    transport._events.add(
+      const DomainEvent(
+        session: 3,
+        event: ConnectionStateChangedEvent(ConnectionState.connected),
+      ),
+    );
     await pumpEventQueue();
 
     expect(transport.calls, ['voiceStart:3']);
   });
 
-  test('a reconnect does not reopen a microphone that is already running', () async {
-    // The engine outlives a dropped connection: reopening the devices would
-    // cut off a stream that had recovered on its own.
-    final transport = _RecordingTransport();
-    final container = ProviderContainer.test(
-      overrides: [clientTransportProvider.overrideWithValue(transport)],
-    );
-    final subscription = container.listen(sessionsProvider, (_, _) {});
-    addTearDown(subscription.close);
-
-    for (final state in [
-      ConnectionState.connected,
-      ConnectionState.reconnecting,
-      ConnectionState.connected,
-    ]) {
-      transport._events.add(
-        DomainEvent(session: 3, event: ConnectionStateChangedEvent(state)),
+  test(
+    'a reconnect does not reopen a microphone that is already running',
+    () async {
+      // The engine outlives a dropped connection: reopening the devices would
+      // cut off a stream that had recovered on its own.
+      final transport = _RecordingTransport();
+      final container = ProviderContainer.test(
+        overrides: [clientTransportProvider.overrideWithValue(transport)],
       );
-      await pumpEventQueue();
-    }
+      final subscription = container.listen(sessionsProvider, (_, _) {});
+      addTearDown(subscription.close);
 
-    expect(transport.calls, ['voiceStart:3']);
-  });
+      for (final state in [
+        ConnectionState.connected,
+        ConnectionState.reconnecting,
+        ConnectionState.connected,
+      ]) {
+        transport._events.add(
+          DomainEvent(session: 3, event: ConnectionStateChangedEvent(state)),
+        );
+        await pumpEventQueue();
+      }
+
+      expect(transport.calls, ['voiceStart:3']);
+    },
+  );
 
   group('localeProvider', () {
     test('an explicit language wins over the system', () {
@@ -355,11 +371,14 @@ void main() {
       expect(container.read(localeProvider), const Locale('zh'));
     });
 
-    test('a system language this build does not have falls back to English', () {
-      final container = containerWith(system: const [Locale('fr')]);
+    test(
+      'a system language this build does not have falls back to English',
+      () {
+        final container = containerWith(system: const [Locale('fr')]);
 
-      expect(container.read(localeProvider), const Locale('en'));
-    });
+        expect(container.read(localeProvider), const Locale('en'));
+      },
+    );
 
     test('a Traditional Chinese system gets Traditional, not Simplified', () {
       // The one that needs a hand. `basicLocaleListResolution` matches on
@@ -378,7 +397,11 @@ void main() {
     });
 
     test('every other Chinese system gets Simplified', () {
-      for (final tag in [const Locale('zh'), const Locale('zh', 'CN'), const Locale('zh', 'SG')]) {
+      for (final tag in [
+        const Locale('zh'),
+        const Locale('zh', 'CN'),
+        const Locale('zh', 'SG'),
+      ]) {
         final container = containerWith(system: [tag]);
         expect(
           container.read(localeProvider).scriptCode,
@@ -396,8 +419,11 @@ void main() {
           // is being measured.
           system: const [Locale('en')],
         );
-        expect(container.read(localeProvider).languageCode, code.split('_').first,
-            reason: code);
+        expect(
+          container.read(localeProvider).languageCode,
+          code.split('_').first,
+          reason: code,
+        );
 
         final explicit = containerWith(system: const [Locale('ja')]);
         expect(explicit.read(localeProvider).languageCode, 'ja');
@@ -418,6 +444,91 @@ void main() {
   });
 
   group('closing a session', () {
+    for (final initial in [
+      ConnectionState.connecting,
+      ConnectionState.connected,
+    ]) {
+      test(
+        'terminal disconnect removes a $initial session and ignores late replies',
+        () async {
+          // A refused handshake and a server-initiated close both used to leave
+          // selectable dead servers, including their old channel trees.
+          final transport = _RecordingTransport();
+          final container = ProviderContainer.test(
+            overrides: [clientTransportProvider.overrideWithValue(transport)],
+          );
+          final subscription = container.listen(sessionsProvider, (_, _) {});
+          addTearDown(subscription.close);
+
+          transport._events.add(
+            DomainEvent(
+              session: 3,
+              event: ConnectionStateChangedEvent(initial),
+            ),
+          );
+          await pumpEventQueue();
+          expect(container.read(sessionsProvider), contains(3));
+          container.read(activeSessionProvider.notifier).select(3);
+
+          transport._events.add(
+            const DomainEvent(session: 3, event: DisconnectedEvent()),
+          );
+          await pumpEventQueue();
+          expect(container.read(sessionsProvider), isEmpty);
+          expect(container.read(activeSessionProvider), isNull);
+
+          transport._events.add(
+            const CommandResultEvent(
+              CommandResult(
+                command: 'connect',
+                session: 3,
+                outcome: CommandOutcome(ok: true),
+              ),
+            ),
+          );
+          transport._events.add(
+            const DomainEvent(
+              session: 3,
+              event: ConnectionStateChangedEvent(ConnectionState.disconnected),
+            ),
+          );
+          await pumpEventQueue();
+          expect(container.read(sessionsProvider), isEmpty);
+          expect(container.read(activeSessionProvider), isNull);
+        },
+      );
+    }
+
+    test(
+      'a recovering connection stays selectable until it actually ends',
+      () async {
+        // Temporary network drops are recoverable and must retain the session.
+        final transport = _RecordingTransport();
+        final container = ProviderContainer.test(
+          overrides: [clientTransportProvider.overrideWithValue(transport)],
+        );
+        final subscription = container.listen(sessionsProvider, (_, _) {});
+        addTearDown(subscription.close);
+        for (final connection in [
+          ConnectionState.connected,
+          ConnectionState.reconnecting,
+        ]) {
+          transport._events.add(
+            DomainEvent(
+              session: 3,
+              event: ConnectionStateChangedEvent(connection),
+            ),
+          );
+          await pumpEventQueue();
+          expect(container.read(sessionsProvider)[3]?.connection, connection);
+        }
+        expect(
+          transport.calls.where((call) => call == 'voiceStart:3'),
+          hasLength(1),
+        );
+      },
+    );
+
     test('a closed session does not come back when the core says so', () async {
       // Regression, found by pressing the new disconnect button and watching
       // the window stay on a dead server page: closing the connection makes
@@ -452,7 +563,9 @@ void main() {
           event: ConnectionStateChangedEvent(ConnectionState.disconnected),
         ),
       );
-      transport._events.add(const DomainEvent(session: 3, event: DisconnectedEvent()));
+      transport._events.add(
+        const DomainEvent(session: 3, event: DisconnectedEvent()),
+      );
       await pumpEventQueue();
 
       expect(
@@ -478,7 +591,11 @@ void main() {
 
       transport._events.add(
         const CommandResultEvent(
-          CommandResult(command: 'connect', session: 9, outcome: CommandOutcome(ok: true)),
+          CommandResult(
+            command: 'connect',
+            session: 9,
+            outcome: CommandOutcome(ok: true),
+          ),
         ),
       );
       await pumpEventQueue();
@@ -492,7 +609,9 @@ void main() {
       // Which is what makes the system's brightness irrelevant to an explicit
       // choice: `MaterialApp` has nothing to switch between.
       for (final name in ['nightcord', 'black', 'white']) {
-        final container = containerWith(settings: Settings(ui: UiSettings(theme: name)));
+        final container = containerWith(
+          settings: Settings(ui: UiSettings(theme: name)),
+        );
         final choice = container.read(themeChoiceProvider);
 
         expect(choice.light.name, name);
@@ -534,8 +653,17 @@ void main() {
     test('the two halves are always a real pair', () {
       // Whatever the setting says, neither slot may be "nothing" — the widget
       // that draws them does not handle a null theme.
-      for (final theme in [null, 'nightcord', 'black', 'white', 'system', 'nonsense']) {
-        final container = containerWith(settings: Settings(ui: UiSettings(theme: theme)));
+      for (final theme in [
+        null,
+        'nightcord',
+        'black',
+        'white',
+        'system',
+        'nonsense',
+      ]) {
+        final container = containerWith(
+          settings: Settings(ui: UiSettings(theme: theme)),
+        );
         final choice = container.read(themeChoiceProvider);
 
         expect(AppPalette.all, contains(choice.light));

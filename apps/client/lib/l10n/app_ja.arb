@@ -301,6 +301,16 @@
   "screenRequestSomeone": "だれか",
   "screenRequestAllow": "許可",
   "screenRequestDeny": "拒否",
-  "settingsShortcutsReset": "既定に戻す"
-  
+  "settingsShortcutsReset": "既定に戻す",
+  "avatarUpload": "アバターをアップロード",
+  "avatarRemove": "アバターを削除",
+  "avatarTitle": "自分のアバター",
+  "avatarEdit": "アバターを編集",
+  "avatarEditHint": "画像をドラッグして位置を調整し、拡大して切り抜きます。",
+  "avatarZoom": "拡大",
+  "avatarRotate": "回転",
+  "avatarReset": "リセット",
+  "avatarInvalidImage": "画像を読み込めません。10 MB以下のPNG、JPEG、WebP画像を選択してください。",
+  "avatarOriginalMissing": "元の画像が保存されていません。再編集するには元の画像を選択してください。",
+  "profileTitle": "プロフィール"
 }

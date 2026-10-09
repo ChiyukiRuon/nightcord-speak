@@ -140,7 +140,12 @@ class NotificationPolicy {
   ///
   /// Returns null when there is nothing to say — which is the common case, and
   /// the point of the whole class.
-  Notice? observe(int session, ClientEvent event, ServerView? view, Attention attention) {
+  Notice? observe(
+    int session,
+    ClientEvent event,
+    ServerView? view,
+    Attention attention,
+  ) {
     switch (event) {
       case ConnectedEvent():
         return _onConnected(session, view);
@@ -200,6 +205,7 @@ class NotificationPolicy {
       // binding a notification to it would double every arrival.
       case ServerInfoChangedEvent():
       case OwnClientIdentifiedEvent():
+      case OwnAvatarChangedEvent():
       case PermissionsChangedEvent():
       case CapabilitiesChangedEvent():
       case ChannelCreatedEvent():
@@ -236,7 +242,11 @@ class NotificationPolicy {
     );
   }
 
-  Notice? _onConnectionState(int session, ConnectionState state, ServerView? view) {
+  Notice? _onConnectionState(
+    int session,
+    ConnectionState state,
+    ServerView? view,
+  ) {
     if (!settings.connection) return null;
 
     // Only the states that mean "this stopped working". `Connecting` and
@@ -259,7 +269,12 @@ class NotificationPolicy {
     );
   }
 
-  Notice? _onMessage(int session, Message message, ServerView? view, Attention attention) {
+  Notice? _onMessage(
+    int session,
+    Message message,
+    ServerView? view,
+    Attention attention,
+  ) {
     // Our own message, echoed back by the server. Whether the library filters
     // these is not something this side can see — `publish_book_event` has no
     // check on the invoker — and a client that notifies you about what you just
@@ -272,7 +287,9 @@ class NotificationPolicy {
     final conversation = ConversationKey.of(message, view?.ownClientId);
     final private = message.isPrivate;
 
-    if (private ? !settings.directMessage : !settings.channelMessage) return null;
+    if (private ? !settings.directMessage : !settings.channelMessage) {
+      return null;
+    }
     if (attention.isLookingAt(session, conversation)) return null;
 
     return Notice(

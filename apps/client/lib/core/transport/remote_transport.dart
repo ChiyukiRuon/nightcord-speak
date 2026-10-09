@@ -355,6 +355,18 @@ class RemoteTransport implements ClientTransport {
       _send('screen', {'session': session, 'command': command});
 
   @override
+  void getAvatar(int session, int clientId) =>
+      _send('get_avatar', {'session': session, 'client_id': clientId});
+
+  @override
+  void setNickname(int session, String nickname) =>
+      _send('set_nickname', {'session': session, 'nickname': nickname});
+
+  @override
+  void setAvatar(int session, String? image, {Map<String, dynamic>? edit}) =>
+      _send('set_avatar', {'session': session, 'image': image, 'edit': edit});
+
+  @override
   void setAway(int session, {required bool away, String? message}) {
     _send('set_away', {'session': session, 'away': away, 'message': message});
   }

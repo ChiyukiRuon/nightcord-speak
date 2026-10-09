@@ -41,6 +41,15 @@ abstract interface class ClientTransport {
   /// Controls screen sharing using domain commands.
   void screen(int session, Map<String, dynamic> command);
 
+  /// Reads a visible user's picture; the result includes its current revision.
+  void getAvatar(int session, int clientId);
+
+  /// Changes the visible name on the current server.
+  void setNickname(int session, String nickname);
+
+  /// Uploads PNG/JPEG base64, or removes our picture with null.
+  void setAvatar(int session, String? image, {Map<String, dynamic>? edit});
+
   /// Moves us into a channel.
   void joinChannel(int session, int channelId);
 

@@ -227,6 +227,7 @@ class Client {
     this.flags = const ClientFlags(),
     this.awayMessage,
     this.uniqueId,
+    this.avatarVersion,
     this.isSelf = false,
     this.clientType = ClientType.voice,
   });
@@ -246,6 +247,8 @@ class Client {
   /// Stable per-user id. Survives reconnects, unlike [id].
   final String? uniqueId;
 
+  final String? avatarVersion;
+
   /// Whether this client is us.
   final bool isSelf;
 
@@ -261,6 +264,7 @@ class Client {
     ),
     awayMessage: json['away_message'] as String?,
     uniqueId: json['unique_id'] as String?,
+    avatarVersion: json['avatar_version'] as String?,
     isSelf: json['is_self'] as bool? ?? false,
     clientType: ClientType.fromWire(json['client_type'] as String?),
   );
@@ -273,6 +277,7 @@ class Client {
     flags: flags,
     awayMessage: awayMessage,
     uniqueId: uniqueId,
+    avatarVersion: avatarVersion,
     isSelf: isSelf,
     clientType: clientType,
   );
@@ -340,7 +345,8 @@ class TemporaryBan extends BanDuration {
   Object get encoded => {'seconds': seconds};
 
   @override
-  bool operator ==(Object other) => other is TemporaryBan && other.seconds == seconds;
+  bool operator ==(Object other) =>
+      other is TemporaryBan && other.seconds == seconds;
 
   @override
   int get hashCode => seconds.hashCode;
@@ -453,7 +459,9 @@ class Attachment {
       value /= 1024;
       unit++;
     }
-    final rounded = value >= 10 || unit == 0 ? value.round().toString() : value.toStringAsFixed(1);
+    final rounded = value >= 10 || unit == 0
+        ? value.round().toString()
+        : value.toStringAsFixed(1);
     return '$rounded ${units[unit]}';
   }
 
@@ -544,7 +552,9 @@ class Message {
     timestamp: json['timestamp'] as int? ?? 0,
     attachments:
         (json['attachments'] as List?)
-            ?.map((e) => Attachment.fromJson((e as Map).cast<String, dynamic>()))
+            ?.map(
+              (e) => Attachment.fromJson((e as Map).cast<String, dynamic>()),
+            )
             .toList(growable: false) ??
         const [],
   );

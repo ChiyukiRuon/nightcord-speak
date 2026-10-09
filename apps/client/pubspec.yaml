@@ -61,6 +61,7 @@ dependencies:
   # Sizes, titles and closes that window. `desktop_multi_window` deliberately
   # has none of those and defers to this, which is why both arrived together.
   window_manager: ^0.5.2
+  file_selector: ^1.1.0
 
 # The screen-share media stack builds from our fork — a submodule on the
 # `nightcord` branch, whose history is the published 1.6.2+hotfix.4 package

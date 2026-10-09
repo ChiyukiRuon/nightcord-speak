@@ -39,9 +39,10 @@ final eventStreamProvider = StreamProvider<FfiEvent>((ref) {
 });
 
 /// One accumulated view per session.
-final sessionsProvider = NotifierProvider<SessionsNotifier, Map<int, ServerView>>(
-  SessionsNotifier.new,
-);
+final sessionsProvider =
+    NotifierProvider<SessionsNotifier, Map<int, ServerView>>(
+      SessionsNotifier.new,
+    );
 
 /// Which session the UI is showing.
 final activeSessionProvider = NotifierProvider<ActiveSessionNotifier, int?>(
@@ -57,7 +58,9 @@ final activeViewProvider = Provider<ServerView?>((ref) {
 });
 
 /// The most recent failure worth telling the user about, if any.
-final lastErrorProvider = NotifierProvider<LastErrorNotifier, ClientError?>(LastErrorNotifier.new);
+final lastErrorProvider = NotifierProvider<LastErrorNotifier, ClientError?>(
+  LastErrorNotifier.new,
+);
 
 /// Accumulates events into per-session views.
 class SessionsNotifier extends Notifier<Map<int, ServerView>> {
@@ -83,6 +86,10 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   /// construction rather than by that argument.
   final Set<int> _closed = {};
 
+  // A terminal event can arrive before the successful connect reply. Session
+  // ids are never reused, so that delayed reply must not revive the view.
+  final Set<int> _ended = {};
+
   @override
   Map<int, ServerView> build() {
     // `listen` rather than `watch`: this must react to each event without
@@ -98,11 +105,18 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   void _apply(FfiEvent envelope) {
     switch (envelope) {
       case DomainEvent(:final session, :final event):
+        if (event is OwnAvatarChangedEvent) return;
         // A session the user closed is over, and the core still has a few
         // words to say about it — the `disconnected` event for the connection
         // it was just told to close, at least. Letting those through would
         // rebuild the view the user dismissed; see `_closed`.
         if (_closed.contains(session)) return;
+
+        if (event is DisconnectedEvent) {
+          _ended.add(session);
+          forget(session);
+          return;
+        }
 
         // A session can publish before `connect` reports back, so the view is
         // created on first sight rather than waiting for the command result.
@@ -155,16 +169,23 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   }
 
   void _applyCommandResult(CommandResult result) {
+    // Picture loads fail quietly to initials. User-initiated uploads still
+    // report their errors through the ordinary notification path.
+    if (result.command == 'get_avatar') return;
     if (result.ok) {
       // `connect` is the one command whose *result* is a value: the new
       // session's handle, which everything else is addressed by.
       if (result.command == 'connect' && result.session != null) {
         final session = result.session!;
+        if (_ended.contains(session)) return;
         // A successful connection is what makes a handle live again, so this
         // is where the closed mark is lifted — not on any event, which is the
         // whole thing `_closed` exists to stop.
         _closed.remove(session);
-        state = {...state, session: state[session] ?? ServerView(session: session)};
+        state = {
+          ...state,
+          session: state[session] ?? ServerView(session: session),
+        };
         ref.read(activeSessionProvider.notifier).select(session);
       }
       return;
@@ -214,7 +235,9 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     // No live session, nothing to tell — same rule as the mute buttons.
     if (view == null || !view.isConnected) return;
 
-    ref.read(clientTransportProvider).setAway(session, away: away, message: message);
+    ref
+        .read(clientTransportProvider)
+        .setAway(session, away: away, message: message);
   }
 
   /// Flips our away state without saying anything about it.
@@ -240,7 +263,11 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
     if (settings != null) {
       ref
           .read(settingsProvider.notifier)
-          .update(settings.copyWith(presence: settings.presence.copyWith(awayMessage: message)));
+          .update(
+            settings.copyWith(
+              presence: settings.presence.copyWith(awayMessage: message),
+            ),
+          );
     }
     setAway(session, away: true, message: message);
   }
@@ -262,6 +289,7 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   /// Forgets a session, as after a clean disconnect.
   void forget(int session) {
     _closed.add(session);
+    _voiceStarted.remove(session);
     final next = {...state}..remove(session);
     state = next;
     ref.read(activeSessionProvider.notifier).forget(session);
@@ -308,19 +336,29 @@ final voiceStatusProvider = NotifierProvider<VoiceStatusNotifier, VoiceStatus?>(
   VoiceStatusNotifier.new,
 );
 
-final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(BookmarksNotifier.new);
+final bookmarksProvider = NotifierProvider<BookmarksNotifier, BookmarkList?>(
+  BookmarksNotifier.new,
+);
 
-final windowFocusProvider = NotifierProvider<WindowFocusNotifier, bool>(WindowFocusNotifier.new);
+final windowFocusProvider = NotifierProvider<WindowFocusNotifier, bool>(
+  WindowFocusNotifier.new,
+);
 
-final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(NoticesNotifier.new);
+final noticesProvider = NotifierProvider<NoticesNotifier, List<Notice>>(
+  NoticesNotifier.new,
+);
 
-final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(SettingsNotifier.new);
+final settingsProvider = NotifierProvider<SettingsNotifier, Settings?>(
+  SettingsNotifier.new,
+);
 
 /// What the operating system says the user prefers.
 ///
 /// Behind a provider so that "what does the system think" can be answered by a
 /// test without a platform.
-final systemLocalesProvider = Provider<List<Locale>>((ref) => PlatformDispatcher.instance.locales);
+final systemLocalesProvider = Provider<List<Locale>>(
+  (ref) => PlatformDispatcher.instance.locales,
+);
 
 /// The language the UI renders in, always resolved to a supported locale.
 ///
@@ -337,7 +375,10 @@ final localeProvider = Provider<Locale>((ref) {
   final preferred = requested == null
       ? ref.watch(systemLocalesProvider).map(_withChineseScript).toList()
       : <Locale>[_withChineseScript(_parse(requested))];
-  return basicLocaleListResolution(preferred, AppLocalizations.supportedLocales);
+  return basicLocaleListResolution(
+    preferred,
+    AppLocalizations.supportedLocales,
+  );
 });
 
 /// Reads a stored language tag, which may name a script: `zh_Hant`.
@@ -395,7 +436,9 @@ Locale _withChineseScript(Locale locale) {
 /// change is also what makes "follow the system" live: `AnimatedTheme` inside
 /// `MaterialApp` already rebuilds on `didChangePlatformBrightness`, so a user
 /// who flips their system theme sees the client follow without a restart.
-final themeChoiceProvider = Provider<({AppPalette light, AppPalette dark})>((ref) {
+final themeChoiceProvider = Provider<({AppPalette light, AppPalette dark})>((
+  ref,
+) {
   final requested = ref.watch(settingsProvider)?.ui.requestedTheme;
 
   if (requested == null || requested == 'nightcord') {
@@ -411,9 +454,10 @@ final themeChoiceProvider = Provider<({AppPalette light, AppPalette dark})>((ref
   return (light: AppPalette.white, dark: AppPalette.black);
 });
 
-final audioDevicesProvider = NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
-  AudioDevicesNotifier.new,
-);
+final audioDevicesProvider =
+    NotifierProvider<AudioDevicesNotifier, Map<String, List<AudioDevice>>>(
+      AudioDevicesNotifier.new,
+    );
 
 /// Collects device lists out of the event stream.
 ///
@@ -575,12 +619,15 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
   /// Sent rather than applied locally, unlike [update]: the core parses the
   /// address, so it — not this class — decides what the entry becomes. The
   /// answer carries the list as it now stands.
-  void add(NewBookmark bookmark) => ref.read(clientTransportProvider).addBookmark(bookmark);
+  void add(NewBookmark bookmark) =>
+      ref.read(clientTransportProvider).addBookmark(bookmark);
 
   void _collect(CommandResult result) {
     // `bookmark_add` answers with the same payload as a plain request, so the
     // screen that just saved something gets the list without asking again.
-    if (result.command != 'bookmarks' && result.command != 'bookmark_add') return;
+    if (result.command != 'bookmarks' && result.command != 'bookmark_add') {
+      return;
+    }
     if (!result.ok) return;
 
     final data = result.data;
@@ -673,7 +720,8 @@ class NoticesNotifier extends Notifier<List<Notice>> {
     );
   }
 
-  bool get _systemEnabled => ref.read(settingsProvider)?.notifications.system ?? true;
+  bool get _systemEnabled =>
+      ref.read(settingsProvider)?.notifications.system ?? true;
 
   void _show(Notice notice) {
     // Oldest first: three is what fits without covering the conversation, and a
@@ -711,7 +759,8 @@ class LastErrorNotifier extends Notifier<ClientError?> {
 
 /// Convenience for widgets: the connection state of the active session.
 final activeConnectionProvider = Provider<ConnectionState>((ref) {
-  return ref.watch(activeViewProvider)?.connection ?? ConnectionState.disconnected;
+  return ref.watch(activeViewProvider)?.connection ??
+      ConnectionState.disconnected;
 });
 
 /// Convenience for widgets: the capabilities of the active session.
