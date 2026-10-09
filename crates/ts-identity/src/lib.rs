@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use ts_model::IdentityError;
 
 /// Directory name for per-user application data on Windows and macOS (§32).
+/// Declared only where it is used, so Linux — which follows the XDG name
+/// below — does not warn about it.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 const APP_DIR_DISPLAY_NAME: &str = "Nightcord Speak";
 /// Directory name on Linux, where lower-case XDG-style names are the norm.
 /// Declared only where it is used, so the other targets do not warn about it.
