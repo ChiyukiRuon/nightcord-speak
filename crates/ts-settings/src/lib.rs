@@ -33,9 +33,11 @@
 //! refusing to start over a preference file turns a cosmetic problem into a
 //! fatal one.
 
+mod avatar;
 mod bookmarks;
 mod store;
 
+pub use avatar::AvatarStore;
 pub use bookmarks::{Bookmark, BookmarkList, BookmarkStore, NewBookmark};
 
 use std::path::PathBuf;

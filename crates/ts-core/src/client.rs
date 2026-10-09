@@ -22,6 +22,8 @@ use crate::request::ConnectRequest;
 /// that knows how to turn a protocol name into a backend. Everything above it
 /// works in terms of [`SessionId`]s.
 pub struct Client {
+    avatar: std::sync::Arc<crate::GlobalAvatar>,
+    avatar_tasks: std::collections::HashMap<SessionId, tokio::task::JoinHandle<()>>,
     sessions: SessionManager,
     identities: IdentityStore,
     /// Where preferences are written when they change.
@@ -57,8 +59,15 @@ impl Client {
             BookmarkList::default()
         });
 
+        let events = EventBus::with_default_capacity();
+        let avatar = crate::GlobalAvatar::new(
+            ts_settings::AvatarStore::new(settings_store.path().with_file_name("avatar.json")),
+            events.clone(),
+        );
         Self {
-            sessions: SessionManager::new(EventBus::with_default_capacity()),
+            avatar,
+            avatar_tasks: std::collections::HashMap::new(),
+            sessions: SessionManager::new(events),
             identities,
             settings_store,
             settings,
@@ -85,6 +94,12 @@ impl Client {
     #[must_use]
     pub fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    /// Shared preference and synchronisation service, independent of the UI.
+    #[must_use]
+    pub fn avatar(&self) -> std::sync::Arc<crate::GlobalAvatar> {
+        self.avatar.clone()
     }
 
     /// Replaces the preferences and writes them down.
@@ -280,6 +295,13 @@ impl Client {
 
         self.sessions.insert(session_id, server, backend);
 
+        if let Some(session) = self.sessions.get(session_id)
+            && let Ok(handle) = session.avatar_handle()
+        {
+            let task = self.avatar.attach(session_id, handle, self.subscribe());
+            self.avatar_tasks.insert(session_id, task);
+        }
+
         let session = self
             .sessions
             .get_mut(session_id)
@@ -288,6 +310,10 @@ impl Client {
         if let Err(error) = session.connect(config).await {
             // Leave nothing behind for the UI to clean up.
             self.sessions.remove(session_id);
+            self.avatar.detach(session_id);
+            if let Some(task) = self.avatar_tasks.remove(&session_id) {
+                task.abort();
+            }
             return Err(error);
         }
 
@@ -302,6 +328,10 @@ impl Client {
     /// Propagates whatever the backend reports while shutting down. The session
     /// is removed either way — a failed shutdown still ends the session.
     pub async fn disconnect(&mut self, session: SessionId) -> Result<(), ClientError> {
+        self.avatar.detach(session);
+        if let Some(task) = self.avatar_tasks.remove(&session) {
+            task.abort();
+        }
         let Some(mut session) = self.sessions.remove(session) else {
             // Disconnecting something that is not there is a no-op, not a bug:
             // a UI may race a server-side drop.
@@ -334,6 +364,14 @@ impl Client {
     #[must_use]
     pub fn state(&self, session: SessionId) -> Option<ConnectionState> {
         self.sessions.get(session).map(ts_session::Session::state)
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        for task in self.avatar_tasks.values() {
+            task.abort();
+        }
     }
 }
 

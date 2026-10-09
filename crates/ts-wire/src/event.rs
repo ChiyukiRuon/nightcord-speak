@@ -52,6 +52,25 @@ pub enum FfiEvent {
 }
 
 impl FfiEvent {
+    /// Correlates both successful and failed image responses to one client.
+    #[must_use]
+    pub fn avatar(
+        session: SessionId,
+        client_id: ts_model::ClientId,
+        result: Result<ts_model::AvatarImage, ClientError>,
+    ) -> Self {
+        match result {
+            Ok(image) => Self::with_data("get_avatar", Some(session), serde_json::json!(image)),
+            Err(error) => {
+                let mut event = Self::failed("get_avatar", Some(session), error);
+                if let Self::CommandResult { data, .. } = &mut event {
+                    *data = Some(serde_json::json!({"client_id": client_id}));
+                }
+                event
+            }
+        }
+    }
+
     /// Forwards a domain event.
     #[must_use]
     pub fn client(session: SessionId, event: ClientEvent) -> Self {

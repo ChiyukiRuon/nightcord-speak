@@ -1546,6 +1546,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3129,6 +3139,8 @@ dependencies = [
 name = "ts-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "tokio",
@@ -3280,6 +3292,8 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "futures",
+ "md-5",
+ "reqwest",
  "serde_json",
  "thiserror 2.0.21",
  "time",
@@ -3320,6 +3334,7 @@ dependencies = [
 name = "ts-wire"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "tracing",

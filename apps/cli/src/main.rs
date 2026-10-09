@@ -539,6 +539,7 @@ fn render(event: &SessionEvent) {
         | ClientEvent::PermissionsChanged(_)
         | ClientEvent::CapabilitiesChanged(_)
         | ClientEvent::Speaking(_)
+        | ClientEvent::OwnAvatarChanged(_)
         | ClientEvent::VoiceStateChanged(_) => {}
     }
 }

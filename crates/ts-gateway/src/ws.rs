@@ -38,12 +38,13 @@ use crate::worker::GatewayCommand;
 /// is longer than any honest client needs.
 const AUTH_DEADLINE: Duration = Duration::from_secs(10);
 
-/// The biggest message either direction may be.
+/// The biggest incoming message, including a Base64 avatar upload.
 ///
-/// The largest legitimate one is a 960-sample mono frame (3,841 bytes); the
-/// rest is headroom for command JSON. Everything else is a mistake or an
-/// attack, and tungstenite enforces the limit before allocating.
-pub(crate) const MAX_MESSAGE: usize = 64 * 1024;
+/// A 200 KiB avatar needs about 267 KiB after Base64 encoding. Ordinary
+/// commands retain their 64 KiB limit below; this ceiling is enforced by
+/// tungstenite before accepting an oversized frame.
+// Original avatar inputs are bounded at 10 MiB before base64 encoding.
+pub(crate) const MAX_MESSAGE: usize = 16 * 1024 * 1024;
 
 /// What a connection task needs from the gateway.
 pub(crate) struct ConnectionContext {
@@ -263,6 +264,13 @@ fn handle_text(text: &str, id: u64, context: &crate::devices::DeviceContext) {
             .is_some_and(serde_json::Map::is_empty)
     {
         value.as_object_mut().map(|object| object.remove("payload"));
+    }
+
+    if text.len() > 64 * 1024
+        && value.get("command").and_then(serde_json::Value::as_str) != Some("set_avatar")
+    {
+        send_to(context, error_json("command exceeds 64 KiB"));
+        return;
     }
 
     if value.get("kind").is_some() {

@@ -389,9 +389,56 @@ impl Worker {
                 self.report(name, Some(session), outcome);
             }
 
+            Command::GetAvatar { session, client_id } => {
+                let session = *session;
+                let client_id = *client_id;
+                let handle = self
+                    .core
+                    .sessions()
+                    .get(session)
+                    .ok_or_else(no_such_session)
+                    .and_then(|s| s.avatar_handle());
+                let outbound = self.outbound.clone();
+                tokio::spawn(async move {
+                    let result = match handle {
+                        Ok(handle) => handle.get_avatar(client_id).await,
+                        Err(error) => Err(error),
+                    };
+                    let _ = outbound.send(Outbound::Text(
+                        serde_json::json!(FfiEvent::avatar(session, client_id, result)).to_string(),
+                    ));
+                });
+            }
+            Command::SetAvatar {
+                session,
+                image,
+                edit,
+            } => {
+                let session = *session;
+                let image = image.clone();
+                let edit = edit.clone();
+                let avatar = self.core.avatar();
+                let outbound = self.outbound.clone();
+                tokio::spawn(async move {
+                    let outcome = match ts_wire::decode_avatar(image.as_deref()) {
+                        Ok(image) => avatar.set_with_edit(session, image, edit).await,
+                        Err(error) => Err(error),
+                    };
+                    let event = match outcome {
+                        Ok(()) => FfiEvent::ok(name, Some(session)),
+                        Err(error) => FfiEvent::failed(name, Some(session), error),
+                    };
+                    let _ = outbound.send(Outbound::Text(serde_json::json!(event).to_string()));
+                });
+            }
             Command::Screen { session, command } => {
                 let session = *session;
                 let outcome = with_session!(self.core, session, s => s.screen(command.clone()));
+                self.report(name, Some(session), outcome);
+            }
+            Command::SetNickname { session, nickname } => {
+                let session = *session;
+                let outcome = with_session!(self.core, session, s => s.set_nickname(nickname));
                 self.report(name, Some(session), outcome);
             }
             Command::SetAway {
@@ -499,7 +546,10 @@ impl Worker {
             Command::SettingsGet => {
                 let settings = self.core.settings().clone();
                 match serde_json::to_value(settings) {
-                    Ok(data) => self.send(FfiEvent::with_data(name, None, data)),
+                    Ok(mut data) => {
+                        data["own_avatar"] = serde_json::json!(self.core.avatar().snapshot());
+                        self.send(FfiEvent::with_data(name, None, data));
+                    }
                     Err(error) => self.send(FfiEvent::failed(
                         name,
                         None,

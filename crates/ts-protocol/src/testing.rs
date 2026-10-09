@@ -304,6 +304,12 @@ impl ClientOperations for FakeClients {
 
 #[async_trait]
 impl Presence for FakePresence {
+    async fn set_nickname(&mut self, _nickname: &str) -> Result<(), ClientError> {
+        self.0
+            .lock()
+            .expect("fake state poisoned")
+            .record("Presence.set_nickname")
+    }
     async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError> {
         // Away and back are recorded apart, and the message itself is never
         // recorded: it is text the user typed, and a fake that kept it would

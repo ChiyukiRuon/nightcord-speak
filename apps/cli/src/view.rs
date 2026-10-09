@@ -74,6 +74,7 @@ impl View {
             | ClientEvent::Poked { .. }
             | ClientEvent::Speaking(_)
             | ClientEvent::VoiceStateChanged(_)
+            | ClientEvent::OwnAvatarChanged(_)
             | ClientEvent::Error(_) => {}
         }
     }

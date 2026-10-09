@@ -169,6 +169,14 @@ fn clamp_client_volume(volume: f32) -> f32 {
 
 /// Work the actor performs against the connection.
 pub(crate) enum Command {
+    GetAvatar {
+        client_id: ClientId,
+        reply: crate::avatar::ImageReply,
+    },
+    SetAvatar {
+        image: Option<Vec<u8>>,
+        reply: Reply,
+    },
     Extension {
         packet: crate::extension::ExtensionCommand,
         reply: Reply,
@@ -192,6 +200,7 @@ pub(crate) enum Command {
     /// Tell the server whether we are muted.
     SetVoiceState { state: VoiceState, reply: Reply },
     /// Tell the server whether we are away, and with what to say about it.
+    SetNickname { nickname: String, reply: Reply },
     SetAway {
         message: Option<String>,
         reply: Reply,
@@ -231,20 +240,27 @@ impl Command {
     ///
     /// Every variant carries one, so this is exhaustive by construction: a new
     /// command cannot be added without deciding what happens to its caller.
-    fn into_reply(self) -> Reply {
+    fn reject(self, error: ClientError) {
         match self {
-            Self::Extension { reply, .. }
+            Self::GetAvatar { reply, .. } => {
+                let _ = reply.send(Err(error));
+            }
+            Self::SetAvatar { reply, .. }
+            | Self::Extension { reply, .. }
             | Self::JoinChannel { reply, .. }
             | Self::SendText { reply, .. }
             | Self::MoveClient { reply, .. }
             | Self::SendVoice { reply, .. }
             | Self::SetVoiceState { reply, .. }
+            | Self::SetNickname { reply, .. }
             | Self::SetAway { reply, .. }
             | Self::Poke { reply, .. }
             | Self::Kick { reply, .. }
             | Self::Ban { reply, .. }
             | Self::SetClientVolume { reply, .. }
-            | Self::Disconnect { reply } => reply,
+            | Self::Disconnect { reply } => {
+                let _ = reply.send(Err(error));
+            }
         }
     }
 }
@@ -255,6 +271,8 @@ impl std::fmt::Debug for Command {
         // belong in a trace by default (§44).
         match self {
             Self::Extension { .. } => f.write_str("Extension(<redacted>)"),
+            Self::GetAvatar { .. } => f.debug_struct("GetAvatar").finish_non_exhaustive(),
+            Self::SetAvatar { .. } => f.debug_struct("SetAvatar").finish_non_exhaustive(),
             Self::JoinChannel { channel_id, .. } => f
                 .debug_struct("JoinChannel")
                 .field("channel_id", channel_id)
@@ -288,6 +306,7 @@ impl std::fmt::Debug for Command {
             // That there *is* a message, never the message: it is text the
             // user typed, and the same rule that keeps chat out of the trace
             // applies to it.
+            Self::SetNickname { .. } => f.debug_struct("SetNickname").finish_non_exhaustive(),
             Self::SetAway { message, .. } => f
                 .debug_struct("SetAway")
                 .field("away", &message.is_some())
@@ -503,6 +522,7 @@ impl std::fmt::Debug for Context {
 enum Outcome {
     Stream(Option<Result<StreamItem, tsclientlib::Error>>),
     Command(Command),
+    Avatar(Option<Result<crate::avatar::Completed, tokio::task::JoinError>>),
     /// The audio clock ticked: one frame of playback is due.
     AudioTick,
     /// The command channel closed, which means every handle was dropped.
@@ -601,7 +621,7 @@ pub(crate) async fn run(
     reconnect: Reconnect,
 ) {
     let Reconnect {
-        config,
+        mut config,
         mut schedule,
     } = reconnect;
 
@@ -647,6 +667,14 @@ pub(crate) async fn run(
             break;
         }
 
+        if let Some(state) = context.snapshot()
+            && let Some(client) = state
+                .clients
+                .iter()
+                .find(|client| Some(client.id) == state.own_client_id)
+        {
+            config.nickname = client.name.clone();
+        }
         match rebuild(&mut commands, &context, &config, &mut schedule, error).await {
             Some(fresh) => connection = fresh,
             None => break,
@@ -708,6 +736,7 @@ async fn serve(
     // would be a no-op anyway; consuming it keeps the cadence honest.
     ticker.tick().await;
 
+    let mut avatars = crate::avatar::Transfers::default();
     loop {
         let mut stream = connection.events();
         let outcome = tokio::select! {
@@ -717,11 +746,13 @@ async fn serve(
                 None => Outcome::Closed,
             },
             _ = ticker.tick() => Outcome::AudioTick,
+            result = avatars.tasks.join_next(), if !avatars.tasks.is_empty() => Outcome::Avatar(result),
         };
         drop(stream);
 
         match outcome {
             Outcome::AudioTick => {
+                avatars.expire();
                 // An empty buffer means nobody is talking: pumping anyway would
                 // push silence at the audio rate forever, which is bandwidth
                 // spent to say nothing and a stream the far end cannot tell
@@ -778,15 +809,17 @@ async fn serve(
                 dropped = true;
             }
             Outcome::Stream(Some(Ok(item))) => {
-                handle_item(
-                    item,
-                    connection,
-                    context,
-                    next_message_id,
-                    pending,
-                    ready,
-                    audio,
-                );
+                if let Some(item) = avatars.item(item) {
+                    handle_item(
+                        item,
+                        connection,
+                        context,
+                        next_message_id,
+                        pending,
+                        ready,
+                        audio,
+                    );
+                }
             }
             Outcome::Stream(Some(Err(error))) => {
                 tracing::warn!(session = %context.session, %error, "connection failed");
@@ -805,8 +838,14 @@ async fn serve(
                 };
             }
             Outcome::Command(command) => {
-                handle_command(command, connection, pending, audio);
+                if let Some(command) = avatars.command(command, connection, pending) {
+                    handle_command(command, connection, pending, audio);
+                }
             }
+            Outcome::Avatar(Some(Ok(completed))) => {
+                avatars.complete(completed, connection, pending);
+            }
+            Outcome::Avatar(_) => {}
             Outcome::Closed => {
                 tracing::info!(session = %context.session, "no handles left; closing connection");
                 let _ = connection.disconnect(DisconnectOptions::new());
@@ -917,7 +956,7 @@ async fn wait_or_stop(
                         ?command,
                         "refusing a command while reconnecting"
                     );
-                    let _ = command.into_reply().send(Err(crate::not_connected()));
+                    command.reject(crate::not_connected());
                 }
             },
         }
@@ -1239,6 +1278,16 @@ fn greet_the_server(connection: &mut Connection, context: &Arc<Context>) -> bool
     };
 
     if first {
+        if let Ok(book) = connection.get_state() {
+            let mut command = OutCommand::new(
+                Direction::C2S,
+                Flags::empty(),
+                PacketType::Command,
+                "clientgetvariables",
+            );
+            command.write_arg("clid", &book.own_client.0);
+            let _ = command.send(connection);
+        }
         send_server_variables(connection, context);
     }
     subscribe_to_every_channel(connection, context);
@@ -1599,6 +1648,16 @@ fn handle_command(
             settle(part.send_with_result(connection), reply, pending);
         }
 
+        Command::SetNickname { nickname, reply } => {
+            let part = {
+                let Ok(book) = connection.get_state() else {
+                    let _ = reply.send(Err(not_connected()));
+                    return;
+                };
+                book.client_update().set_name(&nickname)
+            };
+            settle(part.send_with_result(connection), reply, pending);
+        }
         Command::SetAway { message, reply } => {
             // Announced to the server rather than kept locally: the mark and
             // the message are what other people's clients draw, which is the
@@ -1627,6 +1686,11 @@ fn handle_command(
             settle(part.send_with_result(connection), reply, pending);
         }
 
+        Command::GetAvatar { .. } | Command::SetAvatar { .. } => {
+            command.reject(ClientError::Unsupported(
+                "avatar command outside transfer loop".into(),
+            ));
+        }
         Command::Disconnect { reply } => {
             let outcome = connection
                 .disconnect(DisconnectOptions::new())
@@ -1660,7 +1724,7 @@ fn own_move_part(
 }
 
 /// Records a send so its server response can settle the caller's future.
-fn settle(
+pub(crate) fn settle(
     send: Result<MessageHandle, tsclientlib::Error>,
     reply: Reply,
     pending: &mut HashMap<MessageHandle, Reply>,
@@ -1676,8 +1740,11 @@ fn settle(
     }
 }
 
-fn protocol_error(error: &tsclientlib::Error) -> ClientError {
-    ClientError::Protocol(ProtocolError::new(error.to_string()))
+pub(crate) fn protocol_error(error: &tsclientlib::Error) -> ClientError {
+    match error {
+        tsclientlib::Error::CommandError(error) => command_error(error),
+        _ => ClientError::Protocol(ProtocolError::new(error.to_string())),
+    }
 }
 
 fn not_connected() -> ClientError {

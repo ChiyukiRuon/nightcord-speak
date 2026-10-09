@@ -209,6 +209,20 @@ impl Session {
         self.backend.screen(command).await
     }
 
+    /// Applies the same input validation for every frontend.
+    ///
+    /// # Errors
+    /// Rejects blank names and propagates the server's refusal.
+    pub async fn set_nickname(&mut self, nickname: &str) -> Result<(), ClientError> {
+        let nickname = nickname.trim();
+        if nickname.is_empty() {
+            return Err(ClientError::Protocol(ts_model::ProtocolError::new(
+                "nickname must not be empty",
+            )));
+        }
+        self.backend.presence().set_nickname(nickname).await
+    }
+
     /// Marks us away, or back at the keyboard.
     ///
     /// `away: true` with no message is a legitimate state — away, with nothing
@@ -227,6 +241,24 @@ impl Session {
             None
         };
         self.backend.presence().set_away(message).await
+    }
+
+    /// A shared image capability, independent of the voice/control worker.
+    pub fn avatar_handle(&self) -> Result<std::sync::Arc<dyn ts_protocol::Avatars>, ClientError> {
+        self.backend.avatar_handle()
+    }
+
+    /// Retrieves a visible client's current picture without exposing protocol references.
+    pub async fn get_avatar(
+        &mut self,
+        client_id: ts_model::ClientId,
+    ) -> Result<ts_model::AvatarImage, ClientError> {
+        self.backend.get_avatar(client_id).await
+    }
+
+    /// Uploads or removes our picture on this server.
+    pub async fn set_avatar(&mut self, image: Option<Vec<u8>>) -> Result<(), ClientError> {
+        self.backend.set_avatar(image).await
     }
 
     /// Sends one encoded voice frame.
@@ -301,6 +333,15 @@ mod tests {
         let (backend, handle) = fake_backend(ProtocolKind::Ts3, true);
         let server = fake_server(1, ProtocolKind::Ts3);
         (Session::new(SessionId::new(1), server, backend), handle)
+    }
+
+    #[tokio::test]
+    async fn blank_nicknames_do_not_reach_the_backend() {
+        let (mut session, handle) = session();
+        assert!(session.set_nickname("  \t ").await.is_err());
+        assert_eq!(handle.call_count("Presence.set_nickname"), 0);
+        session.set_nickname(" New Name ").await.unwrap();
+        assert_eq!(handle.call_count("Presence.set_nickname"), 1);
     }
 
     #[tokio::test]

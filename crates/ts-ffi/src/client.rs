@@ -513,8 +513,42 @@ async fn handle(
             report(events, name, Some(session), outcome);
         }
 
+        Command::GetAvatar { session, client_id } => {
+            let handle = core
+                .sessions()
+                .get(session)
+                .ok_or_else(no_such_session)
+                .and_then(|s| s.avatar_handle());
+            let events = events.clone();
+            tokio::spawn(async move {
+                let result = match handle {
+                    Ok(handle) => handle.get_avatar(client_id).await,
+                    Err(error) => Err(error),
+                };
+                events.push(FfiEvent::avatar(session, client_id, result));
+            });
+        }
+        Command::SetAvatar {
+            session,
+            image,
+            edit,
+        } => {
+            let avatar = core.avatar();
+            let events = events.clone();
+            tokio::spawn(async move {
+                let outcome = match ts_wire::decode_avatar(image.as_deref()) {
+                    Ok(image) => avatar.set_with_edit(session, image, edit).await,
+                    Err(error) => Err(error),
+                };
+                report(&events, name, Some(session), outcome);
+            });
+        }
         Command::Screen { session, command } => {
             let outcome = with_session!(core, session, s => s.screen(command));
+            report(events, name, Some(session), outcome);
+        }
+        Command::SetNickname { session, nickname } => {
+            let outcome = with_session!(core, session, s => s.set_nickname(&nickname));
             report(events, name, Some(session), outcome);
         }
         Command::SetAway {
@@ -664,7 +698,10 @@ async fn handle(
         }
 
         Command::SettingsGet => match serde_json::to_value(core.settings()) {
-            Ok(data) => events.push(FfiEvent::with_data(name, None, data)),
+            Ok(mut data) => {
+                data["own_avatar"] = serde_json::json!(core.avatar().snapshot());
+                events.push(FfiEvent::with_data(name, None, data));
+            }
             // Serialising our own data cannot fail; if it somehow does, saying so
             // beats reporting an empty object the UI would take for the truth.
             Err(error) => {

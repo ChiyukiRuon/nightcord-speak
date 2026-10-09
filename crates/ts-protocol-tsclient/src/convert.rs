@@ -199,6 +199,7 @@ fn client_of(id: tsclientlib::ClientId, client: &BookClient, own: tsclientlib::C
             .clone()
             .filter(|message| !message.is_empty()),
         unique_id: client.uid.as_ref().map(|uid| base64_encode(&uid.0)),
+        avatar_version: crate::avatar::version(client),
         // TeamSpeak's own distinction between a person and a server-query
         // connection, which the book does report. It matters because every
         // running server has a `serveradmin` query client sitting on it, and a

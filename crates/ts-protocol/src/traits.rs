@@ -99,12 +99,25 @@ pub trait ClientOperations: Send + Sync {
 /// carries it.
 #[async_trait]
 pub trait Presence: Send + Sync {
+    /// Changes the visible name on this connection.
+    async fn set_nickname(&mut self, _nickname: &str) -> Result<(), ClientError> {
+        Err(ClientError::Unsupported("nickname changes".into()))
+    }
+
     /// Marks us away with `message`, or back at the keyboard with `None`.
     ///
     /// `Some("")` is a third state the protocol distinguishes and the UI has a
     /// use for: away, with nothing to say. It is not the same as `None`, which
     /// clears the mark entirely.
     async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError>;
+}
+
+/// Fetching visible users' pictures and changing our own server picture.
+#[async_trait]
+pub trait Avatars: Send + Sync {
+    async fn get_avatar(&self, client_id: ClientId) -> Result<ts_model::AvatarImage, ClientError>;
+    /// `None` removes our picture; bytes are a complete PNG or JPEG image.
+    async fn set_avatar(&self, image: Option<Vec<u8>>) -> Result<(), ClientError>;
 }
 
 /// Sending messages.
@@ -200,6 +213,7 @@ pub trait ScreenSharing: Send + Sync {
 /// capability unimplemented and get a clear [`ClientError::Unsupported`] rather
 /// than a silent no-op.
 pub struct Backend {
+    avatars: Option<Arc<dyn Avatars>>,
     screen: Option<Box<dyn ScreenSharing>>,
     kind: ProtocolKind,
     connection: Box<dyn Connection>,
@@ -212,6 +226,35 @@ pub struct Backend {
 }
 
 impl Backend {
+    #[must_use]
+    pub fn with_avatars(mut self, avatars: Box<dyn Avatars>) -> Self {
+        self.avatars = Some(Arc::from(avatars));
+        self
+    }
+
+    /// A shared handle keeps image I/O from blocking voice and control workers.
+    pub fn avatar_handle(&self) -> Result<Arc<dyn Avatars>, ClientError> {
+        self.avatars
+            .clone()
+            .ok_or_else(|| ClientError::Unsupported("avatars are unavailable".into()))
+    }
+
+    pub async fn get_avatar(
+        &mut self,
+        client_id: ClientId,
+    ) -> Result<ts_model::AvatarImage, ClientError> {
+        match &mut self.avatars {
+            Some(avatars) => avatars.get_avatar(client_id).await,
+            None => Err(ClientError::Unsupported("avatars are unavailable".into())),
+        }
+    }
+
+    pub async fn set_avatar(&mut self, image: Option<Vec<u8>>) -> Result<(), ClientError> {
+        match &mut self.avatars {
+            Some(avatars) => avatars.set_avatar(image).await,
+            None => Err(ClientError::Unsupported("avatars are unavailable".into())),
+        }
+    }
     /// Adds screen sharing, for backends whose protocol carries it.
     ///
     /// Separate from [`Backend::new`] because it is the only capability a
@@ -252,6 +295,7 @@ impl Backend {
         permissions: Box<dyn PermissionsReport>,
     ) -> Self {
         Self {
+            avatars: None,
             screen: None,
             kind,
             connection,

@@ -23,9 +23,11 @@ use ts_model::{
 /// Variants are additive: a front-end must ignore events it does not recognise
 /// rather than treating them as an error, so that a newer core can talk to an
 /// older UI.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event", content = "payload", rename_all = "snake_case")]
 pub enum ClientEvent {
+    /// Client-wide preference; the session identifies the initiating action.
+    OwnAvatarChanged(ts_model::OwnAvatar),
     /// Screen sharing discovery and peer negotiation.
     Screen(ts_model::ScreenEvent),
     // --- lifecycle --------------------------------------------------------
@@ -153,6 +155,7 @@ impl ClientEvent {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
+            Self::OwnAvatarChanged(_) => "own_avatar_changed",
             Self::ConnectionStateChanged(_) => "connection_state_changed",
             Self::Connected { .. } => "connected",
             Self::Screen(_) => "screen",
@@ -182,7 +185,7 @@ impl ClientEvent {
 ///
 /// With several servers connected at once, an event without a session id is
 /// ambiguous, so the id travels with it rather than being tracked separately.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionEvent {
     /// Which session produced this.
     pub session: SessionId,

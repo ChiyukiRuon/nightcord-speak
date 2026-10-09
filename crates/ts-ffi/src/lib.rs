@@ -573,6 +573,86 @@ pub unsafe extern "C" fn nightcord_screen(
     }
 }
 
+/// Fetches a visible client's avatar asynchronously.
+///
+/// # Safety
+/// `handle` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_get_avatar(
+    handle: *mut NightcordClient,
+    session: u32,
+    client_id: u16,
+) {
+    if let Some(client) = unsafe { handle.as_ref() } {
+        client.send(Command::GetAvatar {
+            session: SessionId::new(session),
+            client_id: ts_model::ClientId::new(client_id),
+        });
+    }
+}
+
+/// Uploads an avatar, or clears it when `image` is null.
+///
+/// # Safety
+/// `handle` must be live; `image` must be null or NUL-terminated UTF-8 base64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_set_avatar(
+    handle: *mut NightcordClient,
+    session: u32,
+    image: *const c_char,
+) {
+    if let Some(client) = unsafe { handle.as_ref() } {
+        client.send(Command::SetAvatar {
+            session: SessionId::new(session),
+            image: unsafe { from_c_str(image) },
+            edit: None,
+        });
+    }
+}
+
+/// Saves the original input and crop together with the public avatar.
+///
+/// # Safety
+/// `handle` must be live; `request` must be NUL-terminated UTF-8 JSON.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_set_avatar_edit(
+    handle: *mut NightcordClient,
+    session: u32,
+    request: *const c_char,
+) {
+    let Some(client) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { from_c_str(request) }) else {
+        return;
+    };
+    if let Some(avatar) = parse_json::<ts_model::OwnAvatar>(client, "set_avatar", &text) {
+        client.send(Command::SetAvatar {
+            session: SessionId::new(session),
+            image: avatar.image,
+            edit: avatar.edit,
+        });
+    }
+}
+
+/// Changes the current server's visible name.
+///
+/// # Safety
+/// `handle` must be live; `nickname` must be NUL-terminated UTF-8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_set_nickname(
+    handle: *mut NightcordClient,
+    session: u32,
+    nickname: *const c_char,
+) {
+    if let Some(client) = unsafe { handle.as_ref() } {
+        client.send(Command::SetNickname {
+            session: SessionId::new(session),
+            nickname: unsafe { from_c_str(nickname) }.unwrap_or_default(),
+        });
+    }
+}
+
 /// Marks us away, or back at the keyboard.
 ///
 /// `away` is the switch and `message` is what to say about it; `message` may be

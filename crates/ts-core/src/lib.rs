@@ -14,8 +14,10 @@
 //! the choice here means the session layer never has to know which protocols
 //! exist (§79).
 
+mod avatar;
 mod client;
 mod request;
 
+pub use avatar::GlobalAvatar;
 pub use client::Client;
 pub use request::{ConnectRequest, DEFAULT_PROFILE};

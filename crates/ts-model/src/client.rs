@@ -76,6 +76,9 @@ pub struct Client {
     /// Stable per-user id. Survives reconnects and nick changes, unlike
     /// [`Client::id`]. Absent for server-query connections.
     pub unique_id: Option<String>,
+    /// Opaque image revision. Changes invalidate the frontend's avatar cache.
+    #[serde(default)]
+    pub avatar_version: Option<String>,
     /// Voice or query.
     pub client_type: ClientType,
     /// Whether this client is us. Saves every front-end re-deriving it.
@@ -93,6 +96,7 @@ impl Client {
             flags: ClientFlags::none(),
             away_message: None,
             unique_id: None,
+            avatar_version: None,
             client_type: ClientType::Voice,
             is_self: false,
         }

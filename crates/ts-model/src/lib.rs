@@ -19,7 +19,11 @@
 //! protocol-shaped is allowed to reach a front-end, and no front-end concept is
 //! allowed to leak down into a backend.
 
+mod avatar;
 mod capability;
+mod own_avatar;
+pub use avatar::AvatarImage;
+pub use own_avatar::{AvatarEdit, OwnAvatar};
 mod channel;
 mod client;
 mod connection;

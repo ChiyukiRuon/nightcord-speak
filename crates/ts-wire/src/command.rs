@@ -57,6 +57,22 @@ impl AudioDirection {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "command", content = "payload", rename_all = "snake_case")]
 pub enum Command {
+    SetNickname {
+        session: SessionId,
+        nickname: String,
+    },
+    /// Fetch a visible client's picture; the response includes its image revision.
+    GetAvatar {
+        session: SessionId,
+        client_id: ClientId,
+    },
+    /// Base64-encoded PNG/JPEG, or `None` to remove our server picture.
+    SetAvatar {
+        session: SessionId,
+        image: Option<String>,
+        #[serde(default)]
+        edit: Option<ts_model::AvatarEdit>,
+    },
     /// Screen control; media travels directly between peers.
     Screen {
         session: SessionId,
@@ -274,6 +290,8 @@ impl Command {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
+            Self::GetAvatar { .. } => "get_avatar",
+            Self::SetAvatar { .. } => "set_avatar",
             Self::Connect(_) => "connect",
             Self::Screen { .. } => "screen",
             Self::Disconnect { .. } => "disconnect",
@@ -285,6 +303,7 @@ impl Command {
             Self::Kick { .. } => "kick",
             Self::Ban { .. } => "ban",
             Self::SetAway { .. } => "set_away",
+            Self::SetNickname { .. } => "set_nickname",
             Self::ListDevices { .. } => "audio_devices",
             Self::VoiceStatus => "voice_status",
             Self::VoiceTestOutput => "voice_test_output",
@@ -342,6 +361,19 @@ mod tests {
 
     fn connect() -> Command {
         Command::Connect(Box::new(ConnectRequest::new("example.com", "Tester")))
+    }
+
+    #[test]
+    fn nickname_command_keeps_its_session_and_name_across_the_wire() {
+        let command: Command = serde_json::from_str(
+            r#"{"command":"set_nickname","payload":{"session":7,"nickname":"New Name"}}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(&command, Command::SetNickname { session, nickname } if session.get() == 7 && nickname == "New Name")
+        );
+        assert_eq!(command.name(), "set_nickname");
+        assert!(!format!("{command:?}").contains("New Name"));
     }
 
     #[test]

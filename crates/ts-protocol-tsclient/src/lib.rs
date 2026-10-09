@@ -32,6 +32,7 @@
 //! while its event stream is polled. See [`actor`] for the details.
 
 mod actor;
+mod avatar;
 mod convert;
 mod diff;
 pub mod extension;
@@ -433,7 +434,47 @@ impl ClientOperations for TsClient {
 }
 
 #[async_trait]
+impl ts_protocol::Avatars for TsClient {
+    async fn get_avatar(&self, client_id: ClientId) -> Result<ts_model::AvatarImage, ClientError> {
+        let commands = self
+            .running()
+            .as_ref()
+            .map(|r| r.commands.clone())
+            .ok_or_else(not_connected)?;
+        let (reply, receiver) = oneshot::channel();
+        commands
+            .send(Command::GetAvatar { client_id, reply })
+            .await
+            .map_err(|_| not_connected())?;
+        tokio::time::timeout(Duration::from_secs(25), receiver)
+            .await
+            .map_err(|_| ClientError::Timeout)?
+            .unwrap_or_else(|_| Err(not_connected()))
+    }
+    async fn set_avatar(&self, image: Option<Vec<u8>>) -> Result<(), ClientError> {
+        if let Some(bytes) = &image {
+            avatar::validate_upload(bytes)?;
+        }
+        tokio::time::timeout(
+            Duration::from_secs(25),
+            avatar::retry_upload(|| {
+                let image = image.clone();
+                self.call(|reply| Command::SetAvatar { image, reply })
+            }),
+        )
+        .await
+        .map_err(|_| ClientError::Timeout)?
+    }
+}
+
+#[async_trait]
 impl Presence for TsClient {
+    async fn set_nickname(&mut self, nickname: &str) -> Result<(), ClientError> {
+        let nickname = nickname.to_string();
+        self.call(|reply| Command::SetNickname { nickname, reply })
+            .await
+    }
+
     async fn set_away(&mut self, message: Option<&str>) -> Result<(), ClientError> {
         let message = message.map(str::to_string);
         self.call(|reply| Command::SetAway { message, reply }).await
@@ -529,8 +570,9 @@ pub fn backend(
         Box::new(client.clone()),
         Box::new(client.clone()),
         Box::new(client.clone()),
-        Box::new(client),
+        Box::new(client.clone()),
     )
+    .with_avatars(Box::new(client))
 }
 
 /// Installs backend-owned wire vocabulary over the existing connection.
@@ -554,6 +596,7 @@ pub fn backend_with_screen(
         Box::new(client.clone()),
         Box::new(client.clone()),
     )
+    .with_avatars(Box::new(client.clone()))
     .with_screen(Box::new(client))
 }
 
