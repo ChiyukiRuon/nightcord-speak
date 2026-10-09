@@ -2127,6 +2127,16 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
   - Intel 那条 job 的 `flutter test` 失败，但**同样的步骤在同一个 runner 标签上重跑
     （临时诊断分支）就全过**——按偶发处理，暂不改测试；再犯就把诊断分支里那套
     `::error::` 注释逻辑接进 `release.yml`，这样失败时不用仓库权限也能读到测试名。
+  - **第四次运行只剩 x64 一条，挂在 `Build macOS bundle`，根因是签名**：Xcode 收尾
+    签名时拒绝一个嵌套 dylib 未签名的 bundle（`Command CodeSign failed`，日志里
+    `code object is not signed at all`，In subcomponent 指向包里那份
+    `libnightcord_ffi.dylib`）。链接器**只在 Apple silicon 上自动 ad-hoc 签名**，
+    Intel 上不签——这就是为什么 arm64 一路绿、只有 x64 炸。
+    修法：在复制 Rust 库的 script phase 里用这次构建自己的身份补签一次
+    （`codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$DEST/libnightcord_ffi.dylib"`）；
+    打包脚本随后还会 `--deep` 重签整个 bundle，两次签名因此一致。
+    验证：Mac 节点上 `flutter build macos --release` 通过；**在 macos-15-intel 上用
+    临时诊断分支跑了同一步骤，绿**（该分支用完即删）。
 - 另记一条 vendor 事实：**fork 里的提交，父仓库也能按 SHA 取到**（GitHub 的 fork
   对象共享）——实测 `git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f`
   在干净克隆上成功。所以改指 fork 不是为了「CI 才拉得到」，而是为了把补丁留在自己的
