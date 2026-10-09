@@ -1,0 +1,214 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  FLUTTER_VERSION: '3.47.5'
+
+jobs:
+  plan:
+    name: Validate version and select platforms
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.plan.outputs.version }}
+      build_name: ${{ steps.plan.outputs.build_name }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test release helpers
+        run: python -m unittest discover -s scripts/tests -p 'test_desktop_release.py'
+      - name: Plan release
+        id: plan
+        run: python scripts/desktop-release.py plan
+
+  check:
+    name: Rust quality checks
+    needs: plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install audio build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config cmake
+      # rustup honors rust-toolchain.toml; do not override it with stable.
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: bash scripts/fmt.sh --check
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --workspace --all-features
+
+  build:
+    name: Package ${{ matrix.platform }} (${{ matrix.arch }})
+    needs: [plan, check]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Prepare macOS build tools
+        if: matrix.platform == 'macos'
+        run: |
+          # fetch-fonts.sh uses GNU sha256sum; macOS ships shasum instead.
+          brew list --versions coreutils >/dev/null || brew install coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          cmake --version
+          pod --version
+      - name: Fetch UI fonts
+        run: bash scripts/fetch-fonts.sh
+      - name: Set product version from tag
+        run: python scripts/desktop-release.py prepare
+      - name: Resolve Flutter dependencies
+        working-directory: apps/client
+        run: flutter pub get
+      - name: Analyze Flutter
+        working-directory: apps/client
+        run: flutter analyze
+      - name: Build the real FFI library for tests
+        run: cargo build --locked -p ts-ffi --all-features
+      - name: Test Flutter
+        working-directory: apps/client
+        run: flutter test --reporter expanded
+      - name: Configure macOS architecture
+        if: matrix.platform == 'macos'
+        env:
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: |
+          if [[ "$RELEASE_ARCH" == arm64 ]]; then
+            excluded=x86_64
+          else
+            excluded=arm64
+          fi
+          # Match the Flutter executable to the host-built Rust dylib.
+          printf '\nEXCLUDED_ARCHS = %s\n' "$excluded" >> apps/client/macos/Runner/Configs/Release.xcconfig
+      - name: Build Windows bundle
+        if: matrix.platform == 'windows'
+        working-directory: apps/client
+        env:
+          BUILD_NAME: ${{ needs.plan.outputs.build_name }}
+        run: flutter build windows --release --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER"
+      - name: Bundle Visual C++ runtime
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or -not $vsPath) { throw 'Visual Studio C++ tools not found' }
+          $runtime = Get-ChildItem -LiteralPath "$vsPath\VC\Redist\MSVC" -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64\Microsoft.VC143.CRT' } |
+            Where-Object { Test-Path -LiteralPath $_ } |
+            Select-Object -First 1
+          if (-not $runtime) { throw 'Visual C++ x64 redistributable not found' }
+          Get-ChildItem -LiteralPath $runtime -Filter '*.dll' |
+            Copy-Item -Destination apps/client/build/windows/x64/runner/Release
+      - name: Build macOS bundle
+        if: matrix.platform == 'macos'
+        working-directory: apps/client
+        env:
+          BUILD_NAME: ${{ needs.plan.outputs.build_name }}
+        run: flutter build macos --release --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER"
+      - name: Package and checksum
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: python scripts/desktop-release.py package --platform "$RELEASE_PLATFORM" --arch "$RELEASE_ARCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+      PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: dist
+      - name: Verify complete artifact set
+        run: python scripts/desktop-release.py verify
+      - name: Create draft, upload bundles, then publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          platforms = json.loads(Path('.github/release-platforms.json').read_text())['platforms']
+          lines = ['本次发布平台：' + '、'.join(platforms) + '。未列出的平台无需更新。', '']
+          if 'windows' in platforms:
+              lines.append('Windows：下载 x64 ZIP，解压并保留完整目录，运行 nightcord_client.exe。')
+          if 'macos' in platforms:
+              lines.append('macOS：按处理器选择 Apple Silicon（arm64）或 Intel（x64）ZIP，解压后将应用复制到「应用程序」。')
+              lines.append('macOS 目前使用临时签名，尚未经过 Apple 公证。')
+          lines.append('每个安装包附带 SHA-256 校验文件及记录源码提交、版本和构建编号的 JSON 清单。')
+          Path('release-notes.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+          if existing=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [[ "$existing" != true ]]; then
+              echo 'Release already published; use a new version tag instead of replacing public assets.' >&2
+              exit 1
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "Nightcord Speak $RELEASE_VERSION" --generate-notes --notes-file release-notes.md
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          latest=true
+          if [[ "$PRERELEASE" == true ]]; then latest=false; fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease="$PRERELEASE" --latest="$latest"

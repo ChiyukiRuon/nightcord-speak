@@ -340,6 +340,61 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 
 ---
 
+### 3.7 桌面自动发布（2026-10-09）
+
+`.github/workflows/release.yml` **仅在推送 `v*` tag 时运行**，普通分支推送不会打包或发布。
+原有 `ci.yml` 保留 PR 与手动运行入口，不增加分支推送触发。
+
+**版本规则**：所有平台共用产品版本，当前开发基线为 `0.1.0`。
+发布时以 tag 为产品版本来源；`scripts/desktop-release.py prepare` 在 CI 工作目录中同步
+`pubspec.yaml` 与“关于”页面的 `appVersion`，不自动提交修改。
+Rust 内部 crate 的版本仍由 workspace 管理，不随每次应用发布改写。
+构建编号使用发布 workflow 的 `github.run_number`；失败任务重跑仍属同一次发布。
+原生文件版本使用纯数字 `X.Y.Z`，完整 beta/rc 版本保留在“关于”页面、文件名与清单中。
+
+允许的 tag 为 `vX.Y.Z`、`vX.Y.Z-alpha.N`、`vX.Y.Z-beta.N`、`vX.Y.Z-rc.N`，
+其中 N 从 1 开始。其他 `v*` tag 会在校验阶段失败，不进入构建。
+`0.x.x` 与所有 alpha/beta/rc 均自动标为 GitHub Pre-release；`1.0.0` 起的
+无后缀版本作为正式 Release，并设为 Latest。
+
+**默认产物**：Windows x64 ZIP、macOS Apple Silicon（arm64）ZIP、macOS Intel（x64）ZIP。
+Windows 包含完整 Flutter 资源、Rust DLL、插件与 Visual C++ 运行库；解压后运行
+`nightcord_client.exe`，不要只取 exe。macOS ZIP 保留 `.app` 的权限与框架符号链接，
+解压后将 `Nightcord Speak.app` 复制到“应用程序”。目前 macOS 使用临时签名，
+**没有 Developer ID 签名或 Apple 公证**；Windows 也未配置发行者签名。
+每个 ZIP 附带 `.sha256` 与 `.json`（产品版本、构建编号、平台、架构、源码提交及哈希）。
+
+**单平台补丁**：tag 指向的提交中，`.github/release-platforms.json` 决定构建范围：
+
+```json
+{"platforms": ["windows", "macos"]}
+```
+
+Windows 专属补丁改为 `["windows"]`；macOS 专属补丁改为 `["macos"]`，仍会生成
+两种 Mac 架构。共同发布前恢复两端列表。选择必须非空、不重复且仅含这两个平台。
+未发布的平台保持上次版本，不要求更新；Release 说明会列出本次平台范围。
+
+**发布操作**：先将完整源码及 workflow 提交并推送，确保 submodule 引用已在远端可获取，
+再给待发布提交打 tag 并只推送该 tag，例如：
+
+```bash
+git tag -a v0.1.0 -m "首个公开测试版本"
+git push origin v0.1.0
+```
+
+workflow 先校验版本与选择，再执行 Rust 格式/Clippy/全工作区测试；每个平台打包前
+执行 Flutter analyze、构建真实 Debug FFI 与 Flutter 测试。Flutter 固定 `3.47.5`，
+Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别使用
+`macos-15` 与 `macos-15-intel`。macOS 发布构建排除另一架构，使应用与 host Rust
+动态库一致，打包前检查应用及 Rust 库架构，再对最终 bundle 签名并验证。
+
+所有目标打包成功、产物集合及哈希检查通过后，创建 Release 草稿，上传完整附件再发布；
+构建失败不会发布 Release。上传失败可重跑恢复草稿；**已公开的 Release 不覆盖附件**，
+需要修复时使用新的补丁 tag。CI 中只给发布 job `contents: write`，使用默认
+`GITHUB_TOKEN`，无需另配 PAT；仓库或组织策略仍需允许该权限。
+
+---
+
 ## 4. 开发规范
 
 ### 4.1 语言
@@ -395,6 +450,20 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 ## 5. 当前进度
 
 **最后更新：2026-10-09**
+
+**桌面 tag 自动发布（2026-10-09）**：按用户确认采用统一产品版本与按平台选择发布。
+新增 `.github/workflows/release.yml`，只有推送版本 tag 才打包并加入 Release；普通推送
+继续保持静默。默认 Windows x64、macOS arm64/x64，单平台补丁由
+`.github/release-platforms.json` 选择，操作和版本约定见 §3.7。Flutter 开发基线与 Rust
+workspace 对齐到 `0.1.0`，发布时产品版本从 tag 注入。现有 CI 修正 Rust 工具链跟随
+仓库版本、Linux ALSA 编译依赖，并加入发布脚本测试。
+提交前 Rust 格式、Clippy、441 项 Rust 测试、Flutter analyze、398 项 Flutter 测试、
+9 项发布回归、两个 workflow 的 actionlint 1.7.7 语法检查与改动文件空白检查通过；
+tag 规划实际输出验证通过。Rust/Flutter 全量测试在沙箱外完成，以访问真实 FFI 与
+应用数据目录。用户授权提交并推送，本次仅包含发布流程、版本基线及对应文档；
+其他未提交功能改动保持在工作区。**本轮未在 GitHub runner 执行两端打包、未创建
+版本 tag 或 Release**，首次 tag 构建仍需验证托管环境的完整链路。
+macOS 临时签名/未公证与 Windows 未配置发行者签名的限制见 §3.7。
 
 **屏幕共享修复汇总（2026-10-09）**：本轮包含以下相互独立的修复与诊断：
 
@@ -1379,8 +1448,8 @@ debug 下对、在测试里也对，唯独 release 下是错的——因为它�
       与单声道无异，带宽却翻倍。要不要在界面上说明这件事，或者检测到单声道设备时
       回落到语音档，待定——这是「固定最高档」这个决定的已知代价
 - [ ] **CI 缺 Flutter job**：`.github/workflows/ci.yml` 只跑 Rust，`flutter analyze`
-      与 `flutter test` 没进 CI。注意 Dart 测试会加载真实的 Rust 动态库，
-      所以这个 job 必须先 `cargo build` 并把 DLL 放到测试能找到的位置。
+      与 `flutter test` 尚未覆盖 PR/手动 CI；2026-10-09 已加入 tag 发布工作流，
+      Windows/macOS 打包前先构建真实 FFI 并执行两项 Flutter 检查。
 - [ ] `.gitignore` 忽略了 `pubspec.lock`。Flutter **应用**（非库）应当提交
       lockfile 以固定依赖，待确认后改。
 

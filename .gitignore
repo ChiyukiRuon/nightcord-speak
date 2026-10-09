@@ -33,6 +33,8 @@ desktop.ini
 *.identity
 /run/
 /logs/
+/dist/
+__pycache__/
 
 # --- Debugging leftovers ---------------------------------------------------
 # Where the browser-automation tool drops its page snapshots and console logs

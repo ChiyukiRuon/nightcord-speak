@@ -1,17 +1,8 @@
 name: CI
 
 on:
-  # Pushes to `main` deliberately do **not** trigger this.
-  #
-  # Turned off on request (2026-10-02) while the macOS work is landing in
-  # bursts; every push ran the whole matrix and the signal was not being read.
-  # `workflow_dispatch` keeps it runnable by hand from the Actions tab, so this
-  # is a pause rather than a removal — put the `push:` block back when the
-  # churn settles.
-  #
-  # Note for whoever restores it: GitHub reads the workflow file **from the
-  # commit being pushed**, so a commit that removes the trigger does not run it
-  # either. The push that turned this off was itself silent.
+  # Ordinary pushes deliberately stay silent. Desktop packaging and publishing
+  # are handled only by version tags in release.yml.
   workflow_dispatch:
   pull_request:
 
@@ -33,9 +24,18 @@ jobs:
           # files from it at compile time.
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install audio build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config cmake
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+
+      - uses: actions/setup-python@v5
         with:
-          components: rustfmt, clippy
+          python-version: '3.12'
+
+      - name: Test desktop release helpers
+        run: python -m unittest discover -s scripts/tests -p 'test_desktop_release.py'
 
       - uses: Swatinem/rust-cache@v2
 
@@ -64,17 +64,22 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install audio build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config cmake
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
         run: cargo build --workspace --release
 
-  # Not yet covered: `flutter analyze` and `flutter test` for apps/client.
+  # PR/manual CI currently covers Rust; release.yml also gates each desktop
+  # package with `flutter analyze` and `flutter test` against the real FFI.
   # The Dart tests load the real Rust shared library, so that job needs a
-  # `cargo build` and the DLL on the loader path first — see the "CI 缺 Flutter
-  # job" entry in AGENTS.md §7 for what it has to do.
+  # `cargo build` and the DLL on the loader path first — see AGENTS.md §7.
   #
   # Android and iOS enter the build matrix at the same point, since they are
   # only reachable through Flutter.
