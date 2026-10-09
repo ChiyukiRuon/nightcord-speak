@@ -2111,6 +2111,22 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
   > `CARGO_TARGET_DIR` 对得上（第一次复现就栽在这上面：把 dylib 建到了别的 target
   > 目录，凭空多出 19 个「加载不了核心」的假失败）。
 - 第二次改指：`v0.1.0` 移到 `ee7f3f3`（同一理由——仍然没有任何附件发布过）。
+- **第三次运行又是两个原因，其中一个是从 `43a6714` 起就埋着的**：
+  - **`Runner.xcodeproj` 坏了**：屏幕共享音频那一轮往工程里加两个 Swift 文件时，把
+    Sources 阶段的 `files` 列表项插进了 `PBXBuildFile` 段——那里每行必须是
+    `key /* … */ = {…};`，而这两行是 `key,`，整个文件因此不是合法 plist，Xcode 直接
+    「Unable to read project」；而 Sources 阶段里**又没有**这两条，即便能打开也不会
+    编译它们。**后果**：任何干净克隆都建不出 macOS 包——CI 正是干净的。构建节点上那份
+    工作区一直脏着（Xcode/CocoaPods 自己改过），所以八天里没人撞见。
+    **教训**：macOS 的构建结论只在**干净克隆**上才算数；手改 `project.pbxproj` 之后
+    必须 `xcodebuild -list` 真的读一遍（§9 早写过这条，这次是没做）。
+    修法：删掉放错的两行，按工作副本的排布把条目补进 Sources 阶段。Mac 节点上
+    `xcodebuild -list` 与 `flutter build macos --release`（121 MB 的 `.app`）都通过，
+    `desktop-release.py package` 也走到了最后（只剩 Mac 的 Python < 3.11 没有
+    `hashlib.file_digest`，CI 用 3.12 不受影响）。
+  - Intel 那条 job 的 `flutter test` 失败，但**同样的步骤在同一个 runner 标签上重跑
+    （临时诊断分支）就全过**——按偶发处理，暂不改测试；再犯就把诊断分支里那套
+    `::error::` 注释逻辑接进 `release.yml`，这样失败时不用仓库权限也能读到测试名。
 - 另记一条 vendor 事实：**fork 里的提交，父仓库也能按 SHA 取到**（GitHub 的 fork
   对象共享）——实测 `git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f`
   在干净克隆上成功。所以改指 fork 不是为了「CI 才拉得到」，而是为了把补丁留在自己的
