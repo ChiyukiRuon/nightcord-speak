@@ -2137,6 +2137,14 @@ apps/client/lib/models/events.dart   ScreenEvent 顶了 ConnectedEvent 的注释
     打包脚本随后还会 `--deep` 重签整个 bundle，两次签名因此一致。
     验证：Mac 节点上 `flutter build macos --release` 通过；**在 macos-15-intel 上用
     临时诊断分支跑了同一步骤，绿**（该分支用完即删）。
+- **第五次运行全绿**：六个 job（版本校验、Rust 门禁、Windows x64、macOS arm64、
+  macOS x64、发布）全部通过，Release 已发布为 Pre-release（`0.x.x` 的既定规则）：
+  <https://github.com/ChiyukiRuon/nightcord-speak/releases/tag/v0.1.0>。附件三个 ZIP
+  各带 `.sha256` 与 `.json`：Windows x64 约 59 MB、macOS arm64 约 60 MB、
+  macOS x64 约 61 MB。tag 最终指向 `7fe3f7a`——**期间改指四次**，每次都是因为上一次
+  运行在打包完成之前就挂了、没有任何附件公开过（§3.7 约束的是「已公开的 Release」）。
+  托管构建节点上的完整链路至此第一次跑通；macOS 仍是临时签名、未公证，Windows 未配置
+  发行者签名（§3.7）。
 - 另记一条 vendor 事实：**fork 里的提交，父仓库也能按 SHA 取到**（GitHub 的 fork
   对象共享）——实测 `git fetch https://github.com/Moepchi/tsdeclarations.git 9d4f50f`
   在干净克隆上成功。所以改指 fork 不是为了「CI 才拉得到」，而是为了把补丁留在自己的
