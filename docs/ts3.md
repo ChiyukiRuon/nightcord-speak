@@ -181,7 +181,9 @@ fork 是叠在它之上的。这 14 个 commit 中与我们相关的：
 所以换成上游能直接消除局域网拦截，但会**同时失去 TS6 支持**
 （`DEVELOPMENT.md` §85 的 Milestone 0.4）以及上述安全修复。
 
-子模块差异：上游指向 `ReSpeak/tsdeclarations`，fork 指向 `Moepchi/tsdeclarations@webspeak3`。
+子模块差异：上游指向 `ReSpeak/tsdeclarations`，fork 随后指向
+`Moepchi/tsdeclarations@webspeak3`；2026-10-09 起本仓库的 fork 链再改指
+`ChiyukiRuon/tsdeclarations@nightcord`（多一个 `client_myteamspeak_avatar` 字段）。
 
 ### 结论（2026-09-29）：已解决
 

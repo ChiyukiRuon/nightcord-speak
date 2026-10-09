@@ -82,7 +82,9 @@ wire 处理放在 `ts-protocol-tsclient`，上面两个 crate 各自只声明「
 - 它的 `utils/tsproto-structs` 在**编译期**用
   `include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/declarations/Versions.csv"))`
   读取声明文件。
-- `declarations/` 是一个嵌套 submodule（`Moepchi/tsdeclarations`）。
+- `declarations/` 是一个嵌套 submodule（现为自建 fork
+  `ChiyukiRuon/tsdeclarations@nightcord`，理由见
+  [`tsclientlib-fork.md`](tsclientlib-fork.md)）。
 - **Cargo 不会为 git 依赖拉取 submodule**，因此构建必定失败于
   `couldn't read .../declarations/Versions.csv`。
 
@@ -93,8 +95,8 @@ wire 处理放在 `ts-protocol-tsclient`，上面两个 crate 各自只声明「
 
 ```text
 .gitmodules
-└── vendor/tsclientlib  →  Moepchi/tsclientlib @ webspeak3
-    └── utils/tsproto-structs/declarations  →  Moepchi/tsdeclarations
+└── vendor/tsclientlib  →  ChiyukiRuon/tsclientlib @ nightcord
+    └── utils/tsproto-structs/declarations  →  ChiyukiRuon/tsdeclarations @ nightcord
 ```
 
 版本由 submodule 记录的 commit 固定（可复现）。升级方式：

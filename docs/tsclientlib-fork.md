@@ -76,8 +76,18 @@ pub fn is_allowed_target(ip: &IpAddr) -> bool {
   branch = nightcord
 ```
 
-submodule 当前 pin 在 `c5cc287`（即下文〈第二处改动〉）。本地的临时补丁已丢弃
-——改动现在是正式版本。
+submodule 当前 pin 在 `26c9945`。本地的临时补丁已丢弃——改动现在是正式版本。
+
+### 5. declarations 也换成自建 fork（2026-10-09）
+
+`utils/tsproto-structs/declarations` 原本指向 `Moepchi/tsdeclarations@webspeak3`。
+要显示公开头像就得在 `Book.toml` 里声明 `client_myteamspeak_avatar`，上游没有这个
+字段，因此 fork 一份：`ChiyukiRuon/tsdeclarations` 的 **`nightcord`** 分支
+（`9d4f50f`，在 `webspeak3` 之上只多那一行），`.gitmodules` 随之改指过去。
+命名与另外两个 fork 一致，`webspeak3` 保持不动、便于日后对上游。
+
+> 只动 `Book.toml` 就够了：该文件开头写明「高层名字相同的属性会被隐式搬运」，
+> 所以不必再往 `MessagesToBook.toml` 加规则。
 
 ---
 
