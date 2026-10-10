@@ -181,7 +181,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsNotifySystem => 'ウィンドウが前面にないときにシステム通知を表示';
 
   @override
-  String get settingsSensitivity => '感度';
+  String get settingsSensitivity => 'マイク感度';
 
   @override
   String get settingsSensitivityHint => '感度が高いほど周囲の騒音では反応しにくく、その分大きな声が必要。';
@@ -1028,4 +1028,20 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get soundsOpenError => '音声フォルダーを開けません。フォルダーにアクセスできるか確認してください。';
+
+  @override
+  String get settingsVad => '音声活動検出 (VAD)';
+
+  @override
+  String get settingsVadSmart => 'スマート音声検出（デフォルト）';
+
+  @override
+  String get settingsVadSmartHint => '音量のしきい値を手動で調整せずに、人の声を自動検出します。';
+
+  @override
+  String get settingsVadWaiting => '音声の検出を待機中';
+
+  @override
+  String get settingsMicBoostHint =>
+      '送信音量は標準で 6 dB 上げています。マイクゲインはこの音量を基準に調整します。';
 }

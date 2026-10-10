@@ -58,7 +58,7 @@
   "settingsNotifyDirectMessage": "私訊",
   "settingsNotifyConnection": "連線中斷與恢復",
   "settingsNotifySystem": "視窗不在前景時顯示系統通知",
-  "settingsSensitivity": "靈敏度",
+  "settingsSensitivity": "麥克風靈敏度",
   "settingsSensitivityHint": "靈敏度越高，越不容易被環境噪音觸發，但需要更大聲說話才能觸發。",
   "settingsMicGain": "麥克風增益",
   "settingsMicGainHint": "其他人聽到你的音量。拖到最底端為靜音。",
@@ -336,5 +336,10 @@
   "soundAwayOff": "關閉 AFK 模式",
   "soundMessage": "收到新訊息",
   "soundsOpenFolder": "開啟音效資料夾",
-  "soundsOpenError": "無法開啟音效資料夾，請檢查目錄是否可存取。"
+  "soundsOpenError": "無法開啟音效資料夾，請檢查目錄是否可存取。",
+  "settingsVad": "語音活動偵測 (VAD)",
+  "settingsVadSmart": "智慧語音偵測（預設）",
+  "settingsVadSmartHint": "自動辨識人聲，無需手動調整音量閾值。",
+  "settingsVadWaiting": "等待偵測到人聲",
+  "settingsMicBoostHint": "傳送音量已預設提升 6 dB，麥克風增益在此基礎上調整。"
 }

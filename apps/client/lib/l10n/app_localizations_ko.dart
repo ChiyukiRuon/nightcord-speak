@@ -182,7 +182,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsNotifySystem => '창이 앞에 없을 때 시스템 알림 표시';
 
   @override
-  String get settingsSensitivity => '감도';
+  String get settingsSensitivity => '마이크 감도';
 
   @override
   String get settingsSensitivityHint =>
@@ -1040,4 +1040,20 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get soundsOpenError => '소리 폴더를 열 수 없습니다. 폴더에 접근할 수 있는지 확인하세요.';
+
+  @override
+  String get settingsVad => '음성 활동 감지 (VAD)';
+
+  @override
+  String get settingsVadSmart => '스마트 음성 감지 (기본값)';
+
+  @override
+  String get settingsVadSmartHint => '음량 기준을 직접 조절하지 않아도 사람의 목소리를 자동으로 감지합니다.';
+
+  @override
+  String get settingsVadWaiting => '음성 감지 대기 중';
+
+  @override
+  String get settingsMicBoostHint =>
+      '송신 음량은 기본으로 6 dB 높아집니다. 마이크 게인은 이 음량을 기준으로 조절합니다.';
 }

@@ -15,6 +15,21 @@ Map<String, dynamic> roundTrip(Settings settings) =>
 
 void main() {
   group('settings', () {
+    test('legacy activation adopts smart VAD and preserves manual tuning', () {
+      final activation = VoiceActivationSettings.fromJson(const {
+        'sensitivity': 0.21,
+        'attack_ms': 45,
+        'release_ms': 250,
+      });
+      expect(activation.algorithm, VadAlgorithm.smart);
+      final manual = activation.copyWith(algorithm: VadAlgorithm.level);
+      final restored = VoiceActivationSettings.fromJson(manual.toJson());
+      expect(restored.algorithm, VadAlgorithm.level);
+      expect(restored.sensitivity, 0.21);
+      expect(restored.attackMs, 45);
+      expect(restored.releaseMs, 250);
+      expect(activation.algorithm, VadAlgorithm.smart);
+    });
     test('survive the JSON round trip unchanged', () {
       const settings = Settings(
         audio: AudioSettings(
@@ -53,7 +68,10 @@ void main() {
     test('a section replaced by something else falls back to defaults', () {
       // What "settings.json: audio: 42" looks like. Refusing to open the
       // settings page over it would be worse than ignoring it.
-      final settings = Settings.fromJson(const {'audio': 42, 'connection': 'nope'});
+      final settings = Settings.fromJson(const {
+        'audio': 42,
+        'connection': 'nope',
+      });
 
       expect(settings.audio, isA<AudioSettings>());
       expect(settings.audio.activation.sensitivity, 0.05);
@@ -64,8 +82,15 @@ void main() {
       // The two are one field apart — `0` versus `null` — and getting it
       // backwards means either a client that never comes back or one that never
       // stops.
-      expect(const ConnectionSettings(maxReconnectAttempts: 0).toJson()['max_reconnect_attempts'], 0);
-      expect(const ConnectionSettings().toJson()['max_reconnect_attempts'], isNull);
+      expect(
+        const ConnectionSettings(maxReconnectAttempts: 0)
+            .toJson()['max_reconnect_attempts'],
+        0,
+      );
+      expect(
+        const ConnectionSettings().toJson()['max_reconnect_attempts'],
+        isNull,
+      );
 
       final off = Settings.fromJson(const {
         'connection': {'max_reconnect_attempts': 0},
@@ -84,7 +109,10 @@ void main() {
       const chosen = AudioSettings(inputDevice: 'wasapi:Headset');
       expect(chosen.copyWith().inputDevice, 'wasapi:Headset');
       expect(chosen.copyWith(clearInputDevice: true).inputDevice, isNull);
-      expect(chosen.copyWith(inputDevice: 'wasapi:Other').inputDevice, 'wasapi:Other');
+      expect(
+        chosen.copyWith(inputDevice: 'wasapi:Other').inputDevice,
+        'wasapi:Other',
+      );
     });
 
     test('notification switches default to on and round trip', () {
@@ -97,7 +125,10 @@ void main() {
       expect(bare.notifications.system, isTrue);
 
       const oneOff = Settings(
-        notifications: NotificationSettings(presence: false, directMessage: false),
+        notifications: NotificationSettings(
+          presence: false,
+          directMessage: false,
+        ),
       );
       final back = Settings.fromJson(roundTrip(oneOff));
       expect(back.notifications.presence, isFalse);
@@ -202,23 +233,30 @@ void main() {
       const both = UiSettings(language: 'en', theme: 'black');
       final changed = both.copyWith(theme: 'white');
       expect(changed.theme, 'white');
-      expect(changed.language, 'en', reason: 'the two settings are independent');
+      expect(
+        changed.language,
+        'en',
+        reason: 'the two settings are independent',
+      );
     });
   });
 
   group('audio and volume', () {
-    test('a file written before any of it existed comes back at the defaults', () {
-      // The upgrade path, and the one that would be a silent bug: a missing
-      // volume read as 0 would load every existing file muted.
-      final audio = AudioSettings.fromJson(const <String, dynamic>{
-        'input_device': 'wasapi:Mic',
-        'mode': 'push_to_talk',
-      });
+    test(
+      'a file written before any of it existed comes back at the defaults',
+      () {
+        // The upgrade path, and the one that would be a silent bug: a missing
+        // volume read as 0 would load every existing file muted.
+        final audio = AudioSettings.fromJson(const <String, dynamic>{
+          'input_device': 'wasapi:Mic',
+          'mode': 'push_to_talk',
+        });
 
-      expect(audio.inputDevice, 'wasapi:Mic');
-      expect(audio.mode, VoiceActivationMode.pushToTalk);
-      expect(audio.outputVolume, 1.0);
-    });
+        expect(audio.inputDevice, 'wasapi:Mic');
+        expect(audio.mode, VoiceActivationMode.pushToTalk);
+        expect(audio.outputVolume, 1.0);
+      },
+    );
 
     test('a file that still carries a codec and a quality still loads', () {
       // The keys are gone from the model, so the core ignores them and so does
@@ -233,16 +271,21 @@ void main() {
       expect(audio.outputVolume, closeTo(0.5, 1e-9));
     });
 
-    test('an out-of-range volume from a hand-edited file is pulled into range', () {
-      expect(
-        AudioSettings.fromJson(const <String, dynamic>{'output_volume': 7.5}).outputVolume,
-        1.0,
-      );
-      expect(
-        AudioSettings.fromJson(const <String, dynamic>{'output_volume': -3}).outputVolume,
-        0.0,
-      );
-    });
+    test(
+      'an out-of-range volume from a hand-edited file is pulled into range',
+      () {
+        expect(
+          AudioSettings.fromJson(const <String, dynamic>{'output_volume': 7.5})
+              .outputVolume,
+          1.0,
+        );
+        expect(
+          AudioSettings.fromJson(const <String, dynamic>{'output_volume': -3})
+              .outputVolume,
+          0.0,
+        );
+      },
+    );
 
     test('the volume survives a round trip', () {
       const settings = Settings(audio: AudioSettings(outputVolume: 0.4));
@@ -259,23 +302,31 @@ void main() {
       });
 
       expect(audio.inputGainDb, 0.0);
-      expect(audio.outputVolume, closeTo(0.5, 1e-9), reason: 'the old key still means what it did');
+      expect(
+        audio.outputVolume,
+        closeTo(0.5, 1e-9),
+        reason: 'the old key still means what it did',
+      );
     });
 
     test('an out-of-range gain is pulled into the offered range', () {
       expect(
-        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': 50}).inputGainDb,
+        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': 50})
+            .inputGainDb,
         gainMaxDb,
       );
       expect(
-        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': -300}).inputGainDb,
+        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': -300})
+            .inputGainDb,
         gainSilenceDb,
       );
       // A value that is not a number at all cannot come from a file, so it
       // means something is broken rather than old — and silence is the reading
       // that never surprises anyone with loudness.
       expect(
-        AudioSettings.fromJson(const <String, dynamic>{'input_gain_db': double.nan}).inputGainDb,
+        AudioSettings.fromJson(const <String, dynamic>{
+          'input_gain_db': double.nan,
+        }).inputGainDb,
         gainSilenceDb,
       );
     });

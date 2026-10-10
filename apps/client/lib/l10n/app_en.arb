@@ -233,7 +233,7 @@
   "@settingsNotifySystem": {
     "description": "Notification switch: desktop toasts"
   },
-  "settingsSensitivity": "Sensitivity",
+  "settingsSensitivity": "Microphone sensitivity",
   "@settingsSensitivity": {
     "description": "Label of the voice activation slider"
   },
@@ -1087,5 +1087,10 @@
   "soundAwayOff": "AFK off",
   "soundMessage": "New message",
   "soundsOpenFolder": "Open sound folder",
-  "soundsOpenError": "Cannot open the sound folder. Check that the directory is accessible."
+  "soundsOpenError": "Cannot open the sound folder. Check that the directory is accessible.",
+  "settingsVad": "Voice activity detection (VAD)",
+  "settingsVadSmart": "Smart speech detection (default)",
+  "settingsVadSmartHint": "Automatically detects speech without a manual volume threshold.",
+  "settingsVadWaiting": "Waiting for speech",
+  "settingsMicBoostHint": "Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline."
 }

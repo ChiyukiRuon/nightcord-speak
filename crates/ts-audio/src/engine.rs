@@ -25,7 +25,7 @@ use crate::capture::Capture;
 use crate::encoder::OpusEncoder;
 use crate::format::{FRAME_MS, FRAME_SAMPLES, PLAYBACK_CHANNELS, PLAYBACK_SAMPLES, is_full_frame};
 use crate::playback::Playback;
-use crate::vad::{VoiceGate, peak, rms};
+use crate::vad::{SmartVad, VoiceGate, peak, rms};
 
 /// Digital silence, as a decibel figure rather than a limit to approach.
 ///
@@ -41,6 +41,20 @@ pub const SILENCE_DB: f32 = -200.0;
 /// +10 dB is a gain of about 3.2, which will clip anything already loud — a
 /// consequence of turning a microphone up, not a bug.
 pub const MAX_GAIN_DB: f32 = 10.0;
+
+/// Built-in transmit boost; the user's slider remains relative to this baseline.
+pub const MICROPHONE_BASE_GAIN_DB: f32 = 6.0;
+
+/// Share the same baseline and silence handling between embedded and remote paths.
+#[must_use]
+pub fn microphone_gain(db: f32) -> f32 {
+    let db = clamp_gain_db(db);
+    if db <= SILENCE_DB {
+        0.0
+    } else {
+        gain_from_db(db + MICROPHONE_BASE_GAIN_DB)
+    }
+}
 
 /// The quietest gain that is still audible, in decibels.
 ///
@@ -82,9 +96,9 @@ pub fn apply_gain(frame: &mut [f32], gain: f32) {
 ///
 /// Holds all the state that makes that decision, and nothing else — no devices,
 /// no codec — so every mode combination can be exercised directly.
-#[derive(Debug, Clone)]
 pub struct TransmitPolicy {
     gate: VoiceGate,
+    smart_vad: SmartVad,
     mode: VoiceActivationMode,
     input_muted: bool,
     /// Whether the speakers are muted — deafened.
@@ -120,6 +134,7 @@ impl TransmitPolicy {
     pub fn new(mode: VoiceActivationMode, settings: VoiceActivationSettings) -> Self {
         Self {
             gate: VoiceGate::new(settings),
+            smart_vad: SmartVad::default(),
             mode,
             input_muted: false,
             output_muted: false,
@@ -130,10 +145,34 @@ impl TransmitPolicy {
         }
     }
 
-    /// Whether the next frame of `level` should be transmitted.
+    /// Manual level detection for callers that only have an RMS reading.
     ///
     /// Advances the gate, so this must be called exactly once per frame.
     pub fn should_transmit(&mut self, level: f32, frame_ms: u32) -> bool {
+        self.decide(
+            level >= self.gate.settings().sensitivity,
+            frame_ms,
+            self.gate.settings().attack_ms,
+        )
+    }
+
+    /// Production entry point: classify unamplified 48 kHz mono PCM, then gate it.
+    pub fn should_transmit_frame(&mut self, frame: &[f32], frame_ms: u32) -> bool {
+        if self.mode != VoiceActivationMode::VoiceActivation
+            || self.input_muted
+            || self.output_muted
+            || self.away
+        {
+            return self.decide(false, frame_ms, 20);
+        }
+        if self.gate.settings().algorithm == ts_model::VadAlgorithm::Level {
+            return self.should_transmit(rms(frame), frame_ms);
+        }
+        let speech = self.smart_vad.speech(frame);
+        self.decide(speech, frame_ms, 20)
+    }
+
+    fn decide(&mut self, speech: bool, frame_ms: u32, attack_ms: u32) -> bool {
         let previous = self.transmitted_last;
 
         let wants = if self.input_muted || self.output_muted || self.away {
@@ -142,7 +181,9 @@ impl TransmitPolicy {
             match self.mode {
                 // Defer to the gate, which is what applies the threshold and
                 // the attack/release timing.
-                VoiceActivationMode::VoiceActivation => self.gate.update(level, frame_ms),
+                VoiceActivationMode::VoiceActivation => {
+                    self.gate.update_activity(speech, frame_ms, attack_ms)
+                }
                 // Both of these bypass the gate entirely, so the gate is reset
                 // to avoid it reopening stale when the mode changes back.
                 VoiceActivationMode::PushToTalk => {
@@ -190,7 +231,7 @@ impl TransmitPolicy {
     pub fn set_mode(&mut self, mode: VoiceActivationMode) {
         if self.mode != mode {
             // The gate's timings belong to the old mode.
-            self.gate.reset();
+            self.reset();
             self.mode = mode;
         }
     }
@@ -198,7 +239,7 @@ impl TransmitPolicy {
     /// Mutes or unmutes the microphone.
     pub fn set_input_muted(&mut self, muted: bool) {
         if self.input_muted != muted {
-            self.gate.reset();
+            self.reset();
             self.input_muted = muted;
         }
     }
@@ -209,7 +250,7 @@ impl TransmitPolicy {
     /// `TransmitPolicy::output_muted` for why the two travel together.
     pub fn set_output_muted(&mut self, muted: bool) {
         if self.output_muted != muted {
-            self.gate.reset();
+            self.reset();
             self.output_muted = muted;
         }
     }
@@ -226,7 +267,7 @@ impl TransmitPolicy {
     /// microphone.
     pub fn set_away(&mut self, away: bool) {
         if self.away != away {
-            self.gate.reset();
+            self.reset();
             self.away = away;
         }
     }
@@ -250,6 +291,9 @@ impl TransmitPolicy {
 
     /// Retunes the voice-activation gate.
     pub fn set_settings(&mut self, settings: VoiceActivationSettings) {
+        if settings.algorithm != self.gate.settings().algorithm {
+            self.reset();
+        }
         self.gate.set_settings(settings);
     }
 
@@ -261,6 +305,7 @@ impl TransmitPolicy {
 
     /// Forgets all timing, as after a reconnect.
     pub fn reset(&mut self) {
+        self.smart_vad.reset();
         self.gate.reset();
         self.transmitted_last = false;
         self.resume = false;
@@ -488,7 +533,7 @@ impl VoiceEngine {
             output_volume: clamp_volume(output_volume),
             // Unity until told otherwise, which is what every build before the
             // gain existed did.
-            input_gain: 1.0,
+            input_gain: microphone_gain(0.0),
             frame_stereo: vec![0.0; PLAYBACK_SAMPLES],
             frame_mono: vec![0.0; FRAME_SAMPLES],
             last_level: 0.0,
@@ -525,7 +570,7 @@ impl VoiceEngine {
         if self.input_gain <= 0.0 {
             return SILENCE_DB;
         }
-        20.0 * self.input_gain.log10()
+        20.0 * self.input_gain.log10() - MICROPHONE_BASE_GAIN_DB
     }
 
     /// Sets the microphone gain, in decibels: how loud everyone else hears us.
@@ -535,7 +580,7 @@ impl VoiceEngine {
     /// sensitivity threshold is compared against would make one slider silently
     /// retune the other.
     pub fn set_input_gain_db(&mut self, db: f32) {
-        self.input_gain = gain_from_db(clamp_gain_db(db));
+        self.input_gain = microphone_gain(db);
     }
 
     /// Sets the playback gain, `0.0..=1.0`.
@@ -821,7 +866,7 @@ impl VoiceEngine {
         let level = rms(frame);
         self.last_level = level;
         self.last_peak = peak(frame);
-        self.policy.should_transmit(level, FRAME_MS)
+        self.policy.should_transmit_frame(frame, FRAME_MS)
     }
 
     /// Queues decoded, mixed stereo audio for playback.
@@ -957,8 +1002,39 @@ impl std::fmt::Debug for VoiceEngine {
 mod tests {
     use super::*;
 
+    #[test]
+    fn baseline_boost_is_relative_to_user_gain_and_preserves_silence() {
+        // Regression: the default transmit path left quiet microphones at unity.
+        assert!((microphone_gain(0.0) - 2.0).abs() < 0.01);
+        assert!((microphone_gain(-6.0) - 1.0).abs() < 0.01);
+        assert!((microphone_gain(4.0) - gain_from_db(10.0)).abs() < 0.01);
+        assert_eq!(microphone_gain(SILENCE_DB), 0.0);
+        assert_eq!(microphone_gain(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn switching_algorithms_clears_speech_and_keeps_manual_tuning() {
+        let mut policy = policy(VoiceActivationMode::VoiceActivation);
+        assert!(!policy.should_transmit_frame(&[0.5; 960], FRAME_MS));
+        assert!(policy.should_transmit_frame(&[0.5; 960], FRAME_MS));
+        policy.set_settings(VoiceActivationSettings {
+            algorithm: ts_model::VadAlgorithm::Smart,
+            ..settings()
+        });
+        assert!(!policy.gate_open());
+        for _ in 0..30 {
+            assert!(!policy.should_transmit_frame(&[0.0; 960], FRAME_MS));
+        }
+        policy.set_settings(settings());
+        assert!(!policy.should_transmit_frame(&[0.5; 960], FRAME_MS));
+        assert!(policy.should_transmit_frame(&[0.5; 960], FRAME_MS));
+        policy.set_input_muted(true);
+        assert!(!policy.should_transmit_frame(&[0.5; 960], FRAME_MS));
+    }
+
     fn settings() -> VoiceActivationSettings {
         VoiceActivationSettings {
+            algorithm: ts_model::VadAlgorithm::Level,
             sensitivity: 0.1,
             attack_ms: 40,
             release_ms: 100,
@@ -969,7 +1045,7 @@ mod tests {
         TransmitPolicy::new(mode, settings())
     }
 
-    /// An engine on the default profile and at unity gain, which is what every
+    /// An engine on the default profile and at baseline gain, which is what every
     /// test that is not about profiles or volume wants.
     fn engine_with(activation: VoiceActivationSettings) -> VoiceEngine {
         VoiceEngine::new(activation, 1.0).expect("build engine")
@@ -1436,7 +1512,7 @@ mod tests {
     fn the_microphone_gain_is_clamped_to_the_offered_range() {
         // Hand-edited settings files produce every one of these.
         let mut engine = engine_with_defaults();
-        assert_eq!(engine.input_gain_db(), 0.0, "unity until told otherwise");
+        assert_eq!(engine.input_gain_db(), 0.0, "baseline until told otherwise");
 
         engine.set_input_gain_db(-12.0);
         assert!((engine.input_gain_db() + 12.0).abs() < 0.01);

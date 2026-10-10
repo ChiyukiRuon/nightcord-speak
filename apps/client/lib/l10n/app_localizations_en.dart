@@ -189,7 +189,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use system notifications when the window is not in front';
 
   @override
-  String get settingsSensitivity => 'Sensitivity';
+  String get settingsSensitivity => 'Microphone sensitivity';
 
   @override
   String get settingsSensitivityHint =>
@@ -1092,4 +1092,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get soundsOpenError =>
       'Cannot open the sound folder. Check that the directory is accessible.';
+
+  @override
+  String get settingsVad => 'Voice activity detection (VAD)';
+
+  @override
+  String get settingsVadSmart => 'Smart speech detection (default)';
+
+  @override
+  String get settingsVadSmartHint =>
+      'Automatically detects speech without a manual volume threshold.';
+
+  @override
+  String get settingsVadWaiting => 'Waiting for speech';
+
+  @override
+  String get settingsMicBoostHint =>
+      'Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline.';
 }

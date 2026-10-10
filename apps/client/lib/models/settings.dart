@@ -56,7 +56,9 @@ class Settings {
     version: json['version'] as int? ?? 1,
     audio: AudioSettings.fromJson(_object(json['audio'])),
     connection: ConnectionSettings.fromJson(_object(json['connection'])),
-    notifications: NotificationSettings.fromJson(_object(json['notifications'])),
+    notifications: NotificationSettings.fromJson(
+      _object(json['notifications']),
+    ),
     shortcuts: ShortcutSettings.fromJson(_object(json['shortcuts'])),
     presence: PresenceSettings.fromJson(_object(json['presence'])),
     ui: UiSettings.fromJson(_object(json['ui'])),
@@ -134,16 +136,17 @@ class NotificationSettings {
     system: system ?? this.system,
   );
 
-  factory NotificationSettings.fromJson(Map<String, dynamic> json) => NotificationSettings(
-    sounds: json['sounds'] as bool? ?? true,
-    soundPack: json['sound_pack'] as String? ?? 'nightcord',
-    presence: json['presence'] as bool? ?? true,
-    poke: json['poke'] as bool? ?? true,
-    channelMessage: json['channel_message'] as bool? ?? true,
-    directMessage: json['direct_message'] as bool? ?? true,
-    connection: json['connection'] as bool? ?? true,
-    system: json['system'] as bool? ?? true,
-  );
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
+      NotificationSettings(
+        sounds: json['sounds'] as bool? ?? true,
+        soundPack: json['sound_pack'] as String? ?? 'nightcord',
+        presence: json['presence'] as bool? ?? true,
+        poke: json['poke'] as bool? ?? true,
+        channelMessage: json['channel_message'] as bool? ?? true,
+        directMessage: json['direct_message'] as bool? ?? true,
+        connection: json['connection'] as bool? ?? true,
+        system: json['system'] as bool? ?? true,
+      );
 
   Map<String, dynamic> toJson() => {
     'sounds': sounds,
@@ -204,7 +207,9 @@ class AudioSettings {
     // `copyWith` means everywhere else — so choosing 「系统默认」 says so
     // explicitly.
     inputDevice: clearInputDevice ? null : (inputDevice ?? this.inputDevice),
-    outputDevice: clearOutputDevice ? null : (outputDevice ?? this.outputDevice),
+    outputDevice: clearOutputDevice
+        ? null
+        : (outputDevice ?? this.outputDevice),
     mode: mode ?? this.mode,
     activation: activation ?? this.activation,
     outputVolume: outputVolume ?? this.outputVolume,
@@ -265,12 +270,17 @@ const double gainSilenceDb = -200.0;
 const double gainMaxDb = 10.0;
 
 /// The voice-activation gate's tuning (§29).
+enum VadAlgorithm { smart, level }
+
 class VoiceActivationSettings {
   const VoiceActivationSettings({
+    this.algorithm = VadAlgorithm.smart,
     this.sensitivity = 0.05,
     this.attackMs = 60,
     this.releaseMs = 400,
   });
+
+  final VadAlgorithm algorithm;
 
   /// RMS level above which transmission opens, `0.0..=1.0`.
   ///
@@ -284,21 +294,30 @@ class VoiceActivationSettings {
   /// How long it may stay below the threshold before closing, ms.
   final int releaseMs;
 
-  VoiceActivationSettings copyWith({double? sensitivity, int? attackMs, int? releaseMs}) =>
-      VoiceActivationSettings(
-        sensitivity: sensitivity ?? this.sensitivity,
-        attackMs: attackMs ?? this.attackMs,
-        releaseMs: releaseMs ?? this.releaseMs,
-      );
+  VoiceActivationSettings copyWith({
+    VadAlgorithm? algorithm,
+    double? sensitivity,
+    int? attackMs,
+    int? releaseMs,
+  }) => VoiceActivationSettings(
+    algorithm: algorithm ?? this.algorithm,
+    sensitivity: sensitivity ?? this.sensitivity,
+    attackMs: attackMs ?? this.attackMs,
+    releaseMs: releaseMs ?? this.releaseMs,
+  );
 
   factory VoiceActivationSettings.fromJson(Map<String, dynamic> json) =>
       VoiceActivationSettings(
+        algorithm: json['algorithm'] == 'level'
+            ? VadAlgorithm.level
+            : VadAlgorithm.smart,
         sensitivity: (json['sensitivity'] as num?)?.toDouble() ?? 0.05,
         attackMs: json['attack_ms'] as int? ?? 60,
         releaseMs: json['release_ms'] as int? ?? 400,
       );
 
   Map<String, dynamic> toJson() => {
+    'algorithm': algorithm.name,
     'sensitivity': sensitivity,
     'attack_ms': attackMs,
     'release_ms': releaseMs,
@@ -344,11 +363,12 @@ class ConnectionSettings {
         : (maxReconnectAttempts ?? this.maxReconnectAttempts),
   );
 
-  factory ConnectionSettings.fromJson(Map<String, dynamic> json) => ConnectionSettings(
-    nickname: json['nickname'] as String? ?? 'Nightcord User',
-    profile: json['profile'] as String? ?? 'default',
-    maxReconnectAttempts: json['max_reconnect_attempts'] as int?,
-  );
+  factory ConnectionSettings.fromJson(Map<String, dynamic> json) =>
+      ConnectionSettings(
+        nickname: json['nickname'] as String? ?? 'Nightcord User',
+        profile: json['profile'] as String? ?? 'default',
+        maxReconnectAttempts: json['max_reconnect_attempts'] as int?,
+      );
 
   Map<String, dynamic> toJson() => {
     'nickname': nickname,

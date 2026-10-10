@@ -58,7 +58,7 @@
   "settingsNotifyDirectMessage": "プライベートメッセージ",
   "settingsNotifyConnection": "接続の切断と復旧",
   "settingsNotifySystem": "ウィンドウが前面にないときにシステム通知を表示",
-  "settingsSensitivity": "感度",
+  "settingsSensitivity": "マイク感度",
   "settingsSensitivityHint": "感度が高いほど周囲の騒音では反応しにくく、その分大きな声が必要。",
   "settingsMicGain": "マイクの増幅",
   "settingsMicGainHint": "相手に届く音量。一番下まで下げると無音になる。",
@@ -336,5 +336,10 @@
   "soundAwayOff": "AFK をオフ",
   "soundMessage": "新しいメッセージ",
   "soundsOpenFolder": "音声フォルダーを開く",
-  "soundsOpenError": "音声フォルダーを開けません。フォルダーにアクセスできるか確認してください。"
+  "soundsOpenError": "音声フォルダーを開けません。フォルダーにアクセスできるか確認してください。",
+  "settingsVad": "音声活動検出 (VAD)",
+  "settingsVadSmart": "スマート音声検出（デフォルト）",
+  "settingsVadSmartHint": "音量のしきい値を手動で調整せずに、人の声を自動検出します。",
+  "settingsVadWaiting": "音声の検出を待機中",
+  "settingsMicBoostHint": "送信音量は標準で 6 dB 上げています。マイクゲインはこの音量を基準に調整します。"
 }

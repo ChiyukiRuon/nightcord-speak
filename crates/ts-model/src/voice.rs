@@ -52,13 +52,27 @@ impl VoiceState {
     }
 }
 
+/// How voice activation distinguishes speech from background sound.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VadAlgorithm {
+    /// Classify speech using a small local neural network.
+    #[default]
+    Smart,
+    /// Compare microphone RMS against a manually chosen threshold.
+    Level,
+}
+
 /// Tuning for [`VoiceActivationMode::VoiceActivation`] (§29).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct VoiceActivationSettings {
+    /// Missing in older files: adopt speech detection while preserving tuning.
+    #[serde(default)]
+    pub algorithm: VadAlgorithm,
     /// RMS level above which transmission opens, `0.0..=1.0`.
     pub sensitivity: f32,
     /// How long the level must stay above the threshold before opening, ms.
-    /// Prevents consonants from being clipped.
+    /// Rejects short transients in manual level detection.
     pub attack_ms: u32,
     /// How long the level may stay below the threshold before closing, ms.
     /// Prevents gaps between words from cutting transmission.
@@ -68,6 +82,7 @@ pub struct VoiceActivationSettings {
 impl Default for VoiceActivationSettings {
     fn default() -> Self {
         Self {
+            algorithm: VadAlgorithm::Smart,
             sensitivity: 0.05,
             attack_ms: 60,
             release_ms: 400,

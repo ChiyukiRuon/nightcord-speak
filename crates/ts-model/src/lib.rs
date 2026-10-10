@@ -56,7 +56,7 @@ pub use permission::Permissions;
 pub use protocol::ProtocolKind;
 pub use server::{Server, ServerInfo};
 pub use target::{ConnectionTarget, DEFAULT_PORT};
-pub use voice::{Speaking, VoiceActivationMode, VoiceActivationSettings, VoiceState};
+pub use voice::{Speaking, VadAlgorithm, VoiceActivationMode, VoiceActivationSettings, VoiceState};
 
 /// Everything a front-end needs to render one server's state after a change.
 ///

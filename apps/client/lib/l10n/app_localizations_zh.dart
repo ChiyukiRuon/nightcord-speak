@@ -180,7 +180,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNotifySystem => '窗口不在前台时显示系统通知';
 
   @override
-  String get settingsSensitivity => '灵敏度';
+  String get settingsSensitivity => '麦克风灵敏度';
 
   @override
   String get settingsSensitivityHint => '灵敏度越高，越不容易被环境噪音触发，但需要更大声说话才能触发。';
@@ -1019,6 +1019,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get soundsOpenError => '无法打开音效文件夹，请检查目录是否可访问。';
+
+  @override
+  String get settingsVad => '语音活动检测 (VAD)';
+
+  @override
+  String get settingsVadSmart => '智能语音检测（默认）';
+
+  @override
+  String get settingsVadSmartHint => '自动识别人声，无需手动调整音量阈值。';
+
+  @override
+  String get settingsVadWaiting => '等待检测到人声';
+
+  @override
+  String get settingsMicBoostHint => '发送音量已默认提升 6 dB，麦克风增益在此基础上调节。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1196,7 +1211,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get settingsNotifySystem => '視窗不在前景時顯示系統通知';
 
   @override
-  String get settingsSensitivity => '靈敏度';
+  String get settingsSensitivity => '麥克風靈敏度';
 
   @override
   String get settingsSensitivityHint => '靈敏度越高，越不容易被環境噪音觸發，但需要更大聲說話才能觸發。';
@@ -2035,4 +2050,19 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get soundsOpenError => '無法開啟音效資料夾，請檢查目錄是否可存取。';
+
+  @override
+  String get settingsVad => '語音活動偵測 (VAD)';
+
+  @override
+  String get settingsVadSmart => '智慧語音偵測（預設）';
+
+  @override
+  String get settingsVadSmartHint => '自動辨識人聲，無需手動調整音量閾值。';
+
+  @override
+  String get settingsVadWaiting => '等待偵測到人聲';
+
+  @override
+  String get settingsMicBoostHint => '傳送音量已預設提升 6 dB，麥克風增益在此基礎上調整。';
 }

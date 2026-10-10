@@ -105,9 +105,9 @@ impl RemoteVoice {
             // encoder would reject every one of them as half a frame.
             encoder: OpusEncoder::new(ts_audio::VOICE_CHANNELS)?,
             policy: TransmitPolicy::new(mode, activation),
-            // Unity until the worker applies the stored preference, which it
-            // does in the same breath as building this.
-            input_gain: 1.0,
+            // The same boosted baseline as the desktop; the worker applies
+            // the user's relative gain immediately after construction.
+            input_gain: ts_audio::microphone_gain(0.0),
             last_level: 0.0,
             last_peak: 0.0,
             last_transmitting: false,
@@ -136,7 +136,7 @@ impl RemoteVoice {
         // that keep the gate shut.
         self.last_level = rms(mixed);
         self.last_peak = ts_audio::peak(mixed);
-        let transmitting = self.policy.should_transmit(self.last_level, FRAME_MS);
+        let transmitting = self.policy.should_transmit_frame(mixed, FRAME_MS);
         self.last_transmitting = transmitting;
         if !transmitting {
             return Ok(None);
@@ -192,7 +192,7 @@ impl RemoteVoice {
     /// user who set their gain on the desktop is not quietly quiet in the
     /// browser.
     pub(crate) fn set_input_gain_db(&mut self, db: f32) {
-        self.input_gain = ts_audio::gain_from_db(ts_audio::clamp_gain_db(db));
+        self.input_gain = ts_audio::microphone_gain(db);
     }
 
     pub(crate) fn set_settings(&mut self, settings: VoiceActivationSettings) {

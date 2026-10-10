@@ -58,7 +58,7 @@
   "settingsNotifyDirectMessage": "私聊消息",
   "settingsNotifyConnection": "连接断开与恢复",
   "settingsNotifySystem": "窗口不在前台时显示系统通知",
-  "settingsSensitivity": "灵敏度",
+  "settingsSensitivity": "麦克风灵敏度",
   "settingsSensitivityHint": "灵敏度越高，越不容易被环境噪音触发，但需要更大声说话才能触发。",
   "settingsMicGain": "麦克风增益",
   "settingsMicGainHint": "其他人听到你的音量。拖到最底端为静音。",
@@ -336,5 +336,10 @@
   "soundAwayOff": "关闭 AFK 模式",
   "soundMessage": "收到新消息",
   "soundsOpenFolder": "打开音效文件夹",
-  "soundsOpenError": "无法打开音效文件夹，请检查目录是否可访问。"
+  "soundsOpenError": "无法打开音效文件夹，请检查目录是否可访问。",
+  "settingsVad": "语音活动检测 (VAD)",
+  "settingsVadSmart": "智能语音检测（默认）",
+  "settingsVadSmartHint": "自动识别人声，无需手动调整音量阈值。",
+  "settingsVadWaiting": "等待检测到人声",
+  "settingsMicBoostHint": "发送音量已默认提升 6 dB，麦克风增益在此基础上调节。"
 }

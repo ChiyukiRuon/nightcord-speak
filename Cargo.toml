@@ -8,7 +8,7 @@ exclude = ["vendor"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
@@ -36,6 +36,8 @@ async-trait = "0.1"
 # native binding is built.
 audiopus = "0.3.0-rc.0"
 cpal = "0.18"
+# Speech classification without a native inference runtime or external model files.
+earshot = "=1.2.2"
 # Decode user-provided notification sounds while reusing our existing output device.
 symphonia = { version = "0.5.5", default-features = false, features = ["wav", "pcm", "mp3", "flac"] }
 base64 = "0.22"

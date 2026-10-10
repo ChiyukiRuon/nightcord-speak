@@ -67,7 +67,12 @@ class _RenderSoundLibrary implements SoundLibrary {
   @override
   Future<void> save(String pack, Map<SoundAction, String?> mapping) async {}
   @override
-  Future<void> play(String pack, String file, {String? output, double volume = 1}) async {}
+  Future<void> play(
+    String pack,
+    String file, {
+    String? output,
+    double volume = 1,
+  }) async {}
 }
 
 /// A transport that answers nothing.
@@ -1290,6 +1295,56 @@ void main() {
     // The playback volume next door is untouched by any of this.
     expect(container.read(settingsProvider)!.audio.outputVolume, 1.0);
   });
+
+  testWidgets(
+    'VAD defaults to smart and manual sensitivity survives switching',
+    (tester) async {
+      // Regression: RMS-only activation could miss quiet speech; the default
+      // should classify speech, while the old tuning remains available.
+      final container = _container(
+        view: _view(),
+        settings: const Settings(
+          audio: AudioSettings(
+            activation: VoiceActivationSettings(sensitivity: 0.21),
+          ),
+        ),
+      );
+      await tester.pumpWidget(_app(container, const SettingsPage(session: 1)));
+      await tester.pumpAndSettle();
+      final selector = find.byType(DropdownButtonFormField<VadAlgorithm>);
+      expect(selector, findsOneWidget);
+      expect(
+        container.read(settingsProvider)!.audio.activation.algorithm,
+        VadAlgorithm.smart,
+      );
+      expect(find.byType(Slider), findsNWidgets(2));
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('麦克风灵敏度').last);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(settingsProvider)!.audio.activation.algorithm,
+        VadAlgorithm.level,
+      );
+      expect(find.byType(Slider), findsNWidgets(3));
+      expect(
+        container.read(settingsProvider)!.audio.activation.sensitivity,
+        0.21,
+      );
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('智能语音检测（默认）').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(Slider), findsNWidgets(2));
+      expect(
+        container.read(settingsProvider)!.audio.activation.sensitivity,
+        0.21,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('an away client shows the message others set', (tester) async {
     // The message is the point of the state: a badge alone says someone is

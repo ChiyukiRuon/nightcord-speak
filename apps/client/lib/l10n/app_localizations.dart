@@ -436,7 +436,7 @@ abstract class AppLocalizations {
   /// Label of the voice activation slider
   ///
   /// In en, this message translates to:
-  /// **'Sensitivity'**
+  /// **'Microphone sensitivity'**
   String get settingsSensitivity;
 
   /// Explains what the sensitivity value means
@@ -1992,6 +1992,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cannot open the sound folder. Check that the directory is accessible.'**
   String get soundsOpenError;
+
+  /// No description provided for @settingsVad.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice activity detection (VAD)'**
+  String get settingsVad;
+
+  /// No description provided for @settingsVadSmart.
+  ///
+  /// In en, this message translates to:
+  /// **'Smart speech detection (default)'**
+  String get settingsVadSmart;
+
+  /// No description provided for @settingsVadSmartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically detects speech without a manual volume threshold.'**
+  String get settingsVadSmartHint;
+
+  /// No description provided for @settingsVadWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for speech'**
+  String get settingsVadWaiting;
+
+  /// No description provided for @settingsMicBoostHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline.'**
+  String get settingsMicBoostHint;
 }
 
 class _AppLocalizationsDelegate

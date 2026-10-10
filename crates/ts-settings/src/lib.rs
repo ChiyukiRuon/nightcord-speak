@@ -679,6 +679,7 @@ mod tests {
                 output_device: None,
                 mode: VoiceActivationMode::PushToTalk,
                 activation: VoiceActivationSettings {
+                    algorithm: ts_model::VadAlgorithm::Level,
                     sensitivity: 0.21,
                     attack_ms: 45,
                     release_ms: 250,
@@ -714,6 +715,23 @@ mod tests {
 
         store.save(&settings).unwrap();
         assert_eq!(store.load().unwrap(), settings);
+    }
+
+    #[test]
+    fn legacy_activation_adopts_smart_vad_without_losing_the_threshold() {
+        let settings: VoiceActivationSettings =
+            serde_json::from_str(r#"{"sensitivity":0.21,"attack_ms":45,"release_ms":250}"#)
+                .unwrap();
+        assert_eq!(settings.algorithm, ts_model::VadAlgorithm::Smart);
+        assert_eq!(settings.sensitivity, 0.21);
+        assert_eq!(settings.attack_ms, 45);
+        let manual = VoiceActivationSettings {
+            algorithm: ts_model::VadAlgorithm::Level,
+            ..settings
+        };
+        let loaded: VoiceActivationSettings =
+            serde_json::from_str(&serde_json::to_string(&manual).unwrap()).unwrap();
+        assert_eq!(loaded, manual);
     }
 
     #[test]

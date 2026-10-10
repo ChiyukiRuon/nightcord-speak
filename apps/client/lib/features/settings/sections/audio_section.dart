@@ -26,7 +26,11 @@ import '../../../util/gain.dart';
 class AudioSection extends ConsumerStatefulWidget {
   /// Edits `settings`; the microphone test and the device swap act on
   /// `session`, when there is one.
-  const AudioSection({required this.settings, required this.session, super.key});
+  const AudioSection({
+    required this.settings,
+    required this.session,
+    super.key,
+  });
 
   final Settings settings;
   final int? session;
@@ -125,11 +129,13 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
 
     // Passed explicitly: the settings write above is asynchronous, and a
     // `voice_start` that raced it would open the device that was stored last.
-    ref.read(clientTransportProvider).voiceStart(
-      session,
-      inputDevice: audio.inputDevice,
-      outputDevice: audio.outputDevice,
-    );
+    ref
+        .read(clientTransportProvider)
+        .voiceStart(
+          session,
+          inputDevice: audio.inputDevice,
+          outputDevice: audio.outputDevice,
+        );
   }
 
   /// Opens the selected microphone so its level can be watched, or closes it.
@@ -206,25 +212,63 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
         SizedBox(height: tokens.space4),
         _DeviceInUse(status: ref.watch(voiceStatusProvider)),
         SizedBox(height: tokens.space4),
-        _SensitivitySlider(
-          value: _dragging ?? settings.audio.activation.sensitivity,
-          enabled: settings.audio.mode == VoiceActivationMode.voiceActivation,
-          onChanged: (value) => setState(() => _dragging = value),
-          onChangeEnd: (value) {
-            setState(() => _dragging = null);
-            _audio(
-              settings.audio.copyWith(
-                activation: settings.audio.activation.copyWith(
-                  sensitivity: value,
-                ),
-              ),
-            );
-          },
+        DropdownButtonFormField<VadAlgorithm>(
+          initialValue: settings.audio.activation.algorithm,
+          isExpanded: true,
+          decoration: InputDecoration(labelText: l10n.settingsVad),
+          items: [
+            DropdownMenuItem(
+              value: VadAlgorithm.smart,
+              child: Text(l10n.settingsVadSmart),
+            ),
+            DropdownMenuItem(
+              value: VadAlgorithm.level,
+              child: Text(l10n.settingsSensitivity),
+            ),
+          ],
+          onChanged: settings.audio.mode == VoiceActivationMode.voiceActivation
+              ? (algorithm) {
+                  if (algorithm == null) return;
+                  setState(() => _dragging = null);
+                  _audio(
+                    settings.audio.copyWith(
+                      activation: settings.audio.activation.copyWith(
+                        algorithm: algorithm,
+                      ),
+                    ),
+                  );
+                }
+              : null,
         ),
+        SizedBox(height: tokens.space2),
+        if (settings.audio.activation.algorithm == VadAlgorithm.smart)
+          Text(
+            l10n.settingsVadSmartHint,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: tokens.textTertiary),
+          ),
+        if (settings.audio.activation.algorithm == VadAlgorithm.level)
+          _SensitivitySlider(
+            value: _dragging ?? settings.audio.activation.sensitivity,
+            enabled: settings.audio.mode == VoiceActivationMode.voiceActivation,
+            onChanged: (value) => setState(() => _dragging = value),
+            onChangeEnd: (value) {
+              setState(() => _dragging = null);
+              _audio(
+                settings.audio.copyWith(
+                  activation: settings.audio.activation.copyWith(
+                    sensitivity: value,
+                  ),
+                ),
+              );
+            },
+          ),
         SizedBox(height: tokens.space2),
         _LevelMeter(
           status: ref.watch(voiceStatusProvider),
-          threshold: settings.audio.activation.sensitivity,
+          threshold: settings.audio.activation.algorithm == VadAlgorithm.level
+              ? settings.audio.activation.sensitivity
+              : null,
         ),
         SizedBox(height: tokens.space3),
         // Above the playback volume because it is about us rather than
@@ -236,6 +280,12 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
             setState(() => _draggingGain = null);
             _audio(settings.audio.copyWith(inputGainDb: value));
           },
+        ),
+        SizedBox(height: tokens.space1),
+        Text(
+          l10n.settingsMicBoostHint,
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: tokens.textTertiary),
         ),
         SizedBox(height: tokens.space3),
         _VolumeSlider(
@@ -254,9 +304,8 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
         // so the note names only the devices.
         Text(
           connected ? l10n.settingsDeviceChangeNote : l10n.settingsConnectFirst,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: tokens.textTertiary),
         ),
         SizedBox(height: tokens.space3),
         Row(
@@ -274,7 +323,8 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
             // depend on a microphone being open first — nothing a person
             // could guess from two buttons sitting side by side.
             OutlinedButton.icon(
-              onPressed: () => ref.read(voiceStatusProvider.notifier).testOutput(),
+              onPressed: () =>
+                  ref.read(voiceStatusProvider.notifier).testOutput(),
               icon: const Icon(Icons.volume_up_outlined),
               label: Text(l10n.settingsTestSpeaker),
             ),
@@ -315,7 +365,9 @@ class _DeviceInUse extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          l10n.settingsDeviceInUse(input?.displayName ?? l10n.settingsNoMicrophone),
+          l10n.settingsDeviceInUse(
+            input?.displayName ?? l10n.settingsNoMicrophone,
+          ),
           style: text.bodySmall?.copyWith(color: tokens.textSecondary),
         ),
         if (input?.fellBack ?? false)
@@ -350,7 +402,7 @@ class _LevelMeter extends StatelessWidget {
   const _LevelMeter({required this.status, required this.threshold});
 
   final VoiceStatus? status;
-  final double threshold;
+  final double? threshold;
 
   @override
   Widget build(BuildContext context) {
@@ -390,13 +442,14 @@ class _LevelMeter extends StatelessWidget {
                 ),
               ),
             ),
-            FractionallySizedBox(
-              widthFactor: threshold.clamp(0.0, 1.0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(width: 2, height: 16, color: tokens.primary),
+            if (threshold != null)
+              FractionallySizedBox(
+                widthFactor: threshold!.clamp(0.0, 1.0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(width: 2, height: 16, color: tokens.primary),
+                ),
               ),
-            ),
           ],
         ),
         SizedBox(height: tokens.space1),
@@ -404,11 +457,12 @@ class _LevelMeter extends StatelessWidget {
           running
               ? (transmitting
                     ? l10n.settingsTransmitting
-                    : l10n.settingsBelowThreshold)
+                    : (threshold == null
+                          ? l10n.settingsVadWaiting
+                          : l10n.settingsBelowThreshold))
               : l10n.settingsLevelMeterHint,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: tokens.textTertiary),
         ),
       ],
     );
