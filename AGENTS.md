@@ -451,6 +451,20 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**默认麦克风增益（2026-10-11）**：按用户要求，将 Rust 设置与 Flutter 设置模型的
+默认麦克风增益统一改为 +10 dB。新设置及缺少 `input_gain_db` 的旧设置使用此默认值；
+已保存的增益（包括 0 dB）保持原值。同步更新缺字段、显式零值与悬浮面板回归测试。
+本项取代下文增益实现记录中“默认及缺字段为 0 dB”的历史约定。
+
+验证：42 项 Rust 设置测试、Flutter analyze、Rust 与 Dart 格式检查通过；Flutter
+全量测试 438 项通过，1 项 FFI 书签版本测试失败（预期 1，实际 0），单独复查仍失败。
+增益设置与相关界面测试通过；尚未构建新版客户端或进行真实语音验收，未提交或推送。
+
+按用户后续要求完成 Windows Release 构建，构建前 Flutter analyze 通过；已检查
+`Nightcord Speak.exe`、Rust DLL、Flutter DLL 与资源目录。产物位于
+`apps/client/build/windows/x64/runner/Release/`，包含默认增益 +10 dB 修改。
+未启动应用或进行真实语音验收，未提交或推送。
+
 **头像缓存、音效目录与字体回退源码提交（2026-10-11）**：按用户要求提交本轮全部
 源码与文档，按头像持久缓存、音效目录设置、混合语言字体回退拆分为三个提交。
 提交前按 `scripts/fmt.sh` 完整包列表执行 Rust 格式检查，全工作区 Clippy 与

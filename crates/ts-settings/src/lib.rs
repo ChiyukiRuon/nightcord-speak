@@ -348,16 +348,15 @@ pub struct AudioSettings {
 
     /// Microphone gain in decibels: how loud everyone else hears us.
     ///
-    /// `0.0` is unity — the raw microphone — and is what `f32::default()`
-    /// gives, so here the bare serde default is the *right* one: a file written
-    /// before this field existed loads as "unchanged", which is what it was.
+    /// Missing values use the same +10 dB preference as a fresh settings file.
+    /// Explicitly saved gains, including zero, keep their existing value.
     /// The bottom of the range is `ts_audio::SILENCE_DB`, a real value rather
     /// than a small one: a user who drags the slider down means silence.
     ///
     /// Kept out of the `output_volume` key on purpose — that one is a linear
     /// fraction of the *playback* gain, and reading its `0.35` as decibels
     /// would be a silent change of meaning for everyone with a settings file.
-    #[serde(default)]
+    #[serde(default = "default_input_gain_db")]
     pub input_gain_db: f32,
 }
 
@@ -379,9 +378,9 @@ impl Default for AudioSettings {
     }
 }
 
-/// Unity: every build before the gain existed sent the microphone's own level.
+/// Boost quiet microphones by default without replacing saved preferences.
 const fn default_input_gain_db() -> f32 {
-    0.0
+    10.0
 }
 
 /// Every build before volume existed played at unity.
@@ -906,10 +905,8 @@ mod tests {
     }
 
     #[test]
-    fn a_file_written_before_the_microphone_gain_existed_is_unity() {
-        // The opposite of the playback volume's upgrade path: here zero *is*
-        // the right default, because a file from a build without the control
-        // was a client that sent the microphone's own level.
+    fn a_file_without_microphone_gain_uses_the_default_boost() {
+        // Missing fields must match fresh settings instead of falling to zero.
         let dir = TempDir::new("nogain");
         let store = dir.store();
         fs::write(
@@ -919,10 +916,17 @@ mod tests {
         .unwrap();
 
         let audio = store.load().unwrap().audio;
-        assert_eq!(audio.input_gain_db, 0.0);
+        assert_eq!(audio.input_gain_db, 10.0);
+        assert_eq!(AudioSettings::default().input_gain_db, 10.0);
         // And the neighbouring field is untouched by the new one: the old key
         // still means what it always did.
         assert!((audio.output_volume - 0.35).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn an_explicit_zero_microphone_gain_is_preserved() {
+        let audio: AudioSettings = serde_json::from_str(r#"{"input_gain_db":0.0}"#).unwrap();
+        assert_eq!(audio.input_gain_db, 0.0);
     }
 
     #[test]

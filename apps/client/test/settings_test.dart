@@ -293,20 +293,28 @@ void main() {
       expect(back.outputVolume, closeTo(0.4, 1e-9));
     });
 
-    test('a file written before the microphone gain existed is unity', () {
-      // The opposite default from the playback volume next door: here zero is
-      // the right answer, because a file without the field came from a build
-      // that sent the microphone's own level.
+    test('a file without microphone gain uses the default boost', () {
+      // Missing fields must match fresh settings instead of falling to zero.
       final audio = AudioSettings.fromJson(const <String, dynamic>{
         'output_volume': 0.5,
       });
 
-      expect(audio.inputGainDb, 0.0);
+      expect(audio.inputGainDb, 10.0);
+      expect(const AudioSettings().inputGainDb, 10.0);
+      expect(const Settings().audio.inputGainDb, 10.0);
       expect(
         audio.outputVolume,
         closeTo(0.5, 1e-9),
         reason: 'the old key still means what it did',
       );
+    });
+
+    test('an explicitly saved zero microphone gain is preserved', () {
+      final settings = Settings.fromJson(const <String, dynamic>{
+        'audio': <String, dynamic>{'input_gain_db': 0.0},
+      });
+      expect(settings.audio.inputGainDb, 0.0);
+      expect(Settings.fromJson(settings.toJson()).audio.inputGainDb, 0.0);
     });
 
     test('an out-of-range gain is pulled into the offered range', () {

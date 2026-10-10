@@ -174,7 +174,7 @@ class AudioSettings {
     this.mode = VoiceActivationMode.voiceActivation,
     this.activation = const VoiceActivationSettings(),
     this.outputVolume = 1.0,
-    this.inputGainDb = 0.0,
+    this.inputGainDb = 10.0,
   });
 
   /// Capture device id, or null for the system default.
@@ -250,16 +250,15 @@ double _volume(Object? value) =>
 
 /// A microphone gain read back from a file, pulled into range.
 ///
-/// Missing is unity, for the same reason as the volume beside it — except that
-/// unity *is* zero for a gain in decibels, so the two defaults agree by
-/// construction.
+/// Missing values use the same +10 dB preference as a fresh settings file.
+/// Explicitly saved gains, including zero, keep their existing value.
 ///
 /// A value that is not a number at all is silence rather than unity: it cannot
 /// come from the file (JSON has no such literal), so it means something is
 /// broken rather than something is old, and a slider holding one would assert
 /// on the first frame. The core reads it the same way.
 double _gainDb(Object? value) {
-  final db = (value as num?)?.toDouble() ?? 0.0;
+  final db = (value as num?)?.toDouble() ?? 10.0;
   if (db.isNaN) return gainSilenceDb;
   return db.clamp(gainSilenceDb, gainMaxDb);
 }
