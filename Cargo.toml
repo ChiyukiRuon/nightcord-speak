@@ -50,6 +50,7 @@ serde_json = "1"
 # Named only because `tsclientlib`'s generated ban message takes a
 # `time::SignedDuration`, and it is not re-exported. Pinned to the same range
 # the vendored library asks for, so the two cannot resolve to different majors.
+# ts-logging also uses it to read the device timezone and format local dates.
 time = "0.3"
 # `ts-crash` asks whether the process that left a run marker is still alive.
 # Windows answers from `windows-sys`; everywhere else answers from
@@ -63,8 +64,8 @@ tracing = "0.1"
 # `tracing-appender` is what makes the log file safe to write to from the audio
 # callback: `non_blocking` hands records to a writer thread through a bounded
 # channel and *drops* them when it is full rather than blocking the caller.
-# Rotating and pruning the files by hand would mean handling midnight rollover
-# and cleanup; this crate is maintained by the `tracing` project itself.
+# The non-blocking queue is retained even though ts-logging handles local-date
+# rollover itself: tracing-appender's rolling writer only supports UTC dates.
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

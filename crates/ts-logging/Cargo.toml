@@ -12,3 +12,5 @@ license.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
+# Reuse the existing time dependency for the device's current UTC offset.
+time = { workspace = true, features = ["formatting", "local-offset", "parsing", "macros"] }

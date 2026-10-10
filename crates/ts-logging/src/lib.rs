@@ -29,9 +29,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use tracing_appender::non_blocking::{NonBlockingBuilder, WorkerGuard};
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
+
+mod local_time;
+use local_time::{LocalDailyWriter, LocalTimer};
 
 /// Environment variable holding the filter, e.g. `debug` or
 /// `ts_protocol_tsclient=trace`.
@@ -59,11 +61,8 @@ const KEEP_FILES: usize = 7;
 
 /// The file name logs are written under: `nightcord.2026-09-30.log`.
 ///
-/// Stem and extension are separate because the appender inserts the date
-/// *after* whatever prefix it is given. Handing it `"nightcord.log"` produced
-/// `nightcord.log.2026-09-30`, where the date is the extension and the file
-/// reads as having none — backwards for anything that groups or opens files by
-/// type, which is most of what will ever touch these.
+/// The date follows the device's timezone, with `.log` kept as the extension
+/// so file managers and log viewers recognise the file type.
 const FILE_STEM: &str = "nightcord";
 /// See [`FILE_STEM`].
 const FILE_EXTENSION: &str = "log";
@@ -176,6 +175,7 @@ pub fn init(dir: Option<&Path>) -> Sink {
     let sink = file.unwrap_or_else(|| {
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(env_filter())
+            .with_timer(LocalTimer)
             .finish();
         // A failure here means something installed a subscriber between the two
         // attempts. That subscriber is logging, which is what was wanted, so
@@ -202,18 +202,13 @@ type BoxedSubscriber = Box<dyn tracing::Subscriber + Send + Sync>;
 /// The filter is a parameter rather than read from the environment here so a
 /// test can install a known one; `init` passes [`env_filter`].
 ///
-/// The directory is created if it is missing — by the appender, whose error
-/// already says "failed to create log directory" with the underlying cause.
+/// The directory is created if it is missing; filesystem errors are returned
+/// so the caller can keep logging to stderr.
 fn build_file(
     dir: &Path,
     filter: EnvFilter,
 ) -> Result<(BoxedSubscriber, WorkerGuard), Box<dyn std::error::Error + Send + Sync>> {
-    let appender = RollingFileAppender::builder()
-        .rotation(Rotation::DAILY)
-        .filename_prefix(FILE_STEM)
-        .filename_suffix(FILE_EXTENSION)
-        .max_log_files(KEEP_FILES)
-        .build(dir)?;
+    let appender = LocalDailyWriter::new(dir)?;
 
     // `lossy(true)` is the default, but it is the whole reason this crate can
     // be called from an audio callback, so it is spelled out rather than
@@ -224,6 +219,7 @@ fn build_file(
         // A file is read on its own, away from a terminal that would render
         // them: escape codes here are noise in whatever opens it.
         .with_ansi(false)
+        .with_timer(LocalTimer)
         .with_env_filter(filter)
         .with_writer(writer)
         .finish();
@@ -241,10 +237,10 @@ mod tests {
     use super::*;
 
     /// A directory that cleans itself up, so tests can run in parallel.
-    struct TempDir(PathBuf);
+    pub(super) struct TempDir(PathBuf);
 
     impl TempDir {
-        fn new(tag: &str) -> Self {
+        pub(super) fn new(tag: &str) -> Self {
             let unique = format!(
                 "nightcord-logging-{tag}-{}-{:?}",
                 std::process::id(),
@@ -256,7 +252,7 @@ mod tests {
             Self(path)
         }
 
-        fn path(&self) -> &Path {
+        pub(super) fn path(&self) -> &Path {
             &self.0
         }
     }
@@ -297,6 +293,7 @@ mod tests {
         // The point of the whole crate: a `tracing` call lands somewhere that
         // survives the process.
         let dir = TempDir::new("writes");
+        let before = time::OffsetDateTime::now_local().expect("device timezone available");
         let (dispatch, guard) =
             build_file(dir.path(), EnvFilter::new("info")).expect("open the log file");
 
@@ -309,6 +306,14 @@ mod tests {
         drop(guard);
 
         let written = only_log_file(dir.path());
+        let timestamp = time::OffsetDateTime::parse(
+            written.split_whitespace().next().expect("a timestamp"),
+            &time::format_description::well_known::Rfc3339,
+        )
+        .expect("timestamp includes the timezone offset");
+        let after = time::OffsetDateTime::now_local().expect("device timezone available");
+        assert!(timestamp.offset() == before.offset() || timestamp.offset() == after.offset());
+        assert!(timestamp >= before && timestamp <= after);
         assert!(
             written.contains("could not join the channel"),
             "got {written}"
