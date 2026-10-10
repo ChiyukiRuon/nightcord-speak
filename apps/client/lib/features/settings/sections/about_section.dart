@@ -8,6 +8,7 @@ import '../../../design/components/app_logo.dart';
 import '../../../design/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_info.dart';
+import 'update_check.dart';
 
 Future<void>? _licensesLoaded;
 
@@ -15,8 +16,9 @@ Future<void>? _licensesLoaded;
 Future<void> loadBundledLicenses() => _licensesLoaded ??= _registerLicenses();
 
 Future<void> _registerLicenses() async {
-  final entries =
-      jsonDecode(await rootBundle.loadString('assets/licenses/third_party.json')) as List;
+  final entries = jsonDecode(
+    await rootBundle.loadString('assets/licenses/third_party.json'),
+  ) as List;
   LicenseRegistry.addLicense(() async* {
     for (final entry in entries.cast<Map<String, dynamic>>()) {
       yield LicenseEntryWithLineBreaks(
@@ -50,13 +52,16 @@ class AboutSection extends StatelessWidget {
                   Text('Nightcord Speak', style: text.titleLarge),
                   Text(
                     l10n.aboutVersion(appVersion),
-                    style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
+        const UpdateCheck(),
         SizedBox(height: tokens.space5),
         Text(l10n.aboutDescription, style: text.bodyMedium),
         SizedBox(height: tokens.space4),

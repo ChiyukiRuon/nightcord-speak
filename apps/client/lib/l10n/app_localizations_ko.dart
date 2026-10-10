@@ -10,6 +10,31 @@ class AppLocalizationsKo extends AppLocalizations {
   AppLocalizationsKo([String locale = 'ko']) : super(locale);
 
   @override
+  String get updateCheck => '업데이트 확인';
+
+  @override
+  String get updateChecking => '확인 중…';
+
+  @override
+  String get updateCurrent => '최신 버전입니다.';
+
+  @override
+  String get updateError =>
+      '업데이트를 확인하거나 배포 페이지를 열 수 없습니다. 네트워크를 확인하고 다시 시도하세요.';
+
+  @override
+  String updateAvailable(String version) {
+    return '버전 $version 사용 가능';
+  }
+
+  @override
+  String get updateDownload => '다운로드 페이지 열기';
+
+  @override
+  String get updateDownloadHint =>
+      'Windows: 설치 프로그램을 실행하여 업데이트하세요. macOS: 프로세서에 맞는 ZIP을 선택하고 응용 프로그램의 앱을 교체하세요. 업데이트 전에 클라이언트를 종료하세요.';
+
+  @override
   String get backButton => '뒤로';
 
   @override

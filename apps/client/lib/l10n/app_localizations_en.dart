@@ -10,6 +10,31 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get updateCheck => 'Check for updates';
+
+  @override
+  String get updateChecking => 'Checking…';
+
+  @override
+  String get updateCurrent => 'You are using the latest version.';
+
+  @override
+  String get updateError =>
+      'Could not check for updates or open the release page. Check your network and try again.';
+
+  @override
+  String updateAvailable(String version) {
+    return 'Version $version is available';
+  }
+
+  @override
+  String get updateDownload => 'Open download page';
+
+  @override
+  String get updateDownloadHint =>
+      'Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.';
+
+  @override
   String get backButton => 'Back';
 
   @override

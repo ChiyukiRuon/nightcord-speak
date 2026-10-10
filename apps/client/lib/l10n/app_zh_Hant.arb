@@ -1,4 +1,11 @@
 {
+  "updateCheck": "檢查更新",
+  "updateChecking": "正在檢查…",
+  "updateCurrent": "目前已是最新版本。",
+  "updateError": "無法檢查更新或開啟發佈頁面，請檢查網路後重試。",
+  "updateAvailable": "發現新版本 {version}",
+  "updateDownload": "開啟下載頁面",
+  "updateDownloadHint": "Windows：下載並執行安裝程式覆蓋升級。macOS：選擇對應處理器的 ZIP，替換「應用程式」中的用戶端。更新前請退出用戶端。",
   "@@locale": "zh_Hant",
 
   "backButton": "返回",

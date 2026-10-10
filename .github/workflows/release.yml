@@ -145,6 +145,21 @@ jobs:
         env:
           BUILD_NAME: ${{ needs.plan.outputs.build_name }}
         run: flutter build macos --release --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER"
+      - name: Install Windows installer compiler
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            # New Chocolatey releases may install the compatible Inno Setup 7.
+            $compiler = "$env:ProgramFiles\Inno Setup 7\ISCC.exe"
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup compiler not found' }
+          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
       - name: Package and checksum
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
@@ -192,7 +207,7 @@ jobs:
           platforms = json.loads(Path('.github/release-platforms.json').read_text())['platforms']
           lines = ['本次发布平台：' + '、'.join(platforms) + '。未列出的平台无需更新。', '']
           if 'windows' in platforms:
-              lines.append('Windows：下载 x64 ZIP，解压并保留完整目录，运行 Nightcord Speak.exe。')
+              lines.append('Windows：下载 x64 Setup.exe 安装；以后运行新版安装程序即可覆盖升级。在系统“已安装的应用”中卸载，身份、设置和自定义音效保留。也可选择 ZIP 便携版，解压并保留完整目录，运行 Nightcord Speak.exe。')
           if 'macos' in platforms:
               lines.append('macOS：按处理器选择 Apple Silicon（arm64）或 Intel（x64）ZIP，解压后将应用复制到「应用程序」。')
               lines.append('macOS 目前使用临时签名，尚未经过 Apple 公证。')

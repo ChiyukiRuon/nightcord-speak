@@ -10,6 +10,30 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get updateCheck => '检查更新';
+
+  @override
+  String get updateChecking => '正在检查…';
+
+  @override
+  String get updateCurrent => '当前已是最新版本。';
+
+  @override
+  String get updateError => '无法检查更新或打开发布页面，请检查网络后重试。';
+
+  @override
+  String updateAvailable(String version) {
+    return '发现新版本 $version';
+  }
+
+  @override
+  String get updateDownload => '打开下载页面';
+
+  @override
+  String get updateDownloadHint =>
+      'Windows：下载并运行安装程序覆盖升级。macOS：选择对应处理器的 ZIP，替换“应用程序”中的客户端。更新前请退出客户端。';
+
+  @override
   String get backButton => '返回';
 
   @override
@@ -1039,6 +1063,30 @@ class AppLocalizationsZh extends AppLocalizations {
 /// The translations for Chinese, using the Han script (`zh_Hant`).
 class AppLocalizationsZhHant extends AppLocalizationsZh {
   AppLocalizationsZhHant() : super('zh_Hant');
+
+  @override
+  String get updateCheck => '檢查更新';
+
+  @override
+  String get updateChecking => '正在檢查…';
+
+  @override
+  String get updateCurrent => '目前已是最新版本。';
+
+  @override
+  String get updateError => '無法檢查更新或開啟發佈頁面，請檢查網路後重試。';
+
+  @override
+  String updateAvailable(String version) {
+    return '發現新版本 $version';
+  }
+
+  @override
+  String get updateDownload => '開啟下載頁面';
+
+  @override
+  String get updateDownloadHint =>
+      'Windows：下載並執行安裝程式覆蓋升級。macOS：選擇對應處理器的 ZIP，替換「應用程式」中的用戶端。更新前請退出用戶端。';
 
   @override
   String get backButton => '返回';

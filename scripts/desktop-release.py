@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import zipfile
 
@@ -59,6 +60,33 @@ def prepare(root, version, build_number):
     app_info.write_text(info, encoding="utf-8")
 
 
+def build_installer(root, version, bundle, destination):
+    compiler = os.environ.get("INNO_SETUP_COMPILER") or shutil.which("ISCC.exe")
+    if not compiler:
+        compiler = r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    subprocess.run([
+        compiler, f"/DProductVersion={version}",
+        f"/DNumericVersion={version.split('-')[0]}",
+        f"/DBundleDir={bundle}", f"/DOutputDir={destination}",
+        str(root / "scripts/windows-installer.iss"),
+    ], check=True)
+    installer = destination / f"Nightcord-Speak-{version}-windows-x64-setup.exe"
+    if not installer.is_file():
+        raise ValueError("Installer compiler did not produce the expected setup executable")
+    return installer
+
+
+def write_manifest(artifact, version, build_number, platform, arch, revision):
+    with artifact.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    artifact.with_suffix(".sha256").write_text(
+        f"{digest}  {artifact.name}\n", encoding="utf-8")
+    artifact.with_suffix(".json").write_text(json.dumps({
+        "version": version, "build_number": build_number, "platform": platform,
+        "arch": arch, "revision": revision, "archive": artifact.name, "sha256": digest,
+    }, indent=2) + "\n", encoding="utf-8")
+
+
 def package(root, version, build_number, platform, arch, revision):
     destination = root / "dist"
     destination.mkdir(exist_ok=True)
@@ -74,6 +102,7 @@ def package(root, version, build_number, platform, arch, revision):
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
             for file in sorted(bundle.rglob("*")):
                 if (file.is_file() and file.suffix.lower() != ".pdb"
+                        and file.relative_to(bundle).parts[0] != "sounds"
                         and file.name != "nightcord_client.exe"):
                     output.write(file, Path(stem) / file.relative_to(bundle))
     else:
@@ -91,33 +120,34 @@ def package(root, version, build_number, platform, arch, revision):
         # ditto preserves framework symlinks, executable modes and bundle metadata.
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
                         str(bundle), str(archive)], check=True)
-    with archive.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    (destination / f"{stem}.sha256").write_text(
-        f"{digest}  {archive.name}\n", encoding="utf-8")
-    (destination / f"{stem}.json").write_text(json.dumps({
-        "version": version, "build_number": build_number, "platform": platform,
-        "arch": arch, "revision": revision, "archive": archive.name, "sha256": digest,
-    }, indent=2) + "\n", encoding="utf-8")
+    write_manifest(archive, version, build_number, platform, arch, revision)
+    if platform == "windows":
+        installer = build_installer(root, version, bundle, destination)
+        write_manifest(installer, version, build_number, platform, arch, revision)
 
 
 def verify(root, release, build_number, revision):
     expected = set()
+    artifacts = []
     for target in release["matrix"]["include"]:
         stem = f"Nightcord-Speak-{release['version']}-{target['platform']}-{target['arch']}"
-        expected.update(f"{stem}.{suffix}" for suffix in ("zip", "sha256", "json"))
+        artifacts.append((target, stem, "zip"))
+        if target["platform"] == "windows":
+            artifacts.append((target, stem + "-setup", "exe"))
+    for target, stem, extension in artifacts:
+        expected.update(f"{stem}.{suffix}" for suffix in (extension, "sha256", "json"))
         manifest = json.loads((root / "dist" / f"{stem}.json").read_text(encoding="utf-8"))
-        with (root / "dist" / f"{stem}.zip").open("rb") as archive:
+        with (root / "dist" / f"{stem}.{extension}").open("rb") as archive:
             digest = hashlib.file_digest(archive, "sha256").hexdigest()
         if (manifest["revision"] != revision
                 or manifest["version"] != release["version"]
                 or manifest["build_number"] != build_number
                 or manifest["platform"] != target["platform"]
                 or manifest["arch"] != target["arch"]
-                or manifest["archive"] != f"{stem}.zip"
+                or manifest["archive"] != f"{stem}.{extension}"
                 or manifest["sha256"] != digest
                 or (root / "dist" / f"{stem}.sha256").read_text(encoding="utf-8")
-                != f"{digest}  {stem}.zip\n"):
+                != f"{digest}  {stem}.{extension}\n"):
             raise ValueError(f"Release artifact mismatch: {stem}")
     if {f.name for f in (root / "dist").iterdir()} != expected:
         raise ValueError("Release artifact set does not match the selected platforms")

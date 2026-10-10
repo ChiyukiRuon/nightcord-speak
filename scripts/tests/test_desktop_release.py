@@ -2,8 +2,10 @@
 
 import importlib.util
 from pathlib import Path
+import re
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location(
@@ -13,6 +15,39 @@ SPEC.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_installer_detects_display_language_instead_of_previous_english(self):
+        # Older installers only had English; upgrades must detect the system again.
+        script = (release.ROOT / "scripts/windows-installer.iss").read_text(encoding="utf-8")
+        self.assertIn("LanguageDetectionMethod=uilanguage", script)
+        self.assertIn("UsePreviousLanguage=no", script)
+        self.assertIn("ShowLanguageDialog=yes", script)
+        languages = re.findall(r"^Name: (\w+); MessagesFile:", script, flags=re.M)
+        self.assertEqual(languages, ["english", "chinesesimplified", "chinesetraditional", "japanese", "korean"])
+        for name, lang_id in (("ChineseSimplified", "$0804"), ("ChineseTraditional", "$0404")):
+            messages = (release.ROOT / f"scripts/installer-languages/{name}.isl").read_text(encoding="utf-8-sig")
+            self.assertIn(f"LanguageID={lang_id}", messages)
+            self.assertIn("[Messages]", messages)
+            self.assertIn("LaunchProgram=", messages)
+
+    def setUp(self):
+        # Unit tests validate artifact handling without executing an installer compiler.
+        def fake_installer(root, version, bundle, destination):
+            path = destination / f"Nightcord-Speak-{version}-windows-x64-setup.exe"
+            path.write_bytes(b"installer-content")
+            return path
+        compiler = patch.object(release, "build_installer", side_effect=fake_installer)
+        compiler.start()
+        self.addCleanup(compiler.stop)
+
+    def test_installer_tampering_prevents_publish(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_windows_bundle(root)
+            release.package(root, "0.2.1", "19", "windows", "x64", "commit")
+            next((root / "dist").glob("*.exe")).write_bytes(b"tampered")
+            with self.assertRaises(ValueError):
+                release.verify(root, release.plan("v0.2.1", {"platforms": ["windows"]}), "19", "commit")
+
     def test_default_matrix_and_preview_policy(self):
         result = release.plan("v0.2.0", {"platforms": ["windows", "macos"]})
         self.assertTrue(result["prerelease"])
@@ -72,6 +107,9 @@ class ReleaseTests(unittest.TestCase):
             self.make_windows_bundle(root)
             # A local incremental build may retain the old launcher; never ship it.
             (root / "apps/client/build/windows/x64/runner/Release/nightcord_client.exe").write_bytes(b"old")
+            sounds = root / "apps/client/build/windows/x64/runner/Release/sounds/private"
+            sounds.mkdir(parents=True)
+            (sounds / "config.json").write_bytes(b"user-config")
             release.package(root, "0.2.1", "19", "windows", "x64", "commit")
             release.verify(root, release.plan("v0.2.1", {"platforms": ["windows"]}), "19", "commit")
             with zipfile.ZipFile(next((root / "dist").glob("*.zip"))) as archive:
@@ -81,6 +119,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertTrue(any(n.endswith("data/flutter_assets/AssetManifest.bin") for n in names))
                 self.assertTrue(any(n.endswith("vcruntime140_1.dll") for n in names))
                 self.assertFalse(any(n.endswith(".pdb") for n in names))
+                self.assertFalse(any("/sounds/" in n for n in names))
 
     def test_missing_core_prevents_packaging(self):
         with tempfile.TemporaryDirectory() as directory:

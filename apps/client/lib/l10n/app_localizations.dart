@@ -103,6 +103,48 @@ abstract class AppLocalizations {
     Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
   ];
 
+  /// No description provided for @updateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updateCheck;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get updateChecking;
+
+  /// No description provided for @updateCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'You are using the latest version.'**
+  String get updateCurrent;
+
+  /// No description provided for @updateError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check for updates or open the release page. Check your network and try again.'**
+  String get updateError;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is available'**
+  String updateAvailable(String version);
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Open download page'**
+  String get updateDownload;
+
+  /// No description provided for @updateDownloadHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.'**
+  String get updateDownloadHint;
+
   /// Tooltip of the button that leaves a page, such as the settings page
   ///
   /// In en, this message translates to:

@@ -1,4 +1,12 @@
 {
+  "updateCheck": "Check for updates",
+  "updateChecking": "Checking…",
+  "updateCurrent": "You are using the latest version.",
+  "updateError": "Could not check for updates or open the release page. Check your network and try again.",
+  "updateAvailable": "Version {version} is available",
+  "@updateAvailable": {"placeholders": {"version": {"type": "String"}}},
+  "updateDownload": "Open download page",
+  "updateDownloadHint": "Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.",
   "@@locale": "en",
 
   "backButton": "Back",

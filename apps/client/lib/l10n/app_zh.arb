@@ -1,4 +1,11 @@
 {
+  "updateCheck": "检查更新",
+  "updateChecking": "正在检查…",
+  "updateCurrent": "当前已是最新版本。",
+  "updateError": "无法检查更新或打开发布页面，请检查网络后重试。",
+  "updateAvailable": "发现新版本 {version}",
+  "updateDownload": "打开下载页面",
+  "updateDownloadHint": "Windows：下载并运行安装程序覆盖升级。macOS：选择对应处理器的 ZIP，替换“应用程序”中的客户端。更新前请退出客户端。",
   "@@locale": "zh",
 
   "backButton": "返回",

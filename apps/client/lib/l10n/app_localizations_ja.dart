@@ -10,6 +10,30 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
+  String get updateCheck => '更新を確認';
+
+  @override
+  String get updateChecking => '確認中…';
+
+  @override
+  String get updateCurrent => '最新バージョンです。';
+
+  @override
+  String get updateError => '更新の確認または配布ページの表示に失敗しました。ネットワークを確認して再試行してください。';
+
+  @override
+  String updateAvailable(String version) {
+    return 'バージョン $version が利用可能です';
+  }
+
+  @override
+  String get updateDownload => 'ダウンロードページを開く';
+
+  @override
+  String get updateDownloadHint =>
+      'Windows：インストーラーを実行して更新します。macOS：プロセッサに対応する ZIP を選び、アプリケーション内のアプリを置き換えます。更新前にクライアントを終了してください。';
+
+  @override
   String get backButton => '戻る';
 
   @override

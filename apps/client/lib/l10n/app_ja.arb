@@ -1,4 +1,11 @@
 {
+  "updateCheck": "更新を確認",
+  "updateChecking": "確認中…",
+  "updateCurrent": "最新バージョンです。",
+  "updateError": "更新の確認または配布ページの表示に失敗しました。ネットワークを確認して再試行してください。",
+  "updateAvailable": "バージョン {version} が利用可能です",
+  "updateDownload": "ダウンロードページを開く",
+  "updateDownloadHint": "Windows：インストーラーを実行して更新します。macOS：プロセッサに対応する ZIP を選び、アプリケーション内のアプリを置き換えます。更新前にクライアントを終了してください。",
   "@@locale": "ja",
 
   "backButton": "戻る",
