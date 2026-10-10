@@ -16,45 +16,85 @@ void main() {
   });
   tearDown(() async => root.delete(recursive: true));
 
-  test('directory handed to the opener is absolute and uses native separators', () async {
-    final path = await library.directory();
-    expect(path, root.absolute.path.replaceAll('/', Platform.pathSeparator));
-    if (Platform.isWindows) expect(path, isNot(contains('/')));
-  });
+  test(
+    'directory handed to the opener is absolute and uses native separators',
+    () async {
+      final path = await library.directory();
+      expect(path, root.absolute.path.replaceAll('/', Platform.pathSeparator));
+      if (Platform.isWindows) expect(path, isNot(contains('/')));
+    },
+  );
 
-  test('extracts defaults and discovers only supported regular audio files', () async {
-    final custom = await Directory('${root.path}/custom').create();
-    for (final name in ['hello.WAV', 'mute.mp3', 'message.flac', 'ignored.txt']) {
-      await File('${custom.path}/$name').writeAsString('fixture');
-    }
-    final packs = await library.scan();
-    expect(packs.map((pack) => pack.name), ['custom', 'nightcord']);
-    expect(packs.first.files, ['hello.WAV', 'message.flac', 'mute.mp3']);
-    expect(await File('${custom.path}/config.json').exists(), isTrue);
-    expect(await File('${root.path}/nightcord/config.json').exists(), isTrue);
-  });
+  test(
+    'extracts defaults and discovers only supported regular audio files',
+    () async {
+      final custom = await Directory('${root.path}/custom').create();
+      for (final name in [
+        'hello.WAV',
+        'mute.mp3',
+        'message.flac',
+        'ignored.txt',
+      ]) {
+        await File('${custom.path}/$name').writeAsString('fixture');
+      }
+      final packs = await library.scan();
+      expect(packs.map((pack) => pack.name), ['custom', 'nightcord']);
+      expect(packs.first.files, ['hello.WAV', 'message.flac', 'mute.mp3']);
+      expect(await File('${custom.path}/config.json').exists(), isTrue);
+      expect(await File('${root.path}/nightcord/config.json').exists(), isTrue);
+      final defaults = packs.singleWhere((pack) => pack.name == 'nightcord');
+      expect(defaults.files, [
+        'connected.wav',
+        'disconnected.wav',
+        'new_message.wav',
+      ]);
+      expect(defaults.mapping[SoundAction.voiceJoined], 'connected.wav');
+      expect(defaults.mapping[SoundAction.voiceLeft], 'disconnected.wav');
+      expect(defaults.mapping[SoundAction.message], 'new_message.wav');
+      for (final name in defaults.files) {
+        final shipped = await File('assets/sounds/nightcord/$name')
+            .readAsBytes();
+        final extracted = await File('${root.path}/nightcord/$name')
+            .readAsBytes();
+        expect(extracted, shipped);
+        expect(ascii.decode(extracted.take(4).toList()), 'RIFF');
+        expect(ascii.decode(extracted.sublist(8, 12)), 'WAVE');
+      }
+    },
+  );
 
-  test('mapping lives inside each pack and survives scanning and missing audio', () async {
-    await library.scan();
-    await library.save('nightcord', {SoundAction.message: 'chat.mp3'});
-    final packs = await library.scan();
-    expect(packs.single.mapping[SoundAction.message], 'chat.mp3');
-    final config = jsonDecode(await File('${root.path}/nightcord/config.json').readAsString());
-    expect(config['actions']['message'], 'chat.mp3');
-    await expectLater(library.play('nightcord', 'chat.mp3'), throwsA(isA<FileSystemException>()));
-  });
+  test(
+    'mapping lives inside each pack and survives scanning and missing audio',
+    () async {
+      await library.scan();
+      await library.save('nightcord', {SoundAction.message: 'chat.mp3'});
+      final packs = await library.scan();
+      expect(packs.single.mapping[SoundAction.message], 'chat.mp3');
+      final config = jsonDecode(
+        await File('${root.path}/nightcord/config.json').readAsString(),
+      );
+      expect(config['actions']['message'], 'chat.mp3');
+      await expectLater(
+        library.play('nightcord', 'chat.mp3'),
+        throwsA(isA<FileSystemException>()),
+      );
+    },
+  );
 
-  test('unsafe mappings are refused without damaging saved configuration', () async {
-    await library.scan();
-    final config = File('${root.path}/nightcord/config.json');
-    final original = await config.readAsString();
-    await expectLater(library.save('../other', {}), throwsFormatException);
-    await expectLater(
-      library.save('nightcord', {SoundAction.message: '../secret.wav'}),
-      throwsFormatException,
-    );
-    expect(await config.readAsString(), original);
-  });
+  test(
+    'unsafe mappings are refused without damaging saved configuration',
+    () async {
+      await library.scan();
+      final config = File('${root.path}/nightcord/config.json');
+      final original = await config.readAsString();
+      await expectLater(library.save('../other', {}), throwsFormatException);
+      await expectLater(
+        library.save('nightcord', {SoundAction.message: '../secret.wav'}),
+        throwsFormatException,
+      );
+      expect(await config.readAsString(), original);
+    },
+  );
 
   test('malformed configuration is reported and preserved', () async {
     await library.scan();
@@ -64,27 +104,31 @@ void main() {
     expect(await config.readAsString(), 'invalid json');
   });
 
-  test('notification sound preference retains defaults and custom selection', () {
-    final defaults = Settings.fromJson({});
-    expect(defaults.notifications.sounds, isTrue);
-    expect(defaults.notifications.soundPack, 'nightcord');
-    expect(defaults.notifications.soundDirectory, isEmpty);
-    final updated = defaults.copyWith(
-      notifications: defaults.notifications.copyWith(
-        sounds: false,
-        soundPack: 'custom',
-        soundDirectory: root.path,
-      ),
-    );
-    final restored = Settings.fromJson(updated.toJson());
-    expect(restored.notifications.sounds, isFalse);
-    expect(restored.notifications.soundPack, 'custom');
-    expect(restored.notifications.soundDirectory, root.path);
-  });
+  test(
+    'notification sound preference retains defaults and custom selection',
+    () {
+      final defaults = Settings.fromJson({});
+      expect(defaults.notifications.sounds, isTrue);
+      expect(defaults.notifications.soundPack, 'nightcord');
+      expect(defaults.notifications.soundDirectory, isEmpty);
+      final updated = defaults.copyWith(
+        notifications: defaults.notifications.copyWith(
+          sounds: false,
+          soundPack: 'custom',
+          soundDirectory: root.path,
+        ),
+      );
+      final restored = Settings.fromJson(updated.toJson());
+      expect(restored.notifications.sounds, isFalse);
+      expect(restored.notifications.soundPack, 'custom');
+      expect(restored.notifications.soundDirectory, root.path);
+    },
+  );
 
   test('bundled sounds stay immutable and mappings survive external directory changes', () async {
     // macOS previously extracted defaults beside the signed application.
-    final bundle = await Directory('${root.path}/app/nightcord').create(recursive: true);
+    final bundle = await Directory('${root.path}/app/nightcord')
+        .create(recursive: true);
     final external = await Directory('${root.path}/music').create();
     final configuration = Directory('${root.path}/data/nightcord');
     final bundledConfig = File('${bundle.path}/config.json');
@@ -97,7 +141,8 @@ void main() {
     final custom = await Directory('${external.path}/custom').create();
     await File('${custom.path}/hello.mp3').writeAsString('fixture');
     final unrelated = await Directory('${external.path}/unrelated').create();
-    final externalDefault = await Directory('${external.path}/nightcord').create();
+    final externalDefault = await Directory('${external.path}/nightcord')
+        .create();
     await File('${externalDefault.path}/wrong.wav').writeAsString('fixture');
     final library = NativeSoundLibrary(external, bundle, configuration);
     final packs = await library.scan();
@@ -135,6 +180,9 @@ void main() {
     await one.save('custom', {SoundAction.message: 'chat.wav'});
     expect((await one.scan()).first.mapping[SoundAction.message], 'chat.wav');
     expect((await two.scan()).first.mapping[SoundAction.message], isNull);
-    expect(await two.directory(), second.absolute.path.replaceAll('/', Platform.pathSeparator));
+    expect(
+      await two.directory(),
+      second.absolute.path.replaceAll('/', Platform.pathSeparator),
+    );
   });
 }

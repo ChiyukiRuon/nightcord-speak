@@ -451,6 +451,18 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**内置默认音效（2026-10-11）**：按用户要求，将本机 Debug 音效目录中的三段 WAV
+纳入 `apps/client/assets/sounds/nightcord/`，绑定加入语音 `connected.wav`、离开语音
+`disconnected.wav`、收到消息 `new_message.wav`。消息源文件 `new_meaasge.wav` 在内置
+资源中规范命名，原文件保留。其他动作仍未分配；沿用现有事件触发与音效包加载逻辑，
+不覆盖用户已保存的动作映射。本项取代此前“默认包只有配置、音频待提供”的状态。
+
+验证：Flutter analyze、18 项音效测试与 Windows Release 构建通过；测试检查三个
+默认动作、WAV 标识与解包后的完整字节。最终构建资源中的三段音频与源资源哈希一致。
+本机 Release 的旧配置全部为空，已同步为新默认映射并补齐缺失音频，方便直接运行。
+产物位于 `apps/client/build/windows/x64/runner/Release/`；未启动客户端进行真实播放
+验收，未提交或推送。
+
 **默认麦克风增益（2026-10-11）**：按用户要求，将 Rust 设置与 Flutter 设置模型的
 默认麦克风增益统一改为 +10 dB。新设置及缺少 `input_gain_db` 的旧设置使用此默认值；
 已保存的增益（包括 0 dB）保持原值。同步更新缺字段、显式零值与悬浮面板回归测试。
