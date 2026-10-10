@@ -159,7 +159,7 @@ pub struct NewBookmark {
 }
 
 /// The saved servers, as they are stored.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BookmarkList {
     /// Format version. Defaulted rather than required so a hand-written file
     /// does not have to know about it.
@@ -168,6 +168,15 @@ pub struct BookmarkList {
 
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+}
+
+impl Default for BookmarkList {
+    fn default() -> Self {
+        Self {
+            version: current_version(),
+            bookmarks: Vec::new(),
+        }
+    }
 }
 
 impl BookmarkList {
@@ -241,13 +250,18 @@ impl BookmarkStore {
     pub fn load(&self) -> Result<BookmarkList, SettingsError> {
         // An embedded default carries the current version, so a file written by
         // hand without one is accepted.
-        let Some(stored) = crate::store::read_json::<BookmarkList>(&self.path())? else {
+        let Some(mut stored) = crate::store::read_json::<BookmarkList>(&self.path())? else {
             return Ok(BookmarkList {
                 version: current_version(),
                 bookmarks: Vec::new(),
             });
         };
 
+        // Older builds derived Default, saved version zero, then rejected their
+        // own address books on restart. The record layout was already version 1.
+        if stored.version == 0 {
+            stored.version = current_version();
+        }
         if stored.version != FILE_VERSION {
             return Err(SettingsError::Malformed {
                 message: format!(
@@ -331,6 +345,37 @@ mod tests {
 
         assert!(loaded.bookmarks.is_empty());
         assert_eq!(loaded.version, FILE_VERSION);
+    }
+
+    #[test]
+    fn default_bookmarks_survive_reopening_the_store() {
+        // Derived Default used version zero, making saved servers disappear.
+        let dir = TempDir::new("default-restart");
+        let mut list = BookmarkList::default();
+        assert_eq!(list.version, FILE_VERSION);
+        list.upsert(sample());
+        dir.store().save(&list).unwrap();
+        assert_eq!(dir.store().load().unwrap(), list);
+    }
+
+    #[test]
+    fn version_zero_recovers_saved_servers_without_rewriting_on_load() {
+        let dir = TempDir::new("zero-recovery");
+        let store = dir.store();
+        let legacy = BookmarkList {
+            version: 0,
+            bookmarks: vec![sample()],
+        };
+        let original = serde_json::to_vec(&legacy).unwrap();
+        fs::write(store.path(), &original).unwrap();
+
+        let recovered = store.load().unwrap();
+        assert_eq!(recovered.version, FILE_VERSION);
+        assert_eq!(recovered.bookmarks, legacy.bookmarks);
+        assert_eq!(fs::read(store.path()).unwrap(), original);
+
+        store.save(&recovered).unwrap();
+        assert_eq!(store.load().unwrap(), recovered);
     }
 
     #[test]

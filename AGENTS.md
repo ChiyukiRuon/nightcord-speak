@@ -451,6 +451,20 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**保存服务器重启后消失（2026-10-11）**：用户反馈服务器列表每次启动都为空。
+确认本机 `bookmarks.json` 中仍有一条记录，但版本为 0；`BookmarkList` 派生
+`Default` 将版本置为 0，读取错误后的空列表沿用该版本保存，下一次启动因只接受
+版本 1 而再次回退为空。此前 Flutter FFI 书签版本测试的失败正是同一问题。
+
+改用显式默认实现，版本固定为当前格式；加载时兼容旧构建误写的版本 0，保持服务器
+条目原样并在内存中升级为 1，后续保存写入版本 1。加载本身不改文件，未知版本仍拒绝。
+新增默认列表保存后重读、旧版本恢复及不改原文件的回归测试。
+
+验证：44 项 Rust 设置测试、Rust 格式检查、Flutter analyze、全部 439 项 Flutter
+测试通过（Debug FFI 已重建），修复版 Windows Release 构建成功，目录仍为
+`apps/client/build/windows/x64/runner/Release/`。FFI 测试恢复原服务器列表后确认本机
+文件为版本 1、仍保留一条记录；未在真实应用图形会话中验收，未提交或推送。
+
 **内置默认音效（2026-10-11）**：按用户要求，将本机 Debug 音效目录中的三段 WAV
 纳入 `apps/client/assets/sounds/nightcord/`，绑定加入语音 `connected.wav`、离开语音
 `disconnected.wav`、收到消息 `new_message.wav`。消息源文件 `new_meaasge.wav` 在内置
