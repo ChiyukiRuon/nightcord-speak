@@ -717,7 +717,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      '본 프로젝트는 비공식 서드파티 TeamSpeak 3 / TeamSpeak 6 클라이언트이며, TeamSpeak 공식과 어떠한 소속 관계도 없습니다.\n\nNightcord는 게임 《프로젝트 세카이 컬러풀 스테이지! feat.하츠네 미쿠》에 등장하는 가상의 음성 채팅 소프트웨어입니다. 본 프로젝트는 Nightcord의 명칭 및 아이콘에 대한 저작권이나 기타 지식재산권을 주장하지 않으며, 관련 권리는 각 권리자에게 귀속됩니다. 본 프로젝트는 SEGA, Colorful Palette, Nuverse와 어떠한 소속, 제휴 또는 사용 허가 관계도 없으며, 해당 기업들의 입장을 대변하지 않습니다.';
+      '본 프로젝트는 비공식 서드파티 TeamSpeak 3 / TeamSpeak 6 클라이언트이며, TeamSpeak 공식과 어떠한 소속 관계도 없습니다.\n\nNightcord는 게임 《프로젝트 세카이 컬러풀 스테이지! feat.하츠네 미쿠》에 등장하는 가상의 음성 채팅 소프트웨어입니다. 본 프로젝트는 게임 《프로젝트 세카이 컬러풀 스테이지! feat.하츠네 미쿠》 및 관련 미술, 음향 등의 리소스에 대한 저작권이나 기타 지식재산권을 주장하지 않으며, 관련 권리는 각 권리자에게 귀속됩니다. 본 프로젝트는 SEGA, Colorful Palette, Nuverse와 어떠한 소속, 제휴 또는 사용 허가 관계도 없으며, 해당 기업들의 입장을 대변하지 않습니다.';
 
   @override
   String get aboutProject => '프로젝트';
@@ -965,4 +965,79 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get profileTitle => '내 프로필';
+
+  @override
+  String get soundsEnabled => '알림 소리 재생';
+
+  @override
+  String get soundsHint =>
+      '아래 경로에 소리 팩 폴더를 만들고 WAV, MP3 또는 FLAC 파일을 추가하세요(최대 30초, 20 MB).';
+
+  @override
+  String get soundsRefresh => '소리 팩 새로고침';
+
+  @override
+  String get soundsPack => '알림 소리 팩';
+
+  @override
+  String get soundsNone => '재생 안 함';
+
+  @override
+  String get soundsPreview => '미리 듣기';
+
+  @override
+  String get soundsEmpty => '오디오 파일이 없습니다. 기본 소리는 제공된 후 추가됩니다.';
+
+  @override
+  String get soundsMissingPack => '선택한 소리 팩이 없습니다. 다른 팩을 선택하세요.';
+
+  @override
+  String get soundsMissingFile => '파일 없음';
+
+  @override
+  String get soundsReadError =>
+      '소리 팩을 읽을 수 없습니다. 폴더 권한과 config.json을 확인한 후 새로고침하세요.';
+
+  @override
+  String get soundsWriteError => '설정을 저장할 수 없습니다. 폴더 쓰기 권한을 확인하세요.';
+
+  @override
+  String get soundsPlayError => '재생할 수 없습니다. 오디오 파일과 출력 장치를 확인하세요.';
+
+  @override
+  String get soundsUnavailable =>
+      '사용자 지정 알림 소리 팩에는 로컬 폴더가 필요하며 현재 네이티브 클라이언트에서 사용할 수 있습니다.';
+
+  @override
+  String get soundVoiceJoined => '음성 참여';
+
+  @override
+  String get soundVoiceLeft => '음성 나가기';
+
+  @override
+  String get soundMicrophoneOff => '마이크 끄기';
+
+  @override
+  String get soundMicrophoneOn => '마이크 켜기';
+
+  @override
+  String get soundSpeakersOff => '스피커 끄기';
+
+  @override
+  String get soundSpeakersOn => '스피커 켜기';
+
+  @override
+  String get soundAwayOn => 'AFK 켜기';
+
+  @override
+  String get soundAwayOff => 'AFK 끄기';
+
+  @override
+  String get soundMessage => '새 메시지';
+
+  @override
+  String get soundsOpenFolder => '소리 폴더 열기';
+
+  @override
+  String get soundsOpenError => '소리 폴더를 열 수 없습니다. 폴더에 접근할 수 있는지 확인하세요.';
 }

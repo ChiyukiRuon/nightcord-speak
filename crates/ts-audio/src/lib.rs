@@ -30,6 +30,7 @@ pub mod device;
 pub mod encoder;
 pub mod engine;
 pub mod format;
+pub mod notification_sound;
 pub mod playback;
 pub mod resampler;
 pub mod ring;

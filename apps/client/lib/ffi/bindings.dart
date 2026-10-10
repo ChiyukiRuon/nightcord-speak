@@ -248,7 +248,7 @@ typedef _BookmarkAddDart = void Function(
 /// Built by [NativeLibrary] once the shared library is loaded.
 class NightcordBindings {
   /// Wraps a loaded library.
-  NightcordBindings(DynamicLibrary library)
+  NightcordBindings(this.library)
     : create = library.lookupFunction<_CreateC, _CreateDart>(
         'nightcord_create',
       ),
@@ -457,6 +457,8 @@ class NightcordBindings {
 
   /// Requests the device list for `"input"` or `"output"`.
   final void Function(Handle, Pointer<Utf8>) audioDevices;
+
+  final DynamicLibrary library;
 
   /// Opens devices and binds voice to a session.
   final void Function(Handle, int, Pointer<Utf8>, Pointer<Utf8>) voiceStart;

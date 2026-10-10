@@ -30,6 +30,23 @@ mod crash;
 mod logging;
 mod string;
 
+/// Queues local notification playback without opening a voice session.
+///
+/// # Safety
+/// All non-null string arguments must be NUL-terminated UTF-8 for this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nightcord_play_notification_sound(
+    path: *const std::ffi::c_char,
+    output: *const std::ffi::c_char,
+    volume: f32,
+) -> bool {
+    let Some(path) = (unsafe { crate::string::from_c_str(path) }) else {
+        return false;
+    };
+    let output = unsafe { crate::string::from_c_str(output) };
+    ts_audio::notification_sound::enqueue(path.into(), output, volume)
+}
+
 use std::ffi::c_char;
 
 use ts_core::ConnectRequest;

@@ -4,7 +4,10 @@ project(nightcord_client LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "nightcord_client")
+set(BINARY_NAME "Nightcord Speak")
+# CMake target identifiers cannot contain spaces. Flutter reads BINARY_NAME
+# above to locate the executable for both build and run.
+set(NIGHTCORD_RUNNER_TARGET "nightcord_client")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -55,7 +58,13 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
-include(flutter/generated_plugins.cmake)
+function(nightcord_add_flutter_plugins)
+  # Generated plugin rules expect BINARY_NAME to name a logical CMake target.
+  set(BINARY_NAME "${NIGHTCORD_RUNNER_TARGET}")
+  include(flutter/generated_plugins.cmake)
+  set(PLUGIN_BUNDLED_LIBRARIES "${PLUGIN_BUNDLED_LIBRARIES}" PARENT_SCOPE)
+endfunction()
+nightcord_add_flutter_plugins()
 
 # The media SDK sources contain UTF-8 comments. MSVC otherwise uses the host
 # ANSI code page and promotes C4819 to an error under the plugin's /WX flags.
@@ -94,14 +103,14 @@ add_custom_target(nightcord_ffi ALL
   VERBATIM)
 
 # The executable is useless without the core, so the core goes first.
-add_dependencies(${BINARY_NAME} nightcord_ffi)
+add_dependencies(${NIGHTCORD_RUNNER_TARGET} nightcord_ffi)
 
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
 # run in place. This is done instead of making a separate bundle (as on Linux)
 # so that building and running from within Visual Studio will work.
-set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
+set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${NIGHTCORD_RUNNER_TARGET}>")
 # Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -111,7 +120,7 @@ endif()
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
-install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+install(TARGETS ${NIGHTCORD_RUNNER_TARGET} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

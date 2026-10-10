@@ -1378,7 +1378,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutDescription.
   ///
   /// In en, this message translates to:
-  /// **'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in the Nightcord name or its icon; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.'**
+  /// **'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in HATSUNE MIKU: COLORFUL STAGE! or its associated artwork, sound effects and other resources; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.'**
   String get aboutDescription;
 
   /// No description provided for @aboutProject.
@@ -1848,6 +1848,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'My profile'**
   String get profileTitle;
+
+  /// No description provided for @soundsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Play notification sounds'**
+  String get soundsEnabled;
+
+  /// No description provided for @soundsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a folder in the directory below for each sound pack and add WAV, MP3 or FLAC files (up to 30 seconds and 20 MB).'**
+  String get soundsHint;
+
+  /// No description provided for @soundsRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh sound packs'**
+  String get soundsRefresh;
+
+  /// No description provided for @soundsPack.
+  ///
+  /// In en, this message translates to:
+  /// **'Sound pack'**
+  String get soundsPack;
+
+  /// No description provided for @soundsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No sound'**
+  String get soundsNone;
+
+  /// No description provided for @soundsPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get soundsPreview;
+
+  /// No description provided for @soundsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This pack has no audio files yet; default sounds will be added when provided.'**
+  String get soundsEmpty;
+
+  /// No description provided for @soundsMissingPack.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected sound pack is missing. Select another pack.'**
+  String get soundsMissingPack;
+
+  /// No description provided for @soundsMissingFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing file'**
+  String get soundsMissingFile;
+
+  /// No description provided for @soundsReadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot read sound packs. Check directory permissions and config.json, then refresh.'**
+  String get soundsReadError;
+
+  /// No description provided for @soundsWriteError.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot save configuration. Check that the sound pack folder is writable.'**
+  String get soundsWriteError;
+
+  /// No description provided for @soundsPlayError.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot play the sound. Check the audio file and output device.'**
+  String get soundsPlayError;
+
+  /// No description provided for @soundsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom sound packs require local folders and are currently available in native clients.'**
+  String get soundsUnavailable;
+
+  /// No description provided for @soundVoiceJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'Join voice'**
+  String get soundVoiceJoined;
+
+  /// No description provided for @soundVoiceLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave voice'**
+  String get soundVoiceLeft;
+
+  /// No description provided for @soundMicrophoneOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone off'**
+  String get soundMicrophoneOff;
+
+  /// No description provided for @soundMicrophoneOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone on'**
+  String get soundMicrophoneOn;
+
+  /// No description provided for @soundSpeakersOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Speakers off'**
+  String get soundSpeakersOff;
+
+  /// No description provided for @soundSpeakersOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Speakers on'**
+  String get soundSpeakersOn;
+
+  /// No description provided for @soundAwayOn.
+  ///
+  /// In en, this message translates to:
+  /// **'AFK on'**
+  String get soundAwayOn;
+
+  /// No description provided for @soundAwayOff.
+  ///
+  /// In en, this message translates to:
+  /// **'AFK off'**
+  String get soundAwayOff;
+
+  /// No description provided for @soundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'New message'**
+  String get soundMessage;
+
+  /// No description provided for @soundsOpenFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open sound folder'**
+  String get soundsOpenFolder;
+
+  /// No description provided for @soundsOpenError.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot open the sound folder. Check that the directory is accessible.'**
+  String get soundsOpenError;
 }
 
 class _AppLocalizationsDelegate

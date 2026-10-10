@@ -192,7 +192,7 @@ jobs:
           platforms = json.loads(Path('.github/release-platforms.json').read_text())['platforms']
           lines = ['本次发布平台：' + '、'.join(platforms) + '。未列出的平台无需更新。', '']
           if 'windows' in platforms:
-              lines.append('Windows：下载 x64 ZIP，解压并保留完整目录，运行 nightcord_client.exe。')
+              lines.append('Windows：下载 x64 ZIP，解压并保留完整目录，运行 Nightcord Speak.exe。')
           if 'macos' in platforms:
               lines.append('macOS：按处理器选择 Apple Silicon（arm64）或 Intel（x64）ZIP，解压后将应用复制到「应用程序」。')
               lines.append('macOS 目前使用临时签名，尚未经过 Apple 公证。')

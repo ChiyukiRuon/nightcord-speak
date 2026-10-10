@@ -36,6 +36,8 @@ async-trait = "0.1"
 # native binding is built.
 audiopus = "0.3.0-rc.0"
 cpal = "0.18"
+# Decode user-provided notification sounds while reusing our existing output device.
+symphonia = { version = "0.5.5", default-features = false, features = ["wav", "pcm", "mp3", "flac"] }
 base64 = "0.22"
 # Avatar transport reuses the HTTP stack already pulled in by tsclientlib.
 reqwest = { version = "0.13", default-features = false, features = ["default-tls"] }

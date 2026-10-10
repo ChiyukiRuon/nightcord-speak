@@ -46,11 +46,29 @@ import 'package:nightcord_client/models/settings.dart';
 import 'package:nightcord_client/models/shortcuts.dart';
 import 'package:nightcord_client/models/voice_status.dart';
 import 'package:nightcord_client/providers/providers.dart';
+import 'package:nightcord_client/providers/sounds.dart';
+import 'package:nightcord_client/core/sounds/sound_pack.dart';
 import 'package:nightcord_client/state/notifications.dart';
 import 'package:nightcord_client/state/server_view.dart';
 import 'package:nightcord_client/layout/mobile_shell.dart';
 import 'package:nightcord_client/layout/desktop_shell.dart';
 import 'package:nightcord_client/util/gain.dart';
+
+/// A filesystem capability that resolves under the widget test's fake clock.
+class _RenderSoundLibrary implements SoundLibrary {
+  @override
+  bool get available => true;
+  @override
+  Future<String> directory() async => '/app/sounds';
+  @override
+  Future<List<SoundPack>> scan() async => [
+    const SoundPack(name: 'nightcord', files: [], mapping: {}),
+  ];
+  @override
+  Future<void> save(String pack, Map<SoundAction, String?> mapping) async {}
+  @override
+  Future<void> play(String pack, String file, {String? output, double volume = 1}) async {}
+}
 
 /// A transport that answers nothing.
 ///
@@ -481,6 +499,8 @@ ProviderContainer _container({
   ScreenShareBackend? screen,
 }) => ProviderContainer.test(
   overrides: [
+    // Page rendering must not wait for filesystem I/O under the fake clock.
+    soundLibraryProvider.overrideWithValue(_RenderSoundLibrary()),
     clientTransportProvider.overrideWithValue(transport ?? _SilentTransport()),
     if (screen != null) screenBackendProvider.overrideWithValue(screen),
     activeSessionProvider.overrideWith(() => _FixedActive()),

@@ -8,6 +8,7 @@ import '../../../design/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/settings.dart';
 import '../../../providers/providers.dart';
+import 'sounds_section.dart';
 
 /// The notification switches.
 class NotificationsSection extends ConsumerWidget {
@@ -65,6 +66,7 @@ class NotificationsSection extends ConsumerWidget {
           if (v) requestNotificationPermission();
           update(notifications.copyWith(system: v));
         }),
+        SoundsSection(settings: settings),
       ],
     );
   }

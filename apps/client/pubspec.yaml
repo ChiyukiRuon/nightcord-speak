@@ -153,6 +153,7 @@ flutter:
   # asset rather than a font family: it is a text file, and declaring it as a
   # face would have Flutter try to parse it as one.
   assets:
+    - assets/sounds/nightcord/
     - assets/licenses/third_party.json
     - assets/fonts/OFL.txt
 

@@ -66,14 +66,15 @@ def package(root, version, build_number, platform, arch, revision):
     archive = destination / f"{stem}.zip"
     if platform == "windows":
         bundle = root / "apps/client/build/windows/x64/runner/Release"
-        for name in ("nightcord_client.exe", "nightcord_ffi.dll", "flutter_windows.dll",
+        for name in ("Nightcord Speak.exe", "nightcord_ffi.dll", "flutter_windows.dll",
                      "libwebrtc.dll", "msvcp140.dll", "vcruntime140.dll",
                      "vcruntime140_1.dll", "data/flutter_assets"):
             if not (bundle / name).exists():
                 raise ValueError(f"Missing Windows bundle component: {name}")
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
             for file in sorted(bundle.rglob("*")):
-                if file.is_file() and file.suffix.lower() != ".pdb":
+                if (file.is_file() and file.suffix.lower() != ".pdb"
+                        and file.name != "nightcord_client.exe"):
                     output.write(file, Path(stem) / file.relative_to(bundle))
     else:
         bundle = root / "apps/client/build/macos/Build/Products/Release/Nightcord Speak.app"

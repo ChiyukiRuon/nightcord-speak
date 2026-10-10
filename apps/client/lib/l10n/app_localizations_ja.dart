@@ -710,7 +710,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      '本プロジェクトは、非公式のサードパーティ製 TeamSpeak 3 / TeamSpeak 6 クライアントであり、TeamSpeak 公式とは一切の所属関係がありません。\n\nNightcord は、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』に登場する架空のボイスチャットソフトウェアです。本プロジェクトは、Nightcord の名称およびアイコンに関する著作権その他の知的財産権を主張しません。関連する権利は、それぞれの権利者に帰属します。本プロジェクトは SEGA、Colorful Palette、Nuverse と一切の所属・提携・許諾関係がなく、これらの企業の見解を代表するものではありません。';
+      '本プロジェクトは、非公式のサードパーティ製 TeamSpeak 3 / TeamSpeak 6 クライアントであり、TeamSpeak 公式とは一切の所属関係がありません。\n\nNightcord は、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』に登場する架空のボイスチャットソフトウェアです。本プロジェクトは、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』および関連する美術・音声などの素材に関する著作権その他の知的財産権を主張しません。関連する権利は、それぞれの権利者に帰属します。本プロジェクトは SEGA、Colorful Palette、Nuverse と一切の所属・提携・許諾関係がなく、これらの企業の見解を代表するものではありません。';
 
   @override
   String get aboutProject => 'プロジェクト';
@@ -953,4 +953,79 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get profileTitle => 'プロフィール';
+
+  @override
+  String get soundsEnabled => '通知音を再生';
+
+  @override
+  String get soundsHint =>
+      '下記のディレクトリに通知音パック用のフォルダーを作成し、WAV・MP3・FLAC ファイル（30 秒・20 MB 以下）を追加してください。';
+
+  @override
+  String get soundsRefresh => '通知音パックを更新';
+
+  @override
+  String get soundsPack => '通知音パック';
+
+  @override
+  String get soundsNone => '再生しない';
+
+  @override
+  String get soundsPreview => '試聴';
+
+  @override
+  String get soundsEmpty => '音声ファイルがありません。既定の通知音は提供後に追加されます。';
+
+  @override
+  String get soundsMissingPack => '選択した通知音パックがありません。別のパックを選んでください。';
+
+  @override
+  String get soundsMissingFile => 'ファイルなし';
+
+  @override
+  String get soundsReadError =>
+      '通知音パックを読み込めません。フォルダーの権限と config.json を確認して更新してください。';
+
+  @override
+  String get soundsWriteError => '設定を保存できません。フォルダーへの書き込み権限を確認してください。';
+
+  @override
+  String get soundsPlayError => '再生できません。音声ファイルと出力デバイスを確認してください。';
+
+  @override
+  String get soundsUnavailable =>
+      'カスタム通知音パックはローカルフォルダーが必要なため、現在はネイティブクライアントで利用できます。';
+
+  @override
+  String get soundVoiceJoined => '音声に参加';
+
+  @override
+  String get soundVoiceLeft => '音声から退出';
+
+  @override
+  String get soundMicrophoneOff => 'マイクをオフ';
+
+  @override
+  String get soundMicrophoneOn => 'マイクをオン';
+
+  @override
+  String get soundSpeakersOff => 'スピーカーをオフ';
+
+  @override
+  String get soundSpeakersOn => 'スピーカーをオン';
+
+  @override
+  String get soundAwayOn => 'AFK をオン';
+
+  @override
+  String get soundAwayOff => 'AFK をオフ';
+
+  @override
+  String get soundMessage => '新しいメッセージ';
+
+  @override
+  String get soundsOpenFolder => '音声フォルダーを開く';
+
+  @override
+  String get soundsOpenError => '音声フォルダーを開けません。フォルダーにアクセスできるか確認してください。';
 }

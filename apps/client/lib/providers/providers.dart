@@ -25,6 +25,7 @@ import '../models/voice_status.dart';
 import '../state/notifications.dart';
 import '../state/server_view.dart';
 import '../util/system_notifications.dart';
+import 'sounds.dart';
 
 /// The only protocol boundary used by state and features.
 final clientTransportProvider = Provider<ClientTransport>((ref) {
@@ -113,6 +114,13 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         if (_closed.contains(session)) return;
 
         if (event is DisconnectedEvent) {
+          unawaited(
+            playSoundActions(
+              ref,
+              ref.read(soundPolicyProvider).leave(session),
+              ref.read(settingsProvider),
+            ),
+          );
           _ended.add(session);
           forget(session);
           return;
@@ -128,6 +136,13 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
         // client on their way out is still in it, and that is the only place
         // their name can still be read.
         ref.read(noticesProvider.notifier).consider(session, event, view);
+        unawaited(
+          playSoundActions(
+            ref,
+            ref.read(soundPolicyProvider).observe(session, event, view),
+            ref.read(settingsProvider),
+          ),
+        );
 
         view.apply(event);
         state = {...state, session: view};
@@ -288,6 +303,13 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
 
   /// Forgets a session, as after a clean disconnect.
   void forget(int session) {
+    unawaited(
+      playSoundActions(
+        ref,
+        ref.read(soundPolicyProvider).leave(session),
+        ref.read(settingsProvider),
+      ),
+    );
     _closed.add(session);
     _voiceStarted.remove(session);
     final next = {...state}..remove(session);
@@ -326,6 +348,13 @@ class SessionsNotifier extends Notifier<Map<int, ServerView>> {
   void reportVoiceState(int session, VoiceState voice) {
     final view = state[session];
     if (view == null) return;
+    unawaited(
+      playSoundActions(
+        ref,
+        ref.read(soundPolicyProvider).voice(session, voice),
+        ref.read(settingsProvider),
+      ),
+    );
     view.voice = voice;
     state = {...state, session: view};
   }

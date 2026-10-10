@@ -18,7 +18,9 @@ List<String> revealCommand(String path, {required String operatingSystem}) {
     case 'windows':
       // Explorer. Note that it reports exit code 1 even when it succeeded,
       // which is why `revealDirectory` never consults the exit code.
-      return ['explorer', path];
+      // Explorer treats forward slashes as command syntax rather than reliably
+      // resolving the mixed separators accepted by Dart's filesystem APIs.
+      return ['explorer', path.replaceAll('/', r'\')];
     case 'macos':
       return ['open', path];
     default:

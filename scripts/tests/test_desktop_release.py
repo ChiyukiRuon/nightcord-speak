@@ -60,9 +60,9 @@ class ReleaseTests(unittest.TestCase):
     def make_windows_bundle(self, root):
         bundle = root / "apps/client/build/windows/x64/runner/Release"
         (bundle / "data/flutter_assets").mkdir(parents=True)
-        for name in ("nightcord_client.exe", "nightcord_ffi.dll", "flutter_windows.dll",
+        for name in ("Nightcord Speak.exe", "nightcord_ffi.dll", "flutter_windows.dll",
                      "libwebrtc.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll",
-                     "data/flutter_assets/AssetManifest.bin", "nightcord_client.pdb"):
+                     "data/flutter_assets/AssetManifest.bin", "Nightcord Speak.pdb"):
             (bundle / name).write_bytes(b"bundle-content")
         return bundle
 
@@ -70,10 +70,14 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.make_windows_bundle(root)
+            # A local incremental build may retain the old launcher; never ship it.
+            (root / "apps/client/build/windows/x64/runner/Release/nightcord_client.exe").write_bytes(b"old")
             release.package(root, "0.2.1", "19", "windows", "x64", "commit")
             release.verify(root, release.plan("v0.2.1", {"platforms": ["windows"]}), "19", "commit")
             with zipfile.ZipFile(next((root / "dist").glob("*.zip"))) as archive:
                 names = archive.namelist()
+                self.assertTrue(any(n.endswith("/Nightcord Speak.exe") for n in names))
+                self.assertFalse(any(n.endswith("/nightcord_client.exe") for n in names))
                 self.assertTrue(any(n.endswith("data/flutter_assets/AssetManifest.bin") for n in names))
                 self.assertTrue(any(n.endswith("vcruntime140_1.dll") for n in names))
                 self.assertFalse(any(n.endswith(".pdb") for n in names))

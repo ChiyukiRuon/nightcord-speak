@@ -708,7 +708,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      '本项目是第三方 TeamSpeak 3 / TeamSpeak 6 客户端，与 TeamSpeak 官方无任何隶属关系。\n\nNightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对 Nightcord 名称及其图标享有版权或其他知识产权；相关权利归各自权利人所有。本项目与 SEGA、Colorful Palette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。';
+      '本项目是第三方 TeamSpeak 3 / TeamSpeak 6 客户端，与 TeamSpeak 官方无任何隶属关系。\n\nNightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对游戏《初音未来：缤纷舞台》及其相关的美术、音效等资源享有版权或其他知识产权；相关权利归各自权利人所有。本项目与 SEGA、Colorful Palette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。';
 
   @override
   String get aboutProject => '项目地址';
@@ -946,6 +946,79 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileTitle => '个人资料';
+
+  @override
+  String get soundsEnabled => '播放提示音';
+
+  @override
+  String get soundsHint =>
+      '在下方目录中新建文件夹作为音效包，放入 WAV、MP3 或 FLAC 文件（最长 30 秒、最大 20 MB）。';
+
+  @override
+  String get soundsRefresh => '刷新音效包';
+
+  @override
+  String get soundsPack => '音效包';
+
+  @override
+  String get soundsNone => '不播放';
+
+  @override
+  String get soundsPreview => '试听';
+
+  @override
+  String get soundsEmpty => '此音效包尚无音频文件；默认提示音将在提供后加入。';
+
+  @override
+  String get soundsMissingPack => '所选音效包不存在，请选择其他音效包。';
+
+  @override
+  String get soundsMissingFile => '文件缺失';
+
+  @override
+  String get soundsReadError => '无法读取音效包，请检查目录权限及 config.json 格式后刷新。';
+
+  @override
+  String get soundsWriteError => '无法保存配置，请检查音效包文件夹是否可写。';
+
+  @override
+  String get soundsPlayError => '无法播放，请检查音频文件及音频输出设备。';
+
+  @override
+  String get soundsUnavailable => '自定义音效包需要本地文件目录，目前仅在原生客户端可用。';
+
+  @override
+  String get soundVoiceJoined => '加入语音';
+
+  @override
+  String get soundVoiceLeft => '离开语音';
+
+  @override
+  String get soundMicrophoneOff => '关闭麦克风';
+
+  @override
+  String get soundMicrophoneOn => '开启麦克风';
+
+  @override
+  String get soundSpeakersOff => '关闭扬声器';
+
+  @override
+  String get soundSpeakersOn => '开启扬声器';
+
+  @override
+  String get soundAwayOn => '开启 AFK 模式';
+
+  @override
+  String get soundAwayOff => '关闭 AFK 模式';
+
+  @override
+  String get soundMessage => '收到新消息';
+
+  @override
+  String get soundsOpenFolder => '打开音效文件夹';
+
+  @override
+  String get soundsOpenError => '无法打开音效文件夹，请检查目录是否可访问。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1651,7 +1724,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutDescription =>
-      '本專案是第三方 TeamSpeak 3 / TeamSpeak 6 用戶端，與 TeamSpeak 官方無任何隸屬關係。\n\nNightcord 是遊戲《世界計畫 繽紛舞台！feat.初音ミク》中虛構的語音聊天軟體。本專案不主張對 Nightcord 名稱及其圖示享有著作權或其他智慧財產權；相關權利歸各自權利人所有。本專案與 SEGA、Colorful Palette、Nuverse 無任何隸屬、合作或授權關係，亦不代表上述公司的立場。';
+      '本專案是第三方 TeamSpeak 3 / TeamSpeak 6 用戶端，與 TeamSpeak 官方無任何隸屬關係。\n\nNightcord 是遊戲《世界計畫 繽紛舞台！feat.初音ミク》中虛構的語音聊天軟體。本專案不主張對遊戲《世界計畫 繽紛舞台！feat.初音ミク》及其相關的美術、音效等資源享有著作權或其他智慧財產權；相關權利歸各自權利人所有。本專案與 SEGA、Colorful Palette、Nuverse 無任何隸屬、合作或授權關係，亦不代表上述公司的立場。';
 
   @override
   String get aboutProject => '專案網址';
@@ -1889,4 +1962,77 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get profileTitle => '個人資料';
+
+  @override
+  String get soundsEnabled => '播放提示音';
+
+  @override
+  String get soundsHint =>
+      '在下方目錄中新建資料夾作為音效包，放入 WAV、MP3 或 FLAC 檔案（最長 30 秒、最大 20 MB）。';
+
+  @override
+  String get soundsRefresh => '重新整理音效包';
+
+  @override
+  String get soundsPack => '音效包';
+
+  @override
+  String get soundsNone => '不播放';
+
+  @override
+  String get soundsPreview => '試聽';
+
+  @override
+  String get soundsEmpty => '此音效包尚無音訊檔案；預設提示音將在提供後加入。';
+
+  @override
+  String get soundsMissingPack => '所選音效包不存在，請選擇其他音效包。';
+
+  @override
+  String get soundsMissingFile => '檔案遺失';
+
+  @override
+  String get soundsReadError => '無法讀取音效包，請檢查目錄權限及 config.json 格式後重新整理。';
+
+  @override
+  String get soundsWriteError => '無法儲存設定，請檢查音效包資料夾是否可寫入。';
+
+  @override
+  String get soundsPlayError => '無法播放，請檢查音訊檔案及音訊輸出裝置。';
+
+  @override
+  String get soundsUnavailable => '自訂音效包需要本機檔案目錄，目前僅在原生用戶端可用。';
+
+  @override
+  String get soundVoiceJoined => '加入語音';
+
+  @override
+  String get soundVoiceLeft => '離開語音';
+
+  @override
+  String get soundMicrophoneOff => '關閉麥克風';
+
+  @override
+  String get soundMicrophoneOn => '開啟麥克風';
+
+  @override
+  String get soundSpeakersOff => '關閉揚聲器';
+
+  @override
+  String get soundSpeakersOn => '開啟揚聲器';
+
+  @override
+  String get soundAwayOn => '開啟 AFK 模式';
+
+  @override
+  String get soundAwayOff => '關閉 AFK 模式';
+
+  @override
+  String get soundMessage => '收到新訊息';
+
+  @override
+  String get soundsOpenFolder => '開啟音效資料夾';
+
+  @override
+  String get soundsOpenError => '無法開啟音效資料夾，請檢查目錄是否可存取。';
 }

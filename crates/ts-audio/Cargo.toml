@@ -12,5 +12,6 @@ ts-protocol.workspace = true
 
 audiopus.workspace = true
 cpal.workspace = true
+symphonia.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

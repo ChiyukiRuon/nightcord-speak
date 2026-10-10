@@ -248,6 +248,10 @@ fn default_push_to_talk_shortcut() -> Option<Chord> {
 /// about every join but not every leave.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotificationSettings {
+    #[serde(default = "default_true")]
+    pub sounds: bool,
+    #[serde(default = "default_sound_pack")]
+    pub sound_pack: String,
     /// Someone joined or left.
     #[serde(default = "default_true")]
     pub presence: bool,
@@ -282,6 +286,8 @@ pub struct NotificationSettings {
 impl Default for NotificationSettings {
     fn default() -> Self {
         Self {
+            sounds: true,
+            sound_pack: default_sound_pack(),
             presence: true,
             poke: true,
             channel_message: true,
@@ -294,6 +300,10 @@ impl Default for NotificationSettings {
 
 const fn default_true() -> bool {
     true
+}
+
+fn default_sound_pack() -> String {
+    "nightcord".into()
 }
 
 /// How audio is captured and played.
@@ -904,6 +914,24 @@ mod tests {
         assert!(settings.direct_message);
         assert!(settings.connection);
         assert!(settings.system);
+        assert!(settings.sounds);
+        assert_eq!(settings.sound_pack, "nightcord");
+    }
+
+    #[test]
+    fn custom_sound_preferences_round_trip_without_changing_notifications() {
+        let old: NotificationSettings = serde_json::from_str(r#"{"presence":false}"#).unwrap();
+        assert!(old.sounds);
+        assert_eq!(old.sound_pack, "nightcord");
+        let selected = NotificationSettings {
+            sounds: false,
+            sound_pack: "custom".into(),
+            ..old
+        };
+        let restored: NotificationSettings =
+            serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
+        assert_eq!(restored, selected);
+        assert!(!restored.presence);
     }
 
     #[test]

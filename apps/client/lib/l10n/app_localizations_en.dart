@@ -758,7 +758,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in the Nightcord name or its icon; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.';
+      'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in HATSUNE MIKU: COLORFUL STAGE! or its associated artwork, sound effects and other resources; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.';
 
   @override
   String get aboutProject => 'Project';
@@ -1012,4 +1012,84 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileTitle => 'My profile';
+
+  @override
+  String get soundsEnabled => 'Play notification sounds';
+
+  @override
+  String get soundsHint =>
+      'Create a folder in the directory below for each sound pack and add WAV, MP3 or FLAC files (up to 30 seconds and 20 MB).';
+
+  @override
+  String get soundsRefresh => 'Refresh sound packs';
+
+  @override
+  String get soundsPack => 'Sound pack';
+
+  @override
+  String get soundsNone => 'No sound';
+
+  @override
+  String get soundsPreview => 'Preview';
+
+  @override
+  String get soundsEmpty =>
+      'This pack has no audio files yet; default sounds will be added when provided.';
+
+  @override
+  String get soundsMissingPack =>
+      'The selected sound pack is missing. Select another pack.';
+
+  @override
+  String get soundsMissingFile => 'Missing file';
+
+  @override
+  String get soundsReadError =>
+      'Cannot read sound packs. Check directory permissions and config.json, then refresh.';
+
+  @override
+  String get soundsWriteError =>
+      'Cannot save configuration. Check that the sound pack folder is writable.';
+
+  @override
+  String get soundsPlayError =>
+      'Cannot play the sound. Check the audio file and output device.';
+
+  @override
+  String get soundsUnavailable =>
+      'Custom sound packs require local folders and are currently available in native clients.';
+
+  @override
+  String get soundVoiceJoined => 'Join voice';
+
+  @override
+  String get soundVoiceLeft => 'Leave voice';
+
+  @override
+  String get soundMicrophoneOff => 'Microphone off';
+
+  @override
+  String get soundMicrophoneOn => 'Microphone on';
+
+  @override
+  String get soundSpeakersOff => 'Speakers off';
+
+  @override
+  String get soundSpeakersOn => 'Speakers on';
+
+  @override
+  String get soundAwayOn => 'AFK on';
+
+  @override
+  String get soundAwayOff => 'AFK off';
+
+  @override
+  String get soundMessage => 'New message';
+
+  @override
+  String get soundsOpenFolder => 'Open sound folder';
+
+  @override
+  String get soundsOpenError =>
+      'Cannot open the sound folder. Check that the directory is accessible.';
 }

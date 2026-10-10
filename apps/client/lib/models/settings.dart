@@ -82,6 +82,8 @@ class Settings {
 /// starts silent looks broken rather than quiet.
 class NotificationSettings {
   const NotificationSettings({
+    this.sounds = true,
+    this.soundPack = 'nightcord',
     this.presence = true,
     this.poke = true,
     this.channelMessage = true,
@@ -109,8 +111,12 @@ class NotificationSettings {
   /// is not in front. A different question — *where* rather than *whether* —
   /// and a desktop notification is far more intrusive than one inside the app.
   final bool system;
+  final bool sounds;
+  final String soundPack;
 
   NotificationSettings copyWith({
+    bool? sounds,
+    String? soundPack,
     bool? presence,
     bool? poke,
     bool? channelMessage,
@@ -118,6 +124,8 @@ class NotificationSettings {
     bool? connection,
     bool? system,
   }) => NotificationSettings(
+    sounds: sounds ?? this.sounds,
+    soundPack: soundPack ?? this.soundPack,
     presence: presence ?? this.presence,
     poke: poke ?? this.poke,
     channelMessage: channelMessage ?? this.channelMessage,
@@ -127,6 +135,8 @@ class NotificationSettings {
   );
 
   factory NotificationSettings.fromJson(Map<String, dynamic> json) => NotificationSettings(
+    sounds: json['sounds'] as bool? ?? true,
+    soundPack: json['sound_pack'] as String? ?? 'nightcord',
     presence: json['presence'] as bool? ?? true,
     poke: json['poke'] as bool? ?? true,
     channelMessage: json['channel_message'] as bool? ?? true,
@@ -136,6 +146,8 @@ class NotificationSettings {
   );
 
   Map<String, dynamic> toJson() => {
+    'sounds': sounds,
+    'sound_pack': soundPack,
     'presence': presence,
     'poke': poke,
     'channel_message': channelMessage,

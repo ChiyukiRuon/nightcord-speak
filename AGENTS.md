@@ -361,7 +361,7 @@ Rust 内部 crate 的版本仍由 workspace 管理，不随每次应用发布改
 
 **默认产物**：Windows x64 ZIP、macOS Apple Silicon（arm64）ZIP、macOS Intel（x64）ZIP。
 Windows 包含完整 Flutter 资源、Rust DLL、插件与 Visual C++ 运行库；解压后运行
-`nightcord_client.exe`，不要只取 exe。macOS ZIP 保留 `.app` 的权限与框架符号链接，
+`Nightcord Speak.exe`，不要只取 exe。macOS ZIP 保留 `.app` 的权限与框架符号链接，
 解压后将 `Nightcord Speak.app` 复制到“应用程序”。目前 macOS 使用临时签名，
 **没有 Developer ID 签名或 Apple 公证**；Windows 也未配置发行者签名。
 每个 ZIP 附带 `.sha256` 与 `.json`（产品版本、构建编号、平台、架构、源码提交及哈希）。
@@ -451,7 +451,82 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
-**最后更新：2026-10-09**
+**客户端文件名统一（2026-10-10）**：用户要求构建产物命名为 `Nightcord Speak`。
+本轮用户授权提交全部源码改动；提交前 Rust 格式、全工作区 Clippy、全工作区
+Rust 测试、Flutter analyze、414 项 Flutter 测试及 9 项发布脚本测试通过。
+本机 bash 指向不可用的 WSL，因此按 `scripts/fmt.sh` 完整包列表运行原生
+`cargo fmt` 检查。WebRTC 子模块仅有下载的 SDK 文件，不纳入源码提交。
+Windows 输出为 `Nightcord Speak.exe`，文件版本资源的内部名称/原文件名同步更新；
+macOS 现有 `.app` 和内部可执行文件已采用此名称。Windows 的 `BINARY_NAME` 保留
+真实文件名供 Flutter build/run 读取，CMake 逻辑目标单独使用不含空格的名称，
+生成的插件链接规则通过局部变量作用域接入目标，不修改自动生成文件。发布脚本
+与 Release 使用说明同步更新；打包时忽略增量构建目录残留的旧启动文件。
+验证：9 项发布脚本测试通过，Windows Release 构建通过，产物为
+`apps/client/build/windows/x64/runner/Release/Nightcord Speak.exe`。
+Debug 编译完成但安装时被正在运行的旧客户端占用 DLL 阻止；未关闭用户客户端，
+本轮交付使用完整 Release 目录。
+
+**通知提示音（2026-10-10）**：按用户要求，在通知设置的开关下方加入提示音开关、
+音效包选择、九种动作的文件映射、逐项试听与刷新。动作包括自己及其他语音用户
+进入/离开当前频道、自己的麦克风开/关、扬声器开/关、AFK 开/关及收到新消息。
+新消息提示音不受当前是否正在阅读该会话影响，自己的消息回显不播放；提示音
+与系统通知开关、语音扬声器静音独立，沿用所选输出设备和输出音量。
+
+桌面目录为可执行文件同级的 `sounds/`，macOS 为 `.app` 同级，以避免破坏签名；
+移动端适配层使用应用数据目录。首次使用将 `assets/sounds/nightcord/` 中的默认
+资源复制到 `sounds/nightcord/`，只补不存在的文件，不覆盖用户配置。用户可在
+`sounds/` 内自行建包目录，放入 WAV、MP3、FLAC 文件后刷新；各包的 `config.json`
+保存版本 `1` 与 `actions` 映射，动作键为 `voice_joined`、`voice_left`、
+`microphone_off/on`、`speakers_off/on`、`away_on/off`、`message`，值是该包内
+文件名或 `null`（不播放）。主设置只保存 `notifications.sounds` 与
+`notifications.sound_pack`，旧设置默认启用并选择 `nightcord`。包配置先写临时
+文件再替换；错误配置保留并报错，缺失的音频在设置中可见且不会导致应用退出。
+
+解码与 PCM 播放均在 Rust `ts-audio`：新增 Symphonia 0.5.5，只启用 WAV/PCM、
+MP3、FLAC；现有依赖没有文件解码能力，播放继续复用 cpal 与 `Playback`，不再
+引入第二套输出库。更新了随包第三方声明。FFI 只排队文件路径/输出设备/音量，
+读取、解码和设备打开在独立工作线程；队列最多 8 项，文件最大 20 MiB、最长
+30 秒，支持单/双声道并重采样为 48 kHz。设备或解码失败记录无内容的诊断日志。
+事件规则过滤首次连接的成员快照、其他频道及 Query 用户，并去重本地静音变化
+和随后确认回包。断开及重连清理该会话的提示音状态。
+
+**默认音频待用户提供**：当前默认包只有配置，所有映射为 `null`，没有替用户生成
+占位提示音。提供音频后放入 `apps/client/assets/sounds/nightcord/` 并填写默认映射。
+Web 没有软件本地目录，当前能力接口明确显示原生客户端可用；未接入浏览器文件包。
+本轮未提交或推送，不改既有 vendor 工作区修改。
+
+验证：改动 crate 的 Rust 格式与 Clippy 全目标/全特性通过，全工作区 445 项 Rust
+测试、Flutter analyze、全量 411 项 Flutter 测试、Windows Debug 构建与 Web 构建
+通过。新增真实 WAV/MP3/FLAC 短音频解码样本、事件去重、文件包扫描与持久化、
+错误配置不覆盖及设置位置/试听/保存失败回归；样本是 FFmpeg 生成的 50 ms 正弦
+测试数据，不作为默认提示音。页面渲染测试使用文件能力替身，避免 fake clock
+等待真实磁盘 I/O。全量测试在沙箱外完成以访问真实 FFI 应用数据目录；沙箱内
+访问拒绝不是代码回归。尚未以用户默认音频完成真机听音验收，未做 macOS 真机构建。
+
+**提示音设置界面调整（2026-10-10）**：用户反馈刷新按钮上下过近；按钮区上下各加
+16 px 的设计 token 间距，并列加入“打开音效文件夹”，窄窗口通过 Wrap 自动换行。
+打开动作复用现有系统文件管理器能力，目标为提示音根目录 `sounds/`。说明精简为
+原首句，仅保留建包目录、支持格式与文件上限。关于页面的不主张权利表述改为游戏
+《初音未来：缤纷舞台》及其相关的美术、音效等资源，五种语言同步更新。
+Flutter analyze、55 项设置及页面测试通过，打开按钮的测试验证了目标目录且不会
+实际启动文件管理器。Windows Debug 已重新构建到原目录；未提交或推送。
+
+**提示音设置收起与分区（2026-10-10）**：关闭“播放提示音”时，仅保留开关，隐藏
+下方说明、目录、操作按钮、音效包选择及动作映射，且不再订阅包扫描；重新开启
+恢复已有选择和映射。中文文案统一使用“音效包”；选择音效包与具体动作之间增加
+分隔线及 32 px 高度的留白区域。
+Flutter analyze、56 项设置及页面测试与 Windows Debug 重建通过；新增回归确认
+关闭时不扫描、不显示配置，再次开启保留原包和文件映射。未提交或推送。
+
+**打开音效目录的路径修复（2026-10-10）**：用户反馈按钮打开位置不正确。音效目录
+原先在 Windows 原生路径后拼接 `/sounds`，直接交给 Explorer；修正音效目录接口
+返回平台原生分隔符的绝对路径，并在文件管理器边界统一 Windows 斜杠，兼容其他
+入口传入的混合路径。补齐混合斜杠、含空格/中文目录及音效目录返回值的回归；
+目标仍为软件目录下的 `sounds/` 根目录。
+Flutter analyze、12 项文件管理器/音效包/设置交互回归及 Windows Debug 重建通过。
+测试检查实际传给系统的参数，不在自动测试中启动 Explorer；真机打开位置待用户复测。
+
+**最后更新：2026-10-10**
 
 **桌面 tag 自动发布（2026-10-09）**：按用户确认采用统一产品版本与按平台选择发布。
 新增 `.github/workflows/release.yml`，只有推送版本 tag 才打包并加入 Release；普通推送

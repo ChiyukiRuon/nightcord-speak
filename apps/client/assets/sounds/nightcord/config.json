@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "actions": {
+    "voice_joined": null,
+    "voice_left": null,
+    "microphone_off": null,
+    "microphone_on": null,
+    "speakers_off": null,
+    "speakers_on": null,
+    "away_on": null,
+    "away_off": null,
+    "message": null
+  }
+}
