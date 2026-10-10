@@ -1048,6 +1048,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get soundMessage => '新しいメッセージ';
 
   @override
+  String get soundsChooseFolder => 'サウンドフォルダーを選択';
+
+  @override
+  String get soundsDefaultFolder => '既定のフォルダーに戻す';
+
+  @override
   String get soundsOpenFolder => '音声フォルダーを開く';
 
   @override

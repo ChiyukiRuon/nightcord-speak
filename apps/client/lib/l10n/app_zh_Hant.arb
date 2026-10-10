@@ -342,6 +342,8 @@
   "soundAwayOn": "開啟 AFK 模式",
   "soundAwayOff": "關閉 AFK 模式",
   "soundMessage": "收到新訊息",
+  "soundsChooseFolder": "選擇音效目錄",
+  "soundsDefaultFolder": "恢復預設目錄",
   "soundsOpenFolder": "開啟音效資料夾",
   "soundsOpenError": "無法開啟音效資料夾，請檢查目錄是否可存取。",
   "settingsVad": "語音活動偵測 (VAD)",

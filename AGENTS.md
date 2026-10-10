@@ -451,6 +451,33 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**音效包目录设置（2026-10-11）**：按用户要求，macOS 的默认 `nightcord` 包直接读取
+`.app/Contents/Frameworks/App.framework/Resources/flutter_assets/assets/sounds/nightcord/`，
+不再向 `.app` 同级目录解包，也不修改签名包内的文件。默认包的动作映射覆盖存于应用
+数据目录的 `sounds/nightcord/config.json`，切换外部目录后仍保留。默认包当前仍只有
+配置，实际音频待用户提供，沿用原有约定。macOS 外部包根目录默认是当前用户的
+`~/Music`，各包为其直接子目录；`nightcord` 为内置包保留名称，其他目录只在含支持的
+音频文件或 `config.json` 时作为包读取，不向无关空目录写配置。旧 `.app` 同级包不会
+自动移动；可选择其原根目录，旧自定义 `nightcord` 包需另取包名后使用。
+
+Windows 保留可执行文件同级 `sounds/` 默认值。两端的通知音效设置新增“选择音效目录”
+与“恢复默认目录”，选择后刷新包列表；取消不改设置，恢复默认不删除用户文件。
+新增 `notifications.sound_directory` 持久化字段，空值使用平台默认，旧设置兼容；
+五种语言同步更新，无新增依赖。macOS 使用系统目录选择框和安全作用域书签保存授权，
+重启后重新获取访问权，补齐音乐目录、用户所选目录读写及应用作用域书签 entitlement；
+授权失效时可重新选择目录。参考 Apple 的
+[沙盒权限说明](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)。
+
+验证：Flutter analyze、全部 432 项 Flutter 测试、41 项 Rust 设置测试、Rust 设置包
+格式检查与 Web 构建通过；Mac 独立源码副本上 12 项音效回归测试及 Debug 构建通过，
+实际检查最终 `.app` 内默认包配置和三项音效目录沙盒权限。回归覆盖内置资源不被覆盖、
+外部目录切换与映射隔离、取消目录选择及恢复默认、旧设置加载及路径往返。
+尚未在图形会话中验收真实目录选择、重启后的书签授权恢复及音频播放；未提交或推送。
+
+按用户要求完成 Windows Release 构建，构建前 Flutter analyze 通过；删除旧图标字体
+子集后重新构建，确认新目录按钮图标纳入资源。产物位于
+`apps/client/build/windows/x64/runner/Release/`，未启动客户端，未提交或推送。
+
 **其他用户头像本地缓存（2026-10-11）**：按用户要求，在共享 Flutter 头像仓库增加
 持久缓存。进入服务器时先显示该服务器、该用户上次下载成功的头像，再通过原有
 `get_avatar` 获取当前版本；成功后刷新界面并覆盖缓存，失败时保留旧图。持久键采用
@@ -568,7 +595,8 @@ Debug 编译完成但安装时被正在运行的旧客户端占用 DLL 阻止；
 新消息提示音不受当前是否正在阅读该会话影响，自己的消息回显不播放；提示音
 与系统通知开关、语音扬声器静音独立，沿用所选输出设备和输出音量。
 
-桌面目录为可执行文件同级的 `sounds/`，macOS 为 `.app` 同级，以避免破坏签名；
+初版桌面目录为可执行文件同级的 `sounds/`，macOS 为 `.app` 同级；macOS 默认包与
+外部包路径及两端的目录自定义已于 2026-10-11 修订，见本文同日记录。
 移动端适配层使用应用数据目录。首次使用将 `assets/sounds/nightcord/` 中的默认
 资源复制到 `sounds/nightcord/`，只补不存在的文件，不覆盖用户配置。用户可在
 `sounds/` 内自行建包目录，放入 WAV、MP3、FLAC 文件后刷新；各包的 `config.json`

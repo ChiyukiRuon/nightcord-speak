@@ -1061,6 +1061,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get soundMessage => '새 메시지';
 
   @override
+  String get soundsChooseFolder => '효과음 폴더 선택';
+
+  @override
+  String get soundsDefaultFolder => '기본 폴더로 복원';
+
+  @override
   String get soundsOpenFolder => '소리 폴더 열기';
 
   @override

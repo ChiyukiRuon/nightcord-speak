@@ -252,6 +252,9 @@ pub struct NotificationSettings {
     pub sounds: bool,
     #[serde(default = "default_sound_pack")]
     pub sound_pack: String,
+    /// Empty uses the frontend platform default; paths never reach the protocol.
+    #[serde(default)]
+    pub sound_directory: String,
     /// Someone joined or left.
     #[serde(default = "default_true")]
     pub presence: bool,
@@ -288,6 +291,7 @@ impl Default for NotificationSettings {
         Self {
             sounds: true,
             sound_pack: default_sound_pack(),
+            sound_directory: String::new(),
             presence: true,
             poke: true,
             channel_message: true,
@@ -941,9 +945,11 @@ mod tests {
         let old: NotificationSettings = serde_json::from_str(r#"{"presence":false}"#).unwrap();
         assert!(old.sounds);
         assert_eq!(old.sound_pack, "nightcord");
+        assert!(old.sound_directory.is_empty());
         let selected = NotificationSettings {
             sounds: false,
             sound_pack: "custom".into(),
+            sound_directory: "/custom/sounds".into(),
             ..old
         };
         let restored: NotificationSettings =

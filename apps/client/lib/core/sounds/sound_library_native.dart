@@ -4,19 +4,55 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
+import 'package:file_selector/file_selector.dart';
 
 import '../../ffi/native.dart';
 import '../../ffi/rust_client.dart' show coreLogDirectory;
 import 'sound_pack.dart';
 
-SoundLibrary createSoundLibrary() => NativeSoundLibrary();
+const _soundPaths = MethodChannel('nightcord/sound_paths');
+
+Future<String?> chooseSoundDirectory() =>
+    Platform.isMacOS ? _soundPaths.invokeMethod<String>('choose') : getDirectoryPath();
+
+SoundLibrary createSoundLibrary({String directory = ''}) =>
+    NativeSoundLibrary.forPlatform(directory);
 
 typedef _PlayC = Bool Function(Pointer<Utf8>, Pointer<Utf8>, Float);
 typedef _PlayDart = bool Function(Pointer<Utf8>, Pointer<Utf8>, double);
 
 /// Filesystem access and native playback are capabilities, never widget branches.
 class NativeSoundLibrary implements SoundLibrary {
-  NativeSoundLibrary([this._root]);
+  NativeSoundLibrary([this._root, this.bundledDirectory, this.configDirectory])
+    : _usePlatformPaths = _root == null;
+
+  NativeSoundLibrary.forPlatform(String directory)
+    : _root = directory.isEmpty ? null : Directory(directory),
+      bundledDirectory = null,
+      configDirectory = null,
+      _usePlatformPaths = true;
+
+  // Injected roots stay independent of the host OS in filesystem tests.
+  final bool _usePlatformPaths;
+  final Directory? bundledDirectory;
+  final Directory? configDirectory;
+  Directory? _bundle;
+
+  Future<Directory?> _bundledPack() async {
+    if (bundledDirectory != null) return bundledDirectory;
+    if (!_usePlatformPaths || !Platform.isMacOS) return null;
+    final path = await _soundPaths.invokeMethod<String>('bundled');
+    if (path == null) throw const FileSystemException('Bundled sounds unavailable');
+    return _bundle ??= Directory(path);
+  }
+
+  Future<Directory> _configuration() async {
+    if (configDirectory != null) return configDirectory!;
+    final logs = coreLogDirectory();
+    if (logs == null) throw const FileSystemException('Application data directory unavailable');
+    return Directory('${Directory(logs).parent.path}/sounds/nightcord');
+  }
+
   Directory? _root;
   @override
   bool get available => true;
@@ -24,16 +60,24 @@ class NativeSoundLibrary implements SoundLibrary {
   @override
   Future<String> directory() async {
     if (_root == null) {
+      if (Platform.isMacOS) {
+        final path = await _soundPaths.invokeMethod<String>('music');
+        if (path == null) throw const FileSystemException('Music directory unavailable');
+        _root = Directory(path);
+      }
+    }
+    if (_root == null) {
       var parent = File(Platform.resolvedExecutable).parent;
-      // Keep user-editable files outside signed macOS application bundles.
-      if (Platform.isMacOS && parent.parent.parent.path.endsWith('.app')) {
-        parent = parent.parent.parent.parent;
-      } else if (Platform.isAndroid || Platform.isIOS) {
+      if (Platform.isAndroid || Platform.isIOS) {
         final logs = coreLogDirectory();
         if (logs == null) throw const FileSystemException('Application data directory unavailable');
         parent = Directory(logs).parent;
       }
       _root = Directory('${parent.path}/sounds');
+    }
+    if (_usePlatformPaths && Platform.isMacOS) {
+      final path = await _soundPaths.invokeMethod<String>('access', {'path': _root!.absolute.path});
+      if (path != null) _root = Directory(path);
     }
     await _root!.create(recursive: true);
     return _root!.absolute.path.replaceAll('/', Platform.pathSeparator);
@@ -41,6 +85,10 @@ class NativeSoundLibrary implements SoundLibrary {
 
   Future<Directory> _pack(String name) async {
     if (!safeSoundName(name)) throw const FormatException('Invalid sound pack name');
+    if (name == 'nightcord') {
+      final bundle = await _bundledPack();
+      if (bundle != null) return bundle;
+    }
     final root = await directory();
     final pack = Directory('$root/$name');
     if (await FileSystemEntity.type(pack.path, followLinks: false) !=
@@ -53,36 +101,44 @@ class NativeSoundLibrary implements SoundLibrary {
   @override
   Future<List<SoundPack>> scan() async {
     final root = await directory();
+    final bundled = await _bundledPack();
     final defaultPack = Directory('$root/nightcord');
-    if (await FileSystemEntity.type(defaultPack.path, followLinks: false) ==
-        FileSystemEntityType.notFound) {
-      await defaultPack.create();
-    }
-    if (await FileSystemEntity.type(defaultPack.path, followLinks: false) ==
-        FileSystemEntityType.directory) {
-      // Extract shipped defaults once; upgrades must not overwrite user mappings.
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      for (final asset in manifest.listAssets().where(
-        (asset) => asset.startsWith('assets/sounds/nightcord/'),
-      )) {
-        final name = asset.split('/').last;
-        if (!safeSoundName(name)) continue;
-        final destination = File('${defaultPack.path}/$name');
-        if (await FileSystemEntity.type(destination.path, followLinks: false) !=
-            FileSystemEntityType.notFound) {
-          continue;
+    if (bundled == null) {
+      if (await FileSystemEntity.type(defaultPack.path, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        await defaultPack.create();
+      }
+      if (await FileSystemEntity.type(defaultPack.path, followLinks: false) ==
+          FileSystemEntityType.directory) {
+        // Extract shipped defaults once; upgrades must not overwrite user mappings.
+        final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+        for (final asset in manifest.listAssets().where(
+          (asset) => asset.startsWith('assets/sounds/nightcord/'),
+        )) {
+          final name = asset.split('/').last;
+          if (!safeSoundName(name)) continue;
+          final destination = File('${defaultPack.path}/$name');
+          if (await FileSystemEntity.type(destination.path, followLinks: false) !=
+              FileSystemEntityType.notFound) {
+            continue;
+          }
+          final data = await rootBundle.load(asset);
+          await destination.writeAsBytes(
+            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+            flush: true,
+          );
         }
-        final data = await rootBundle.load(asset);
-        await destination.writeAsBytes(
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-          flush: true,
-        );
       }
     }
     final packs = <SoundPack>[];
-    await for (final entity in Directory(root).list(followLinks: false)) {
+    final external = await Directory(root).list(followLinks: false).toList();
+    for (final entity in [?bundled, ...external]) {
       if (entity is! Directory) continue;
-      final name = entity.uri.pathSegments.where((segment) => segment.isNotEmpty).last;
+      final isBundled = entity == bundled;
+      final name = isBundled
+          ? 'nightcord'
+          : entity.uri.pathSegments.where((segment) => segment.isNotEmpty).last;
+      if (!isBundled && bundled != null && name == 'nightcord') continue;
       if (!safeSoundName(name)) continue;
       final files = <String>[];
       await for (final file in entity.list(followLinks: false)) {
@@ -91,7 +147,13 @@ class NativeSoundLibrary implements SoundLibrary {
         if (soundFileName(name)) files.add(name);
       }
       files.sort();
-      final config = File('${entity.path}/config.json');
+      var config = File('${entity.path}/config.json');
+      if (isBundled) {
+        final override = File('${(await _configuration()).path}/config.json');
+        if (await override.exists()) config = override;
+      }
+      // Music may contain unrelated folders; never write configuration into them.
+      if (!isBundled && files.isEmpty && !await config.exists()) continue;
       final mapping = <SoundAction, String?>{};
       if (await FileSystemEntity.type(config.path, followLinks: false) ==
           FileSystemEntityType.notFound) {
@@ -125,7 +187,11 @@ class NativeSoundLibrary implements SoundLibrary {
 
   @override
   Future<void> save(String pack, Map<SoundAction, String?> mapping) async {
-    final directory = await _pack(pack);
+    var directory = await _pack(pack);
+    if (pack == 'nightcord' && await _bundledPack() != null) {
+      directory = await _configuration();
+      await directory.create(recursive: true);
+    }
     for (final file in mapping.values) {
       if (file != null && !soundFileName(file)) {
         throw const FormatException('Invalid sound filename');

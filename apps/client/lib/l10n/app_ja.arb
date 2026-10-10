@@ -342,6 +342,8 @@
   "soundAwayOn": "AFK をオン",
   "soundAwayOff": "AFK をオフ",
   "soundMessage": "新しいメッセージ",
+  "soundsChooseFolder": "サウンドフォルダーを選択",
+  "soundsDefaultFolder": "既定のフォルダーに戻す",
   "soundsOpenFolder": "音声フォルダーを開く",
   "soundsOpenError": "音声フォルダーを開けません。フォルダーにアクセスできるか確認してください。",
   "settingsVad": "音声活動検出 (VAD)",

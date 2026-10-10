@@ -1039,6 +1039,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get soundMessage => '收到新消息';
 
   @override
+  String get soundsChooseFolder => '选择音效目录';
+
+  @override
+  String get soundsDefaultFolder => '恢复默认目录';
+
+  @override
   String get soundsOpenFolder => '打开音效文件夹';
 
   @override
@@ -2092,6 +2098,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get soundMessage => '收到新訊息';
+
+  @override
+  String get soundsChooseFolder => '選擇音效目錄';
+
+  @override
+  String get soundsDefaultFolder => '恢復預設目錄';
 
   @override
   String get soundsOpenFolder => '開啟音效資料夾';

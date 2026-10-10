@@ -1112,6 +1112,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get soundMessage => 'New message';
 
   @override
+  String get soundsChooseFolder => 'Choose sound folder';
+
+  @override
+  String get soundsDefaultFolder => 'Use default folder';
+
+  @override
   String get soundsOpenFolder => 'Open sound folder';
 
   @override

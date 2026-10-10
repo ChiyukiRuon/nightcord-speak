@@ -41,6 +41,99 @@ class MainFlutterWindow: NSWindow {
   /// `pickScreenSource`.
   private var screenPickerChannel: FlutterMethodChannel?
 
+  private var soundPathsChannel: FlutterMethodChannel?
+  // Keep grants alive for the Rust playback worker as well as Dart filesystem IO.
+  private var soundDirectoryGrants: [String: URL] = [:]
+  private let soundBookmarksKey = "NightcordSoundDirectoryBookmarks"
+
+  private var musicDirectory: URL {
+    let home = getpwuid(getuid()).map { String(cString: $0.pointee.pw_dir) }
+      ?? NSHomeDirectory()
+    return URL(fileURLWithPath: home).appendingPathComponent("Music", isDirectory: true)
+  }
+
+  private func handleSoundPath(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    do {
+      switch call.method {
+      case "music":
+        result(musicDirectory.path)
+      case "bundled":
+        guard let frameworks = Bundle.main.privateFrameworksURL,
+          let app = Bundle(url: frameworks.appendingPathComponent("App.framework")),
+          let resources = app.resourceURL else {
+          throw NSError(domain: "NightcordSounds", code: 1)
+        }
+        result(resources.appendingPathComponent("flutter_assets/assets/sounds/nightcord").path)
+      case "choose":
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.beginSheetModal(for: self) { response in
+          guard response == .OK, let url = panel.url else { result(nil); return }
+          do {
+            let bookmark = try url.bookmarkData(options: .withSecurityScope,
+              includingResourceValuesForKeys: nil, relativeTo: nil)
+            var bookmarks = UserDefaults.standard.dictionary(forKey: self.soundBookmarksKey)
+              as? [String: Data] ?? [:]
+            bookmarks[url.path] = bookmark
+            UserDefaults.standard.set(bookmarks, forKey: self.soundBookmarksKey)
+            if self.soundDirectoryGrants[url.path] == nil {
+              guard url.startAccessingSecurityScopedResource() else {
+                throw NSError(domain: "NightcordSounds", code: 2)
+              }
+              self.soundDirectoryGrants[url.path] = url
+            }
+            result(url.path)
+          } catch {
+            result(FlutterError(code: "sound_directory_access", message: error.localizedDescription,
+              details: nil))
+          }
+        }
+      case "access":
+        guard let args = call.arguments as? [String: Any], let path = args["path"] as? String else {
+          throw NSError(domain: "NightcordSounds", code: 3)
+        }
+        if path == musicDirectory.path { result(path); return }
+        if let url = soundDirectoryGrants[path]
+          ?? soundDirectoryGrants.values.first(where: { $0.path == path }) {
+          result(url.path)
+          return
+        }
+        let bookmarks = UserDefaults.standard.dictionary(forKey: soundBookmarksKey)
+          as? [String: Data] ?? [:]
+        guard let bookmark = bookmarks[path] else {
+          result(FlutterError(code: "sound_directory_access",
+            message: "Select the sound directory again to grant access.", details: nil))
+          return
+        }
+        var stale = false
+        let url = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope,
+          relativeTo: nil, bookmarkDataIsStale: &stale)
+        guard url.startAccessingSecurityScopedResource() else {
+          throw NSError(domain: "NightcordSounds", code: 4)
+        }
+        soundDirectoryGrants[path] = url
+        if stale {
+          var refreshed = bookmarks
+          refreshed[path] = try url.bookmarkData(options: .withSecurityScope,
+            includingResourceValuesForKeys: nil, relativeTo: nil)
+          UserDefaults.standard.set(refreshed, forKey: soundBookmarksKey)
+        }
+        result(url.path)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    } catch {
+      result(FlutterError(code: "sound_directory_access", message: error.localizedDescription,
+        details: nil))
+    }
+  }
+
+  deinit {
+    for url in soundDirectoryGrants.values { url.stopAccessingSecurityScopedResource() }
+  }
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -65,6 +158,11 @@ class MainFlutterWindow: NSWindow {
     super.awakeFromNib()
 
     let messenger = flutterViewController.engine.binaryMessenger
+    soundPathsChannel = FlutterMethodChannel(name: "nightcord/sound_paths", binaryMessenger: messenger)
+    soundPathsChannel?.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { result(nil); return }
+      self.handleSoundPath(call, result: result)
+    }
 
     // After `super`, so the menu the xib installed is in place to be wired.
     appMenuChannel = FlutterMethodChannel(name: "nightcord/shell", binaryMessenger: messenger)

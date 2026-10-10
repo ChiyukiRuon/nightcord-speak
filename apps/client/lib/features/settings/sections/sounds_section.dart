@@ -68,6 +68,23 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
     }
   }
 
+  Future<void> chooseDirectory() async {
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    try {
+      final path = await ref.read(soundDirectoryChooserProvider)();
+      if (mounted && path != null) {
+        update(widget.settings.notifications.copyWith(soundDirectory: path));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = AppLocalizations.of(context).soundsOpenError);
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
   Future<void> openDirectory() async {
     setState(() => _opening = true);
     final library = ref.read(soundLibraryProvider);
@@ -122,6 +139,17 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
               spacing: tokens.space3,
               runSpacing: tokens.space2,
               children: [
+                TextButton.icon(
+                  onPressed: _opening || _saving ? null : chooseDirectory,
+                  icon: const Icon(Icons.folder_outlined),
+                  label: Text(l10n.soundsChooseFolder),
+                ),
+                TextButton(
+                  onPressed: _opening || _saving || notifications.soundDirectory.isEmpty
+                      ? null
+                      : () => update(notifications.copyWith(soundDirectory: '')),
+                  child: Text(l10n.soundsDefaultFolder),
+                ),
                 TextButton.icon(
                   onPressed: _saving ? null : () => ref.invalidate(soundPacksProvider),
                   icon: const Icon(Icons.refresh),

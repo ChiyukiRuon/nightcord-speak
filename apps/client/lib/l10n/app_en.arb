@@ -1094,6 +1094,8 @@
   "soundAwayOn": "AFK on",
   "soundAwayOff": "AFK off",
   "soundMessage": "New message",
+  "soundsChooseFolder": "Choose sound folder",
+  "soundsDefaultFolder": "Use default folder",
   "soundsOpenFolder": "Open sound folder",
   "soundsOpenError": "Cannot open the sound folder. Check that the directory is accessible.",
   "settingsVad": "Voice activity detection (VAD)",

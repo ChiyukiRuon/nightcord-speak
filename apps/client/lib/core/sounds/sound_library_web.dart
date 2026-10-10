@@ -1,6 +1,8 @@
 import 'sound_pack.dart';
 
-SoundLibrary createSoundLibrary() => _UnavailableSoundLibrary();
+Future<String?> chooseSoundDirectory() async => null;
+
+SoundLibrary createSoundLibrary({String directory = ''}) => _UnavailableSoundLibrary();
 
 class _UnavailableSoundLibrary implements SoundLibrary {
   @override

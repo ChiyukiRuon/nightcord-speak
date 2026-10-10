@@ -86,6 +86,7 @@ class NotificationSettings {
   const NotificationSettings({
     this.sounds = true,
     this.soundPack = 'nightcord',
+    this.soundDirectory = '',
     this.presence = true,
     this.poke = true,
     this.channelMessage = true,
@@ -115,10 +116,12 @@ class NotificationSettings {
   final bool system;
   final bool sounds;
   final String soundPack;
+  final String soundDirectory;
 
   NotificationSettings copyWith({
     bool? sounds,
     String? soundPack,
+    String? soundDirectory,
     bool? presence,
     bool? poke,
     bool? channelMessage,
@@ -128,6 +131,7 @@ class NotificationSettings {
   }) => NotificationSettings(
     sounds: sounds ?? this.sounds,
     soundPack: soundPack ?? this.soundPack,
+    soundDirectory: soundDirectory ?? this.soundDirectory,
     presence: presence ?? this.presence,
     poke: poke ?? this.poke,
     channelMessage: channelMessage ?? this.channelMessage,
@@ -140,6 +144,7 @@ class NotificationSettings {
       NotificationSettings(
         sounds: json['sounds'] as bool? ?? true,
         soundPack: json['sound_pack'] as String? ?? 'nightcord',
+        soundDirectory: json['sound_directory'] as String? ?? '',
         presence: json['presence'] as bool? ?? true,
         poke: json['poke'] as bool? ?? true,
         channelMessage: json['channel_message'] as bool? ?? true,
@@ -151,6 +156,7 @@ class NotificationSettings {
   Map<String, dynamic> toJson() => {
     'sounds': sounds,
     'sound_pack': soundPack,
+    'sound_directory': soundDirectory,
     'presence': presence,
     'poke': poke,
     'channel_message': channelMessage,

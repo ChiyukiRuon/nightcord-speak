@@ -68,11 +68,73 @@ void main() {
     final defaults = Settings.fromJson({});
     expect(defaults.notifications.sounds, isTrue);
     expect(defaults.notifications.soundPack, 'nightcord');
+    expect(defaults.notifications.soundDirectory, isEmpty);
     final updated = defaults.copyWith(
-      notifications: defaults.notifications.copyWith(sounds: false, soundPack: 'custom'),
+      notifications: defaults.notifications.copyWith(
+        sounds: false,
+        soundPack: 'custom',
+        soundDirectory: root.path,
+      ),
     );
     final restored = Settings.fromJson(updated.toJson());
     expect(restored.notifications.sounds, isFalse);
     expect(restored.notifications.soundPack, 'custom');
+    expect(restored.notifications.soundDirectory, root.path);
+  });
+
+  test('bundled sounds stay immutable and mappings survive external directory changes', () async {
+    // macOS previously extracted defaults beside the signed application.
+    final bundle = await Directory('${root.path}/app/nightcord').create(recursive: true);
+    final external = await Directory('${root.path}/music').create();
+    final configuration = Directory('${root.path}/data/nightcord');
+    final bundledConfig = File('${bundle.path}/config.json');
+    final original = jsonEncode({
+      'version': 1,
+      'actions': {'message': 'message.wav'},
+    });
+    await bundledConfig.writeAsString(original);
+    await File('${bundle.path}/message.wav').writeAsString('fixture');
+    final custom = await Directory('${external.path}/custom').create();
+    await File('${custom.path}/hello.mp3').writeAsString('fixture');
+    final unrelated = await Directory('${external.path}/unrelated').create();
+    final externalDefault = await Directory('${external.path}/nightcord').create();
+    await File('${externalDefault.path}/wrong.wav').writeAsString('fixture');
+    final library = NativeSoundLibrary(external, bundle, configuration);
+    final packs = await library.scan();
+    expect(packs.map((pack) => pack.name), ['custom', 'nightcord']);
+    expect(packs.last.files, ['message.wav']);
+    expect(packs.last.mapping[SoundAction.message], 'message.wav');
+    expect(await File('${unrelated.path}/config.json').exists(), isFalse);
+    expect(await File('${externalDefault.path}/config.json').exists(), isFalse);
+    await library.save('nightcord', {SoundAction.voiceJoined: 'message.wav'});
+    expect(await bundledConfig.readAsString(), original);
+    expect(await File('${configuration.path}/config.json').exists(), isTrue);
+    final other = await Directory('${root.path}/other').create();
+    final reloaded = NativeSoundLibrary(other, bundle, configuration);
+    final restored = (await reloaded.scan()).single;
+    expect(restored.mapping[SoundAction.voiceJoined], 'message.wav');
+    expect(restored.mapping[SoundAction.message], isNull);
+    expect(await Directory('${other.path}/nightcord').exists(), isFalse);
+    await expectLater(
+      reloaded.play('nightcord', 'missing.wav'),
+      throwsA(isA<FileSystemException>()),
+    );
+  });
+
+  test('custom directories keep pack files and mappings isolated', () async {
+    final first = await Directory('${root.path}/first').create();
+    final second = await Directory('${root.path}/second').create();
+    for (final directory in [first, second]) {
+      final pack = await Directory('${directory.path}/custom').create();
+      await File('${pack.path}/chat.wav').writeAsString('fixture');
+    }
+    final one = NativeSoundLibrary(first);
+    final two = NativeSoundLibrary(second);
+    await one.scan();
+    await two.scan();
+    await one.save('custom', {SoundAction.message: 'chat.wav'});
+    expect((await one.scan()).first.mapping[SoundAction.message], 'chat.wav');
+    expect((await two.scan()).first.mapping[SoundAction.message], isNull);
+    expect(await two.directory(), second.absolute.path.replaceAll('/', Platform.pathSeparator));
   });
 }

@@ -54,12 +54,15 @@ void main() {
     WidgetTester tester,
     _Library library, {
     Settings settings = const Settings(),
+    Future<String?> Function()? chooseDirectory,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           soundLibraryProvider.overrideWithValue(library),
           soundDirectoryOpenerProvider.overrideWithValue((path) async => library.opened.add(path)),
+          if (chooseDirectory != null)
+            soundDirectoryChooserProvider.overrideWithValue(chooseDirectory),
           settingsProvider.overrideWith(() => _Settings(settings)),
         ],
         child: MaterialApp(
@@ -82,6 +85,27 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('directory selection persists, cancellation retains it, and reset restores default', (
+    tester,
+  ) async {
+    String? chosen = '/custom/sounds';
+    await mount(tester, _Library(), chooseDirectory: () async => chosen);
+    await tester.ensureVisible(find.text('Choose sound folder'));
+    await tester.tap(find.text('Choose sound folder'));
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(NotificationsSection));
+    final container = ProviderScope.containerOf(context);
+    expect(container.read(settingsProvider)!.notifications.soundDirectory, '/custom/sounds');
+    chosen = null;
+    await tester.tap(find.text('Choose sound folder'));
+    await tester.pumpAndSettle();
+    expect(container.read(settingsProvider)!.notifications.soundDirectory, '/custom/sounds');
+    await tester.tap(find.text('Use default folder'));
+    await tester.pumpAndSettle();
+    expect(container.read(settingsProvider)!.notifications.soundDirectory, isEmpty);
+    expect(container.read(settingsProvider)!.notifications.soundPack, 'nightcord');
+  });
 
   testWidgets('disabled sounds hide configuration without scanning or losing mappings', (
     tester,

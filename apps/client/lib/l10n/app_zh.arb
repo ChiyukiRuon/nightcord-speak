@@ -342,6 +342,8 @@
   "soundAwayOn": "开启 AFK 模式",
   "soundAwayOff": "关闭 AFK 模式",
   "soundMessage": "收到新消息",
+  "soundsChooseFolder": "选择音效目录",
+  "soundsDefaultFolder": "恢复默认目录",
   "soundsOpenFolder": "打开音效文件夹",
   "soundsOpenError": "无法打开音效文件夹，请检查目录是否可访问。",
   "settingsVad": "语音活动检测 (VAD)",

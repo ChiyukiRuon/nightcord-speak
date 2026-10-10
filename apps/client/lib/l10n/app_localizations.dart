@@ -2023,6 +2023,18 @@ abstract class AppLocalizations {
   /// **'New message'**
   String get soundMessage;
 
+  /// No description provided for @soundsChooseFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose sound folder'**
+  String get soundsChooseFolder;
+
+  /// No description provided for @soundsDefaultFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Use default folder'**
+  String get soundsDefaultFolder;
+
   /// No description provided for @soundsOpenFolder.
   ///
   /// In en, this message translates to:

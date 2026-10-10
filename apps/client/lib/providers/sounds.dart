@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/sounds/sound_library.dart';
 import '../models/settings.dart';
+import 'providers.dart' show settingsProvider;
 import '../state/sound_policy.dart';
 import '../core/platform/services.dart' show logToCore;
 import '../util/reveal.dart';
@@ -10,7 +11,16 @@ final soundDirectoryOpenerProvider = Provider<Future<void> Function(String)>(
   (ref) => revealDirectory,
 );
 
-final soundLibraryProvider = Provider<SoundLibrary>((ref) => createSoundLibrary());
+final soundDirectoryChooserProvider = Provider<Future<String?> Function()>(
+  (ref) => chooseSoundDirectory,
+);
+final soundLibraryProvider = Provider<SoundLibrary>(
+  (ref) => createSoundLibrary(
+    directory: ref.watch(
+      settingsProvider.select((settings) => settings?.notifications.soundDirectory ?? ''),
+    ),
+  ),
+);
 final soundPacksProvider = FutureProvider<List<SoundPack>>(
   (ref) => ref.watch(soundLibraryProvider).scan(),
 );
