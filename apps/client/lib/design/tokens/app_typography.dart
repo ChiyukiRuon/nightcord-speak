@@ -21,6 +21,8 @@ import 'dart:ui' show FontVariation;
 
 import 'package:flutter/material.dart' show TextTheme, TextStyle, FontWeight;
 
+import 'app_fonts.dart';
+
 /// Sizes, weights and the `TextTheme` built from them.
 abstract final class AppTypography {
   // --- Weights (`docs/UI字体规范.md` §3) ------------------------------------
@@ -145,6 +147,7 @@ abstract final class AppTypography {
     double? letterSpacing,
   }) => TextStyle(
     fontFamily: family,
+    fontFamilyFallback: AppFonts.fallbacksFor(family),
     fontSize: size,
     fontWeight: weight,
     fontVariations: <FontVariation>[

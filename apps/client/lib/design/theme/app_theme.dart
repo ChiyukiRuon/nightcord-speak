@@ -50,6 +50,7 @@ ThemeData buildAppTheme(AppPalette palette, Locale locale) {
     brightness: Brightness.dark,
     colorScheme: scheme,
     fontFamily: family,
+    fontFamilyFallback: AppFonts.fallbacksFor(family),
     textTheme: text,
     scaffoldBackgroundColor: palette.bgMain,
     dividerColor: palette.borderSubtle,

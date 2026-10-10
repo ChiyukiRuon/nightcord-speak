@@ -25,6 +25,16 @@ abstract final class AppFonts {
   /// Korean.
   static const String korean = 'NotoSansKR';
 
+  /// Keep mixed-language content independent of the device's installed fonts.
+  /// The primary family still decides regional shapes for shared ideographs.
+  static List<String> fallbacksFor(String family) => <String>[
+    latin,
+    simplifiedChinese,
+    traditionalChinese,
+    japanese,
+    korean,
+  ].where((candidate) => candidate != family).toList(growable: false);
+
   /// Which family `locale`'s text is drawn in.
   ///
   /// One CJK face per language rather than one for all of them, because they
