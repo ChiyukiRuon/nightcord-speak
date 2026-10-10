@@ -347,7 +347,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 `.github/workflows/release.yml` **仅在推送 `v*` tag 时运行**，普通分支推送不会打包或发布。
 原有 `ci.yml` 保留 PR 与手动运行入口，不增加分支推送触发。
 
-**版本规则**：所有平台共用产品版本，当前开发基线为 `0.1.0`。
+**版本规则**：所有平台共用产品版本，当前开发基线为 `0.2.0`。
 发布时以 tag 为产品版本来源；`scripts/desktop-release.py prepare` 在 CI 工作目录中同步
 `pubspec.yaml` 与“关于”页面的 `appVersion`，不自动提交修改。
 Rust 内部 crate 的版本仍由 workspace 管理，不随每次应用发布改写。
@@ -451,6 +451,16 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**0.2.0 发布准备（2026-10-11）**：按用户要求，将本轮默认增益、内置音效、服务器
+持久化修复与设备本地时区日志的源码及文档提交，并以 `v0.2.0` 标签推送发布。
+产品版本及“关于”页面统一为 `0.2.0+1`，CI 发布编号仍由 workflow 覆盖；发布范围沿用
+Windows x64、macOS arm64 与 x64。Rust 内部 crate 版本保持不变。
+
+门禁：完整包列表 Rust 格式检查、全工作区 Clippy、460 项 Rust 测试、Flutter analyze、
+439 项 Flutter 测试与 11 项发布脚本测试全部通过。Windows Release 构建通过，exe
+版本确认 `0.2.0+1`；实际 Release DLL 独立进程实测日志带 `+08:00`，文件日期与
+设备本地日期一致。WebRTC 子模块仅有 SDK 下载缓存，不纳入源码提交。
+
 **日志使用设备本地时区（2026-10-11）**：确认原日志正文与按日文件名均使用 UTC，
 导致 UTC+8 设备显示相差八小时，凌晨日志落入前一天文件。改为读取设备当前本地时区，
 正文采用含偏移量的 RFC 3339 时间（例如 `+08:00`），文件按本地日期命名并在本地
@@ -506,6 +516,14 @@ Clippy、完整 Rust 格式检查、Flutter analyze、439 项 Flutter 测试与 
 `Nightcord Speak.exe`、Rust DLL、Flutter DLL 与资源目录。产物位于
 `apps/client/build/windows/x64/runner/Release/`，包含默认增益 +10 dB 修改。
 未启动应用或进行真实语音验收，未提交或推送。
+
+**Windows 任务栏空白图标排查（2026-10-11）**：用户反馈直接双击最新 Release exe 后，
+任务栏按钮仍在但图标空白。检查确认 exe 内图标资源存在，Windows `LoadIconW` 可成功
+加载。发现本机开始菜单的 `Nightcord Speak.lnk` 仍指向已不存在的旧 Debug
+`nightcord_client.exe`；`local_notifier` 初始化会设置进程 AppUserModelID，并复用同 ID
+的旧快捷方式，但不会校正目标路径，因此该失效快捷方式是疑似原因。经授权将这一个
+本机快捷方式的目标、工作目录和图标更新为当前 Release exe，重读确认保存成功且目标
+存在。未改应用源码，尚待用户重新启动后目视确认任务栏图标；未提交或推送。
 
 **头像缓存、音效目录与字体回退源码提交（2026-10-11）**：按用户要求提交本轮全部
 源码与文档，按头像持久缓存、音效目录设置、混合语言字体回退拆分为三个提交。
