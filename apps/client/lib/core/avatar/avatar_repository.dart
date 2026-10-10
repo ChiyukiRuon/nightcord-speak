@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/events.dart';
 import '../../providers/providers.dart';
 import '../transport/client_transport.dart';
+import 'avatar_cache.dart';
+import 'avatar_cache_storage.dart';
 
 /// Session and stable identity prevent an id reused by another user from
 /// inheriting the previous user's cached picture.
@@ -19,14 +21,22 @@ typedef AvatarKey = ({
 });
 
 final avatarRepositoryProvider = Provider<AvatarRepository>((ref) {
-  final repository = AvatarRepository(ref.watch(clientTransportProvider));
+  final repository = AvatarRepository(
+    ref.watch(clientTransportProvider),
+    persistentCache: AvatarCache(createAvatarCacheStorage()),
+  );
   ref.onDispose(repository.dispose);
   return repository;
 });
 
-final avatarImageProvider = FutureProvider.autoDispose
+final avatarImageProvider = StreamProvider.autoDispose
     .family<Uint8List?, AvatarKey>((ref, key) {
-      return ref.watch(avatarRepositoryProvider).fetch(key);
+      final server = ref.watch(
+        sessionsProvider.select(
+          (sessions) => sessions[key.session]?.server?.address,
+        ),
+      );
+      return ref.watch(avatarRepositoryProvider).watch(key, server: server);
     });
 
 class _Request {
@@ -38,11 +48,12 @@ class _Request {
 
 /// Bounded memory cache and three simultaneous loads shared by chat and tree.
 class AvatarRepository {
-  AvatarRepository(this.transport) {
+  AvatarRepository(this.transport, {this.persistentCache}) {
     _subscription = transport.events.listen(_event);
   }
 
   final ClientTransport transport;
+  final AvatarCache? persistentCache;
   late final StreamSubscription<FfiEvent> _subscription;
   final _cache = <AvatarKey, Uint8List>{};
   final _requests = <AvatarKey, _Request>{};
@@ -51,6 +62,22 @@ class AvatarRepository {
   final _failures = <AvatarKey, DateTime>{};
   int _bytes = 0;
   bool _disposed = false;
+
+  /// A previous connection's picture remains visible while this session refreshes.
+  Stream<Uint8List?> watch(AvatarKey key, {String? server}) async* {
+    final cached = await persistentCache?.read(server, key.identity);
+    if (_disposed) return;
+    if (cached != null) yield cached;
+    final fresh = await fetch(key);
+    if (_disposed) return;
+    // Start persistence before yielding: a widget can unsubscribe as soon as
+    // it receives the image, which cancels the remainder of an async generator.
+    final saving = fresh == null
+        ? null
+        : persistentCache?.save(server, key.identity, fresh);
+    yield fresh ?? cached;
+    await saving;
+  }
 
   Future<Uint8List?> fetch(AvatarKey key) {
     if (_disposed) return Future.value(null);

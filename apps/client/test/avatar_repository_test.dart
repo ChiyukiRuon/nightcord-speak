@@ -2,11 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/avatar/avatar_repository.dart';
+import 'package:nightcord_client/core/avatar/avatar_cache.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/models/domain.dart';
 import 'package:nightcord_client/models/events.dart';
+import 'package:nightcord_client/design/components/app_avatar.dart';
+import 'package:nightcord_client/features/avatar/client_avatar.dart';
+import 'package:nightcord_client/providers/providers.dart';
+import 'package:nightcord_client/state/server_view.dart';
 
 class _Transport implements ClientTransport {
   final incoming = StreamController<FfiEvent>.broadcast(sync: true);
@@ -46,6 +53,27 @@ AvatarKey key(
   String identity = 'alice',
   String version = 'one',
 }) => (session: session, clientId: id, identity: identity, version: version);
+
+class _Storage implements AvatarCacheStorage {
+  String? data;
+  @override
+  Future<String?> read() async => data;
+  @override
+  Future<void> write(String value) async => data = value;
+}
+
+class _Sessions extends SessionsNotifier {
+  @override
+  Map<int, ServerView> build() => {
+    1: ServerView(session: 1)
+      ..server = const Server(
+        id: 1,
+        name: 'Server',
+        address: 'server',
+        protocol: ProtocolKind.ts3,
+      ),
+  };
+}
 
 void main() {
   late _Transport transport;
@@ -115,6 +143,87 @@ void main() {
     expect(await Future.wait(futures), everyElement(isNull));
   });
 
+  test(
+    'a new session displays the persisted avatar before its server reply',
+    () async {
+      // Previously a restart left chat and tree avatars blank until download.
+      final storage = _Storage();
+      await AvatarCache(storage)
+          .save('server:9987', 'alice', Uint8List.fromList([9]));
+      repository.dispose();
+      repository = AvatarRepository(
+        transport,
+        persistentCache: AvatarCache(storage),
+      );
+      final images = <Uint8List?>[];
+      final ready = Completer<void>();
+      final done = Completer<void>();
+      repository
+          .watch(key(8, session: 3, version: 'new'), server: 'server:9987')
+          .listen((image) {
+            images.add(image);
+            if (!ready.isCompleted) ready.complete();
+          }, onDone: done.complete);
+      await ready.future;
+      expect(images, [
+        [9],
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      expect(transport.calls, [(3, 8)]);
+      transport.answer(key(8, session: 3, version: 'new'));
+      await done.future;
+      expect(images, [
+        [9],
+        [1, 2, 3],
+      ]);
+      expect(await AvatarCache(storage).read('server:9987', 'alice'), [
+        1,
+        2,
+        3,
+      ]);
+    },
+  );
+
+  test('failed refresh retains the previous avatar without crossing identities or servers', () async {
+    // Cached images must not leak when a numeric client id is reused.
+    final storage = _Storage();
+    final cache = AvatarCache(storage);
+    await cache.save('server', 'alice', Uint8List.fromList([9]));
+    repository.dispose();
+    repository = AvatarRepository(transport, persistentCache: cache);
+    final images = <Uint8List?>[];
+    final done = Completer<void>();
+    repository
+        .watch(key(2), server: 'server')
+        .listen(images.add, onDone: done.complete);
+    await Future<void>.delayed(Duration.zero);
+    transport.answer(key(2), ok: false);
+    await done.future;
+    expect(images, [
+      [9],
+      [9],
+    ]);
+    expect(await cache.read('other', 'alice'), isNull);
+    expect(await cache.read('server', 'bob'), isNull);
+    expect(await cache.read('server', null), isNull);
+  });
+
+  test('unsubscribing after a fresh image still persists it', () async {
+    // Leaving the page as an image arrives must not cancel its cache write.
+    final storage = _Storage();
+    repository.dispose();
+    repository = AvatarRepository(
+      transport,
+      persistentCache: AvatarCache(storage),
+    );
+    final image = repository.watch(key(2), server: 'server').first;
+    await Future<void>.delayed(Duration.zero);
+    transport.answer(key(2));
+    expect(await image, [1, 2, 3]);
+    await Future<void>.delayed(Duration.zero);
+    expect(await AvatarCache(storage).read('server', 'alice'), [1, 2, 3]);
+  });
+
   test('old snapshots still parse and moves preserve the image revision', () {
     final client = Client.fromJson({
       'id': 1,
@@ -125,4 +234,51 @@ void main() {
     expect(client.movedTo(3).avatarVersion, 'image-v1');
     expect(Client.fromJson({'id': 1}).avatarVersion, isNull);
   });
+
+  testWidgets(
+    'client avatar shows cached and refreshed images, then hides a removed avatar',
+    (tester) async {
+      // The shared widget must retain the cache until a fresh image arrives.
+      final cache = AvatarCache(_Storage());
+      await cache.save('server', 'alice', Uint8List.fromList([9]));
+      repository.dispose();
+      repository = AvatarRepository(transport, persistentCache: cache);
+      final container = ProviderContainer.test(
+        overrides: [
+          clientTransportProvider.overrideWithValue(transport),
+          avatarRepositoryProvider.overrideWithValue(repository),
+          sessionsProvider.overrideWith(_Sessions.new),
+        ],
+      );
+      Future<void> render(String? version) => tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: ClientAvatar(
+              session: 1,
+              client: Client(
+                id: 2,
+                name: 'Alice',
+                channelId: 1,
+                uniqueId: 'alice',
+                avatarVersion: version,
+              ),
+            ),
+          ),
+        ),
+      );
+      await render('one');
+      await tester.pumpAndSettle();
+      expect(tester.widget<Avatar>(find.byType(Avatar)).image, [9]);
+      expect(transport.calls, [(1, 2)]);
+      transport.answer(key(2));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Avatar>(find.byType(Avatar)).image, [1, 2, 3]);
+      await render(null);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Avatar>(find.byType(Avatar)).image, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+    },
+  );
 }
