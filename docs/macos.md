@@ -59,9 +59,10 @@ CocoaPods 自己要的（它没看到 UTF-8 locale 会警告），而这个项�
 | 键 | 缺了会怎样 |
 | --- | --- |
 | `com.apple.security.network.client` | `connect(2)` 返回 `Operation not permitted`。症状与「服务器连不上」**完全一样**，日志里看不出区别 |
+| `com.apple.security.network.server` | TeamSpeak 的 UDP socket 无法绑定或接收回复；即使已允许本地网络访问，Release 仍可能连接失败 |
 | `com.apple.security.device.audio-input` | 音频 HAL 层被拒。**没有对话框**，就是没有声音 |
 
-两条都同时加进 Debug 与 Release。Release 那份尤其要紧：那是没人挂调试器在跑的版本。
+三条都同时加进 Debug 与 Release。Release 那份尤其要紧：那是没人挂调试器在跑的版本。
 
 > 这是从 Windows 移植过来时最容易漏的一处——Windows 上没有对应的东西，
 > 而 macOS 上它是「静默失败」而不是「报错」。
@@ -71,9 +72,8 @@ CocoaPods 自己要的（它没看到 UTF-8 locale 会警告），而这个项�
 缺了它不是「麦克风打不开」，是 **TCC 直接把进程杀掉**。所以这句话必须在第一次
 推麦之前就存在。
 
-**不走 `l10n`**：Info.plist 的字符串由系统在 Flutter 起来之前解析，要翻译就得另配
-一套 `InfoPlist.strings`，等于在应用自己的翻译体系旁边再建一套。应用是多语言的，
-但这句用户在系统弹窗里只读一次的话，就跟随构建语言。
+原生授权说明使用五种语言的 `InfoPlist.strings`，由 macOS 为应用选择语言。
+菜单使用同语言资源中的 `Menu.strings`，通过 `nightcord/shell` 跟随应用语言实时切换。
 
 ### 2.3 产品名（`Runner/Configs/AppInfo.xcconfig`）
 
@@ -116,6 +116,13 @@ Flutter 自己的 embed 阶段之后。它 `cargo build -p ts-ffi`，再把
 用 `contentMinSize` 而不是 `minSize`：它量的是 Flutter 绘制的区域，标题栏不算在里面。
 point 本身就是逻辑单位，所以 Retina 屏与 1x 屏拿到的是同一个窗口——这正是 Windows
 那边要手动按 DPI 缩放才有的性质。
+
+窗口恢复后还要立即校正初始内容尺寸；仅设置 `contentMinSize` 不会把模板或恢复出的
+800×600 窗口自动扩大。按宽、高分别补足下限，已足够大的尺寸保持原值。
+
+主窗口关闭即退出整个应用，包括仍打开的独立观看窗口。`nightcord/lifecycle` 仅绑定
+主引擎，等待 Core 断连完成后才允许 AppKit 结束进程；菜单退出使用同一路径。
+子窗口关闭只结束观看。连接中退出会取消握手并清理会话，不再误留异常退出标记。
 
 ### 2.6 图标
 

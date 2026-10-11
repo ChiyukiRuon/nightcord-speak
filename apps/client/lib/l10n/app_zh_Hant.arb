@@ -350,5 +350,10 @@
   "settingsVadSmart": "智慧語音偵測（預設）",
   "settingsVadSmartHint": "自動辨識人聲，無需手動調整音量閾值。",
   "settingsVadWaiting": "等待偵測到人聲",
-  "settingsMicBoostHint": "傳送音量已預設提升 6 dB，麥克風增益在此基礎上調整。"
+  "settingsMicBoostHint": "傳送音量已預設提升 6 dB，麥克風增益在此基礎上調整。",
+  "errorGatewayCommandRejected": "閘道拒絕了命令，請重新連線後重試。",
+  "errorGatewayInvalidResponse": "閘道傳回了無效回應，請重新連線後重試。",
+  "errorGatewayConnectFirst": "請先連線至閘道。",
+  "errorBrowserAudioDevices": "無法讀取瀏覽器音訊裝置，請檢查麥克風權限後重試。",
+  "errorBrowserMicrophone": "麥克風無法使用，請允許存取麥克風後重新啟用音訊。"
 }

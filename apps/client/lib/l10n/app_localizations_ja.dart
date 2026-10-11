@@ -1074,4 +1074,23 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get settingsMicBoostHint =>
       '送信音量は標準で 6 dB 上げています。マイクゲインはこの音量を基準に調整します。';
+
+  @override
+  String get errorGatewayCommandRejected =>
+      'ゲートウェイがコマンドを拒否しました。再接続してから再試行してください。';
+
+  @override
+  String get errorGatewayInvalidResponse =>
+      'ゲートウェイから無効な応答が返されました。再接続してから再試行してください。';
+
+  @override
+  String get errorGatewayConnectFirst => '先にゲートウェイに接続してください。';
+
+  @override
+  String get errorBrowserAudioDevices =>
+      'ブラウザーの音声デバイスを取得できません。マイクのアクセス許可を確認して再試行してください。';
+
+  @override
+  String get errorBrowserMicrophone =>
+      'マイクを使用できません。マイクへのアクセスを許可して、音声を再度有効にしてください。';
 }

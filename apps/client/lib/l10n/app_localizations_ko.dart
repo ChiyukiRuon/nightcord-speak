@@ -1087,4 +1087,23 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get settingsMicBoostHint =>
       '송신 음량은 기본으로 6 dB 높아집니다. 마이크 게인은 이 음량을 기준으로 조절합니다.';
+
+  @override
+  String get errorGatewayCommandRejected =>
+      '게이트웨이가 명령을 거부했습니다. 다시 연결한 후 재시도하세요.';
+
+  @override
+  String get errorGatewayInvalidResponse =>
+      '게이트웨이가 잘못된 응답을 반환했습니다. 다시 연결한 후 재시도하세요.';
+
+  @override
+  String get errorGatewayConnectFirst => '먼저 게이트웨이에 연결하세요.';
+
+  @override
+  String get errorBrowserAudioDevices =>
+      '브라우저 오디오 장치를 불러올 수 없습니다. 마이크 권한을 확인한 후 다시 시도하세요.';
+
+  @override
+  String get errorBrowserMicrophone =>
+      '마이크를 사용할 수 없습니다. 마이크 접근을 허용한 후 오디오를 다시 활성화하세요.';
 }

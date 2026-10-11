@@ -16,10 +16,14 @@ import 'core/transport/client_transport.dart';
 import 'core/transport/transport_factory.dart';
 import 'features/gateway/gateway_gate.dart';
 import 'features/screen/detached/screen_window.dart';
+import 'features/screen/detached/detached_screen.dart';
+import 'l10n/locale.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/providers.dart';
 import 'widgets/startup_failure.dart';
 import 'widgets/app_shell.dart';
+import 'util/app_menu.dart';
+import 'util/app_exit.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +56,10 @@ Future<void> main(List<String> args) async {
     trace = stack;
   }
 
+  // Register before the first frame, including the startup failure screen.
+  // A close during startup waits for this handshake instead of killing core.
+  await registerMainWindowExit(() => client?.dispose());
+
   if (failure != null) {
     // The system locale, not the setting: the setting lives in the core, and
     // the core is what failed to start. It only decides which font family the
@@ -64,7 +72,10 @@ Future<void> main(List<String> args) async {
         stackTrace: trace,
         // Nightcord, not the theme setting: the setting lives in the
         // core, and the core is what failed to start.
-        theme: buildAppTheme(AppPalette.nightcord, PlatformDispatcher.instance.locale),
+        theme: buildAppTheme(
+          AppPalette.nightcord,
+          resolveAppLocale(systemLocales: PlatformDispatcher.instance.locales),
+        ),
       ),
     );
     return;
@@ -91,7 +102,10 @@ void _recordUncaughtErrors() {
     // The existing handler first: it prints the whole report, and one line in
     // a log file is not a replacement for it.
     (previous ?? FlutterError.presentError)(details);
-    logToCore('error', '${details.exceptionAsString()}\n${details.stack ?? ''}');
+    logToCore(
+      'error',
+      '${details.exceptionAsString()}\n${details.stack ?? ''}',
+    );
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
@@ -123,6 +137,8 @@ class NightcordApp extends ConsumerWidget {
     // Both resolved to concrete values in `providers.dart` — see there for why
     // neither is left to `MaterialApp`'s own resolution.
     final locale = ref.watch(localeProvider);
+    updateDetachedScreenLocale(locale);
+    unawaited(updateAppMenuLocale(locale));
     final themes = ref.watch(themeChoiceProvider);
 
     return MaterialApp(

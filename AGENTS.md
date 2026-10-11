@@ -451,6 +451,150 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**macOS 主窗口退出与连接中正常关闭（2026-10-11）**：用户要求关闭主窗口即退出
+整个应用，即使独立观看窗口仍开着。主窗口原生关闭现在先请求应用退出，保留主引擎
+至断连完成；菜单退出走同一条路径。新增仅绑定主引擎的 `nightcord/lifecycle` 通道，
+避免 Flutter 新建子引擎时覆盖全局退出 handler，跳过主窗口的 Core 清理。启动期间
+收到退出请求会等待主 isolate 注册清理回调，启动失败页也能正常退出。
+
+连接中关闭被误报异常的原因是 Shutdown 排在握手后面：握手可等 20 秒，但退出仅等
+3 秒，因此 worker 未及时停止，运行标记被保留。FFI 新增独立退出信号，打断握手
+等待后仍通过 Core 统一断开全部会话；协议 actor 在握手未完成时直接结束，不再等待
+不存在的已建立会话的断开确认。真正的 worker panic 仍保留异常证据。
+
+验证：本地格式检查、全工作区 Clippy、461 项 Rust 测试、Flutter analyze 与 453 项
+Flutter 测试通过。Mac 独立验证目录完成连接中退出回归、arm64 Release 构建、严格
+深度签名与 9 项 AppKit/XCTest。原生冒烟实际走主窗口关闭路径，分别覆盖子窗口
+仍开着与子窗口已关闭；两次进程均正常退出，并检查本进程的运行标记确已清除。
+测试只连接本地 UDP 接收端，未将真实服务器作为单元测试依赖。未提交或推送。
+
+已将验证后的正式入口 Release 重新打包为 0.2.0+1 arm64 ZIP，本机产物为
+`run/mac-exit-release-20261011/Nightcord-Speak-0.2.0-macos-arm64.zip`，附带 `.sha256`、
+`.json` 与验证／打包日志。取回后的 SHA-256、清单与 ZIP 完整性检查通过；清单
+记录未提交修复与源码覆盖文件哈希。此前本地 ZIP 保留。仍为临时签名，未做 Apple
+公证，未构建 Intel 包；本次未在真实服务器上验收已建立连接的退出。
+
+**本地化修复版 macOS 重新打包（2026-10-11）**：按用户要求，使用当前工作区
+源码覆盖清单在 Mac 独立目录重建 0.2.0+1 arm64 Release，包含独立窗口语言继承、
+应用错误提示、启动失败页及五语言原生菜单／麦克风权限说明修复。Flutter analyze、
+Release 构建、应用与 Rust dylib 架构、严格深度签名、UDP／音频权限、十份原生
+翻译资源、内置音效字节与 ZIP 完整性检查通过；下载后 SHA-256 与清单一致。
+沿用上一轮已通过的 450 项 Flutter 与 6 项原生测试。构建仍有 vendored
+`tsproto-packets` 已有的 13 条方法名未来冲突警告，未影响构建。
+
+本机产物为 `run/mac-localized-release-20261011/Nightcord-Speak-0.2.0-macos-arm64.zip`，
+附带 `.sha256`、`.json` 与构建日志；清单记录本地未提交源码及覆盖文件哈希。
+Mac 共享副本为 `/Users/Shared/Nightcord-Speak-0.2.0-macos-arm64-localized.zip`。
+仍使用临时签名，未做 Apple 公证；未在图形会话人工验收，未构建 Intel 版本，
+未提交或推送。
+
+**macOS 原生菜单与权限说明本地化（2026-10-11）**：此前保留了 macOS 模板中的英文
+菜单和麦克风授权说明，应用内翻译未接入原生资源，属于本地化遗漏。补齐英文、
+简体中文、繁体中文、日文、韩文的 52 条菜单文案及麦克风授权说明，加入 Xcode
+资源组。菜单通过既有 `nightcord/shell` 通道跟随应用语言实时切换；按 XIB 的语义
+标识只改标题，保留动作、快捷键及动态窗口／服务名称，品牌与全屏进出状态同步更新。
+麦克风权限说明使用各语言的 `InfoPlist.strings`，由 macOS 为应用选择语言。
+
+新增 Flutter 原生资源完整性／通道同步回归与 AppKit/XCTest 测试，覆盖五语言切换、
+动作与快捷键保留、品牌、全屏状态及真实构建中的资源。验证：Flutter analyze、
+450 项完整 Flutter 测试、Mac arm64 Release 构建、五语言资源检查、严格深度签名
+验证及 6 项原生 XCTest 全部通过。独立 XCTest 程序需显式指定 Xcode 的框架与
+Swift 模块／动态库搜索路径；测试中子菜单父项被 AppKit 清除快捷键，已改为分别
+构造真实设置动作项与编辑子菜单来验证。未在图形会话逐页人工验收。
+
+构建继续使用 Mac 独立验证目录，未覆盖远程主仓库改动；此前交付 ZIP 仍为旧包，
+本次完成源码与 Release 应用验证，未重新打包 ZIP，未提交或推送。
+修订 `docs/localization.md` 的五语言、共享解析与原生资源说明。
+
+**独立窗口语言与全客户端本地化检查（2026-10-11）**：用户反馈“回到小窗”只显示
+繁体。五种翻译均存在，原因是独立窗口自行按系统语言解析，未继承主窗口语言设置。
+窗口参数现传递主窗口已解析的语言标签（含中文脚本）；主窗口语言变化通过已有
+跨引擎通道同步，协商期间变化在交接结束后补发。子窗口不启动额外 core，也不传递
+完整设置。窗口文案与 CJK 字体使用同一语言；“连接中”与失败提示去掉硬编码英文。
+
+新增 `lib/l10n/locale.dart`，主窗口、独立窗口及启动失败页共用解析规则：
+`zh_TW/HK/MO` 解析为繁体，显式设置优先，不支持的系统语言回退英文。网关表单
+错误改存错误类型，在渲染时翻译，切换语言后已有错误提示立即更新。Web 前端自行
+生成的五类网关／设备／麦克风错误改为稳定的 `ClientError.kind`，不再通过英文
+`detail.message` 绕过本地化；新增五种语言的对应文案，重新生成 l10n 产物。
+
+检查覆盖 Flutter UI 文案调用点、全部 ARB 与生成产物、语言白名单／设置入口、
+中文脚本与字体、通知／错误渲染、原生资源及 Windows 安装器。五种语言现各有
+334 条文案，无缺项、多余项、空值、重复 JSON 键或 ICU 占位符不一致；与英文
+相同的值为语言自称、品牌和单位。Windows 安装器同样覆盖五种语言。
+新增持续检查非空翻译与占位符集合的守卫，以及子窗口五种语言实时切换、字体、
+失败提示、参数序列化、主窗口发送语言消息、网关错误切换和麦克风错误类型回归。
+
+本次检查时 macOS 菜单栏 XIB 与麦克风权限说明仍使用英文原生资源，现已由上述
+原生本地化修复补齐；底层／服务器原始诊断、技术名称、物理键名和用户内容保留原文。
+本轮完成源码检查和回归验证，不代表逐语言人工校对或原生图形界面逐页验收。
+修订 `docs/localization.md` §1/§2/§7：当前为五种语言、解析入口移至共享文件；
+启动失败页仍只能跟随系统，但现在与主窗口使用相同的中文脚本规则。
+
+验证：Flutter analyze、447 项完整 Flutter 测试通过。当前此前交付的
+Mac ZIP 未包含本轮本地化修复，尚未重建安装包。未提交或推送。
+
+**macOS 独立窗口修复包重建（2026-10-11）**：按用户要求，在独立验证目录重新构建
+0.2.0+1 arm64 Release，包含子窗口插件注册修复，并保留此前窗口最小尺寸与 UDP
+沙盒权限修复。Flutter analyze、产品入口 Release 构建、最终 bundle／Rust dylib
+架构、严格深度签名、网络／音频权限、内置音效、ZIP 完整性及取回后的 SHA-256
+校验通过。打包使用 Mac 已安装的 Python 3.12；系统 Python 3.9 缺少
+`hashlib.file_digest`，构建成功后改用 3.12 完成打包。
+
+本机产物：`run/mac-detached-release-20261011/Nightcord-Speak-0.2.0-macos-arm64.zip`，
+附带 `.sha256` 与 `.json`；清单注明未提交的本地修复、基底快照哈希与覆盖文件哈希。
+Mac 共享副本：`/Users/Shared/Nightcord-Speak-0.2.0-macos-arm64-detached-fix.zip`。
+使用临时签名，未做 Apple 公证；尚未在真实服务器上验收视频／音频观看，未构建
+Intel 包，未提交或推送。
+
+**macOS 观看共享时独立窗口无响应（2026-10-11）**：确认 macOS runner 只给主引擎
+注册插件，未像 Windows 一样设置子窗口创建回调。独立窗口是新的 Flutter 引擎，
+缺少 `window_manager` 时，在握手前的窗口初始化阶段失败；WebRTC 也需要在该引擎
+独立注册，不能借用主窗口的纹理。现通过 `FlutterMultiWindowPlugin` 的创建回调
+为每个子引擎注册完整插件列表，不在子窗口启动 Rust core 或主窗口的系统服务。
+
+扩展原生 `screen_window_smoke.dart`，覆盖子窗口的窗口管理、WebRTC 视频渲染器、
+peer 初始化与释放，连续三轮关闭／重开并检查主引擎仍可用。macOS 沙盒启动时工作
+目录在容器内，测试工具现主动创建日志父目录，避免进入验证前因缺目录而失败。
+
+验证：本机与 Mac 的 Flutter analyze、4 项窗口交接回归测试、Mac arm64 Release
+构建通过。Mac 原生冒烟程序实际执行三轮全部通过（`PASS`），覆盖子引擎窗口管理、
+视频纹理和 peer 初始化、关闭与重开，以及子引擎销毁后主引擎继续协商。
+使用独立目录 `~/workspace/nightcord-detached-check-20261011`，保留远程仓库已有
+改动；尚未在真实服务器上验收视频／音频观看。未提交或推送。
+
+**macOS 修复版本地打包（2026-10-11）**：按用户要求，将启动窗口最小内容尺寸修复
+打入 0.2.0+1 Apple Silicon（arm64）Release 包；同时补齐此前连接日志排查确认缺失的
+`com.apple.security.network.server`。TeamSpeak 在握手前绑定本地 UDP socket；仅有
+`network.client` 的 Release 沙盒权限不足以支持 UDP 收发，系统“本地网络”授权不能
+替代该签名权限。新增权限回归测试，检查 Debug/Release 均允许 UDP 收发。
+
+使用当前工作区源码快照在 Mac 独立目录 `~/workspace/nightcord-release-20261011-window`
+构建，未覆盖远程仓库的已有改动。Flutter analyze、Release 构建、14 项发布脚本测试
+通过；窗口 3 项原生回归测试沿用同日通过结果。最终 bundle 架构及 Rust dylib 确认为
+arm64，深度严格签名验证、签名中的网络／音频权限、内置音效字节、ZIP 完整性与下载后
+SHA-256 校验均通过。快照保留了 Windows 换行，打包重签名时权限 XML 解析失败，
+在独立目录用 `plutil -convert xml1` 规范化后成功；打包使用 Mac 已安装的 Python 3.12。
+
+本机产物：`run/mac-release-20261011/Nightcord-Speak-0.2.0-macos-arm64.zip`，附带
+`.sha256` 和 `.json`，清单注明本地未提交源码及快照哈希。Mac 上另存于
+`/Users/Shared/Nightcord-Speak-0.2.0-macos-arm64-window-fix.zip`。
+使用临时签名，未做 Apple 公证；未在图形会话或真实服务器上验收，未提交或推送。
+本轮未构建 Intel 版本。修订 `docs/macos.md` §2.1：Release 的 UDP 连接还需
+`network.server`，并非仅补 `network.client` 与 `audio-input` 即完整。
+
+**macOS 启动窗口未满足最小尺寸（2026-10-11）**：用户反馈首次打开窗口小于约束，
+拖动后才达到最小尺寸。确认 `MainMenu.xib` 的初始内容区域为 800×600；
+`MainFlutterWindow.awakeFromNib` 恢复窗口后只设置 `contentMinSize = 960×640`，
+没有主动校正已有尺寸。恢复后立即按宽、高分别补足到最小内容尺寸，再注册 Flutter
+插件；已足够大的尺寸保持原值，标题栏不计入内容区域。补充原生回归测试，覆盖初始
+小窗口、较大窗口、单边不足及重复校正。
+
+验证：远程 Mac（macOS 27.0.1 / Xcode 27.0）使用实际校正方法与 `RunnerTests`
+组成独立 AppKit/XCTest 程序，3 项测试全部通过。未覆盖远程仓库的已有改动，未重新
+构建完整客户端或在图形会话中验收，未提交或推送。修订 `docs/macos.md` §2.5：
+最小内容尺寸除了限制手动缩放，还须在恢复初始窗口后主动应用。
+
 **Windows 安装包漏装内置音效（2026-10-11）**：用户反馈安装后音效包读取失败，
 `sounds/nightcord/` 为空，手动补文件仍无效。本机安装目录确认缺少
 `data/flutter_assets/assets/sounds/nightcord/` 内置资源；安装脚本的 `Excludes`

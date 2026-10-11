@@ -9,12 +9,18 @@ import 'package:flutter/material.dart';
 import '../design/theme/app_theme.dart';
 import '../core/platform/services.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/locale.dart';
 import '../util/reveal.dart';
 
 /// A minimal app that explains why the core is missing.
 class StartupFailureApp extends StatelessWidget {
   /// Wraps the failure.
-  const StartupFailureApp({required this.error, required this.theme, this.stackTrace, super.key});
+  const StartupFailureApp({
+    required this.error,
+    required this.theme,
+    this.stackTrace,
+    super.key,
+  });
 
   /// What went wrong.
   final Object error;
@@ -31,10 +37,10 @@ class StartupFailureApp extends StatelessWidget {
       title: 'Nightcord Speak',
       debugShowCheckedModeBanner: false,
       theme: theme,
-      // No `locale:` here on purpose: this screen runs when the core did not
-      // start, and the core is what owns the language setting. The system's
-      // language is the only honest answer left — and it is what the caller
-      // already used to pick the theme's font family.
+      // Settings are unavailable, but script resolution must still match fonts.
+      locale: resolveAppLocale(
+        systemLocales: WidgetsBinding.instance.platformDispatcher.locales,
+      ),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: _FailureScreen(error: error, stackTrace: stackTrace),
@@ -62,12 +68,13 @@ class _FailureScreen extends StatelessWidget {
     // Three places want the same shape: a label, then text in the platform's
     // monospace. §7 of the font specification says widgets should not name a
     // font family; the name lives in `AppTypography` and is applied here.
-    TextStyle mono(double size, Color colour, {double height = 1.4}) => TextStyle(
-      fontFamily: AppTypography.monospaceFamily,
-      fontSize: size,
-      height: height,
-      color: colour,
-    );
+    TextStyle mono(double size, Color colour, {double height = 1.4}) =>
+        TextStyle(
+          fontFamily: AppTypography.monospaceFamily,
+          fontSize: size,
+          height: height,
+          color: colour,
+        );
 
     return Scaffold(
       body: Center(
@@ -90,7 +97,11 @@ class _FailureScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.space4),
                 SelectableText(
                   '$error',
-                  style: mono(AppTypography.bodySize, tokens.textSecondary, height: 1.5),
+                  style: mono(
+                    AppTypography.bodySize,
+                    tokens.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
                 if (!isMissingNativeLibrary(error) && stackTrace != null) ...[
                   const SizedBox(height: AppSpacing.space6),
@@ -112,12 +123,17 @@ class _FailureScreen extends StatelessWidget {
                   // if the library could be loaded far enough to have one.
                   Text(
                     l10n.startupFailureLogHint,
-                    style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.space1),
                   SelectableText(
                     directory,
-                    style: mono(AppTypography.captionSize, tokens.textSecondary),
+                    style: mono(
+                      AppTypography.captionSize,
+                      tokens.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.space3),
                   OutlinedButton.icon(

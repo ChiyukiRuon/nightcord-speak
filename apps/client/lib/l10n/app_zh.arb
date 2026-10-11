@@ -350,5 +350,10 @@
   "settingsVadSmart": "智能语音检测（默认）",
   "settingsVadSmartHint": "自动识别人声，无需手动调整音量阈值。",
   "settingsVadWaiting": "等待检测到人声",
-  "settingsMicBoostHint": "发送音量已默认提升 6 dB，麦克风增益在此基础上调节。"
+  "settingsMicBoostHint": "发送音量已默认提升 6 dB，麦克风增益在此基础上调节。",
+  "errorGatewayCommandRejected": "网关拒绝了命令，请重新连接后重试。",
+  "errorGatewayInvalidResponse": "网关返回了无效响应，请重新连接后重试。",
+  "errorGatewayConnectFirst": "请先连接网关。",
+  "errorBrowserAudioDevices": "无法读取浏览器音频设备，请检查麦克风权限后重试。",
+  "errorBrowserMicrophone": "麦克风不可用，请允许麦克风访问后重新启用音频。"
 }

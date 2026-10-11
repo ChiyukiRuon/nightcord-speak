@@ -1064,6 +1064,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsMicBoostHint => '发送音量已默认提升 6 dB，麦克风增益在此基础上调节。';
+
+  @override
+  String get errorGatewayCommandRejected => '网关拒绝了命令，请重新连接后重试。';
+
+  @override
+  String get errorGatewayInvalidResponse => '网关返回了无效响应，请重新连接后重试。';
+
+  @override
+  String get errorGatewayConnectFirst => '请先连接网关。';
+
+  @override
+  String get errorBrowserAudioDevices => '无法读取浏览器音频设备，请检查麦克风权限后重试。';
+
+  @override
+  String get errorBrowserMicrophone => '麦克风不可用，请允许麦克风访问后重新启用音频。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2125,4 +2140,19 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settingsMicBoostHint => '傳送音量已預設提升 6 dB，麥克風增益在此基礎上調整。';
+
+  @override
+  String get errorGatewayCommandRejected => '閘道拒絕了命令，請重新連線後重試。';
+
+  @override
+  String get errorGatewayInvalidResponse => '閘道傳回了無效回應，請重新連線後重試。';
+
+  @override
+  String get errorGatewayConnectFirst => '請先連線至閘道。';
+
+  @override
+  String get errorBrowserAudioDevices => '無法讀取瀏覽器音訊裝置，請檢查麥克風權限後重試。';
+
+  @override
+  String get errorBrowserMicrophone => '麥克風無法使用，請允許存取麥克風後重新啟用音訊。';
 }

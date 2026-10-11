@@ -9,6 +9,8 @@ import '../../design/components/app_logo.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
 
+enum _GatewayError { invalidUrl, tokenRequired, connectionFailed }
+
 /// Remote clients authenticate before mounting state that issues core commands.
 class GatewayGate extends ConsumerStatefulWidget {
   const GatewayGate({
@@ -27,7 +29,7 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
   final _token = TextEditingController();
   StreamSubscription<GatewayState>? _subscription;
   Timer? _ticker;
-  String? _error;
+  _GatewayError? _error;
   bool _connecting = false;
   bool _requiresToken = false;
 
@@ -49,9 +51,7 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
         ref.invalidate(noticesProvider);
       }
       setState(() {
-        _error = client.failure == null
-            ? null
-            : AppLocalizations.of(context).gatewayConnectionFailed;
+        _error = client.failure == null ? null : _GatewayError.connectionFailed;
       });
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -65,7 +65,6 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
   }
 
   Future<void> _connect(RemoteTransport client) async {
-    final l10n = AppLocalizations.of(context);
     final uri = Uri.tryParse(_url.text.trim());
     if (uri == null ||
         !{'ws', 'wss'}.contains(uri.scheme) ||
@@ -74,7 +73,7 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
         uri.hasFragment ||
         uri.userInfo.isNotEmpty ||
         (Uri.base.scheme == 'https' && uri.scheme != 'wss')) {
-      setState(() => _error = l10n.gatewayInvalidUrl);
+      setState(() => _error = _GatewayError.invalidUrl);
       return;
     }
     setState(() {
@@ -88,10 +87,11 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
       if (mounted) {
         setState(() {
           _requiresToken =
-              client.failure == 'Gateway token required' || widget.config.token.isNotEmpty;
+              client.failure == 'Gateway token required' ||
+              widget.config.token.isNotEmpty;
           _error = client.failure == 'Gateway token required'
-              ? l10n.gatewayTokenRequired
-              : l10n.gatewayConnectionFailed;
+              ? _GatewayError.tokenRequired
+              : _GatewayError.connectionFailed;
         });
       }
     } finally {
@@ -113,13 +113,20 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
     final client = ref.watch(clientTransportProvider);
     if (client is! RemoteTransport) return widget.child;
     final l10n = AppLocalizations.of(context);
+    final errorText = switch (_error) {
+      _GatewayError.invalidUrl => l10n.gatewayInvalidUrl,
+      _GatewayError.tokenRequired => l10n.gatewayTokenRequired,
+      _GatewayError.connectionFailed => l10n.gatewayConnectionFailed,
+      null => null,
+    };
     if (_connecting) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (client.state == GatewayState.ready) {
       final active = ref.watch(activeSessionProvider);
       final connected =
-          active != null && (ref.watch(sessionsProvider)[active]?.isConnected ?? false);
+          active != null &&
+          (ref.watch(sessionsProvider)[active]?.isConnected ?? false);
       return Column(
         children: [
           if (connected && client.voice.status['healthy'] != true)
@@ -127,7 +134,10 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
                       Expanded(child: Text(l10n.webAudioHint)),
@@ -158,7 +168,10 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
                   children: [
                     const Center(child: AppLogo(size: 56)),
                     const SizedBox(height: 24),
-                    Text(l10n.gatewayTitle, style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      l10n.gatewayTitle,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 12),
                     Text(l10n.gatewayDescription),
                     const SizedBox(height: 24),
@@ -180,7 +193,9 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
                         obscureText: true,
                         autocorrect: false,
                         enableSuggestions: false,
-                        decoration: InputDecoration(labelText: l10n.gatewayTokenLabel),
+                        decoration: InputDecoration(
+                          labelText: l10n.gatewayTokenLabel,
+                        ),
                         onSubmitted: (_) {
                           if (!_connecting) unawaited(_connect(client));
                         },
@@ -188,13 +203,20 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
                     ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
-                      Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      Text(
+                        errorText!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: _connecting ? null : () => _connect(client),
                       child: Text(
-                        _connecting ? l10n.connectionStateConnecting : l10n.gatewayConnect,
+                        _connecting
+                            ? l10n.connectionStateConnecting
+                            : l10n.gatewayConnect,
                       ),
                     ),
                   ],

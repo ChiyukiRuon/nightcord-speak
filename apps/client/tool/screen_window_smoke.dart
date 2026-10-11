@@ -1,4 +1,5 @@
 // Run with `flutter build windows --debug -t tool/screen_window_smoke.dart`.
+// On macOS use `flutter build macos --debug -t tool/screen_window_smoke.dart`.
 // Exercises real secondary-engine creation and destruction without a server.
 import 'dart:async';
 import 'dart:io';
@@ -20,13 +21,18 @@ Future<void> main() async {
   final window = await WindowController.fromCurrentEngine();
   runApp(const MaterialApp(home: SizedBox()));
   if (window.arguments == 'screen-smoke') {
+    // macOS used to register plugins only in the main engine. The child
+    // failed here before it could answer, making the pop-out button inert.
     await windowManager.ensureInitialized();
+    final renderer = RTCVideoRenderer();
+    await renderer.initialize();
     final pc = await _peer();
     await window.setWindowMethodHandler((call) async {
       if (call.method == 'ping') return 'ready';
       if (call.method == 'close') {
         await pc.close();
         await pc.dispose();
+        await renderer.dispose();
         // Reply first so the caller knows cleanup completed before destruction.
         Timer(const Duration(milliseconds: 50), () => windowManager.close());
       }
@@ -35,6 +41,8 @@ Future<void> main() async {
     return;
   }
   final output = File('${Directory.current.path}/run/screen-window-smoke.log');
+  // A sandboxed macOS app starts in its container, not the launch directory.
+  await output.parent.create(recursive: true);
   await output.writeAsString('start\n');
   try {
     final mainPeer = await _peer();

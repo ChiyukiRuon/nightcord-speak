@@ -13,6 +13,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Locale;
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
@@ -84,6 +85,10 @@ class DetachedScreen {
 
   Future<Map<dynamic, dynamic>?> status() =>
       _channel.invokeMethod<Map<dynamic, dynamic>>('status').timeout(_courtesy);
+
+  Future<void> setLocale(Locale locale) => _channel
+      .invokeMethod<void>('locale', locale.toLanguageTag())
+      .timeout(_courtesy);
 
   /// Opens a window and hands it the connection it will work through.
   ///
@@ -258,6 +263,16 @@ class DetachedScreen {
 /// One rather than many: the picture is one stream, and a second window would
 /// be a second join to it.
 DetachedScreen? detachedWindow;
+
+Locale? _latestLocale;
+
+/// Includes changes made while a window is still negotiating its media.
+void updateDetachedScreenLocale(Locale locale) {
+  if (_latestLocale == locale) return;
+  _latestLocale = locale;
+  unawaited(detachedWindow?.setLocale(locale).catchError((Object _) {}));
+}
+
 Future<void> _opening = Future<void>.value();
 
 /// Opens one, replacing whatever was open before.
@@ -304,11 +319,15 @@ Future<DetachedScreen> _replaceDetachedScreen({
       session: args.session,
       clientId: args.clientId,
       title: args.title,
+      locale: args.locale ?? _latestLocale,
       channelName:
           'nightcord/screen-window/${DateTime.now().microsecondsSinceEpoch}',
     ),
     onReturn: onReturn,
   );
   detachedWindow = screen;
+  if (_latestLocale != null) {
+    await screen.setLocale(_latestLocale!).catchError((Object _) {});
+  }
   return screen;
 }

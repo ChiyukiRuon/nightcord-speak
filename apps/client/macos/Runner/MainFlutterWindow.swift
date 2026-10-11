@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import UserNotifications
+import desktop_multi_window
 import flutter_webrtc
 
 /// The window, and the two things the app has to say to Flutter through it.
@@ -11,6 +12,16 @@ import flutter_webrtc
 /// this job -- on macOS it does not conform to `FlutterPluginRegistry`, so it
 /// has no messenger to open a channel with.
 class MainFlutterWindow: NSWindow {
+  // Keep the main engine alive until it has disconnected every server. Closing
+  // the main window exits even when a detached viewer is still open.
+  override func close() {
+    requestApplicationExit()
+  }
+
+  func requestApplicationExit() {
+    NSApp.terminate(nil)
+  }
+
   /// The smallest window the layout can hold, in points.
   ///
   /// Below this the chat header gives up: its fixed pieces, the leading icon,
@@ -28,6 +39,8 @@ class MainFlutterWindow: NSWindow {
 
   /// Menu commands, one way. The other end is `lib/util/app_menu.dart`.
   private var appMenuChannel: FlutterMethodChannel?
+  private var menuLanguage: String?
+  private var fullScreenMenuObservers: [NSObjectProtocol] = []
 
   /// Notifications, one way. The other end is `lib/util/system_notifications.dart`.
   ///
@@ -131,6 +144,7 @@ class MainFlutterWindow: NSWindow {
   }
 
   deinit {
+    for observer in fullScreenMenuObservers { NotificationCenter.default.removeObserver(observer) }
     for url in soundDirectoryGrants.values { url.stopAccessingSecurityScopedResource() }
   }
 
@@ -140,12 +154,16 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
-    // After the frame is restored: the minimum is what the window is allowed to
-    // shrink to, not what it is opened at, and AppKit only pulls a too-small
-    // frame up to the floor if the floor is already set when it sizes itself.
-    self.contentMinSize = Self.minimumContentSize
+    enforceMinimumContentSize()
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    (NSApp.delegate as? AppDelegate)?.configureMainLifecycle(
+      messenger: flutterViewController.engine.binaryMessenger)
+    // Each detached window owns an engine. Without its own plugins,
+    // window_manager initialization fails before the Dart ready handshake.
+    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
+      RegisterGeneratedPlugins(registry: controller)
+    }
 
     // Before any Dart code runs: the peer connection factory is built
     // around the audio device named here, created lazily on first use.
@@ -167,6 +185,22 @@ class MainFlutterWindow: NSWindow {
     // After `super`, so the menu the xib installed is in place to be wired.
     appMenuChannel = FlutterMethodChannel(name: "nightcord/shell", binaryMessenger: messenger)
     wirePreferencesMenuItem()
+    localizeMenu()
+    appMenuChannel?.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "setLanguage", let language = call.arguments as? String else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      self?.menuLanguage = language
+      self?.localizeMenu()
+      result(nil)
+    }
+    for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
+      fullScreenMenuObservers.append(NotificationCenter.default.addObserver(
+        forName: name, object: nil, queue: .main) { [weak self] _ in
+          self?.localizeMenu()
+        })
+    }
 
     // Before the first notification can arrive, and it has to be this object:
     // without a delegate macOS suppresses banners while the app is frontmost,
@@ -223,6 +257,20 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
+  /// A minimum constrains later resizes; it does not enlarge the nib's frame.
+  /// `setFrame(_:display:)` also bypasses this constraint, so apply the floor
+  /// explicitly after restoring the frame, before Flutter starts rendering.
+  func enforceMinimumContentSize() {
+    contentMinSize = Self.minimumContentSize
+    let currentSize = contentRect(forFrameRect: frame).size
+    let initialSize = NSSize(
+      width: max(currentSize.width, Self.minimumContentSize.width),
+      height: max(currentSize.height, Self.minimumContentSize.height))
+    if initialSize != currentSize {
+      setContentSize(initialSize)
+    }
+  }
+
   // MARK: - Menu bar
 
   /// Gives the template's Preferences... item something to do.
@@ -238,9 +286,6 @@ class MainFlutterWindow: NSWindow {
   /// rather than by its `id`, which is an Xcode object identifier and not
   /// something to depend on.
   ///
-  /// The title stays "Preferences..." rather than becoming "Settings": it is
-  /// the template's string, and the app's own translation system does not reach
-  /// nib files. Localising the menu bar is a separate job.
   private func wirePreferencesMenuItem() {
     guard
       let appMenu = NSApplication.shared.mainMenu?.items.first?.submenu,
@@ -254,6 +299,12 @@ class MainFlutterWindow: NSWindow {
 
   @objc private func openSettings() {
     appMenuChannel?.invokeMethod("openSettings", arguments: nil)
+  }
+
+  private func localizeMenu() {
+    guard let menu = NSApplication.shared.mainMenu else { return }
+    NightcordMenuLocalization.apply(to: menu, language: menuLanguage,
+      fullScreen: NSApplication.shared.keyWindow?.styleMask.contains(.fullScreen) ?? false)
   }
 
   // MARK: - Notifications

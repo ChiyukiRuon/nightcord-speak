@@ -838,6 +838,15 @@ async fn serve(
                 };
             }
             Outcome::Command(command) => {
+                if ready.is_some()
+                    && let Command::Disconnect { reply } = command
+                {
+                    // There is no established session to say goodbye to yet.
+                    // Waiting for its stream to end would wait out the handshake
+                    // timeout and turn a normal application exit into a crash.
+                    let _ = reply.send(Ok(()));
+                    return Ended::Done;
+                }
                 if let Some(command) = avatars.command(command, connection, pending) {
                     handle_command(command, connection, pending, audio);
                 }

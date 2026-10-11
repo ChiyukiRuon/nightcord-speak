@@ -1102,5 +1102,10 @@
   "settingsVadSmart": "Smart speech detection (default)",
   "settingsVadSmartHint": "Automatically detects speech without a manual volume threshold.",
   "settingsVadWaiting": "Waiting for speech",
-  "settingsMicBoostHint": "Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline."
+  "settingsMicBoostHint": "Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline.",
+  "errorGatewayCommandRejected": "The gateway rejected the command. Reconnect and try again.",
+  "errorGatewayInvalidResponse": "The gateway returned an invalid response. Reconnect and try again.",
+  "errorGatewayConnectFirst": "Connect to the gateway first.",
+  "errorBrowserAudioDevices": "Cannot list browser audio devices. Check microphone permissions and try again.",
+  "errorBrowserMicrophone": "Microphone unavailable. Allow microphone access and enable audio again."
 }

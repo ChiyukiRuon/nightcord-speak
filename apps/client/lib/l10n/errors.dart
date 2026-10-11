@@ -30,6 +30,11 @@ extension ClientErrorText on ClientError {
 
     if (detail == null) {
       return switch (kind) {
+        'gateway_command_rejected' => l10n.errorGatewayCommandRejected,
+        'gateway_invalid_response' => l10n.errorGatewayInvalidResponse,
+        'gateway_connect_first' => l10n.errorGatewayConnectFirst,
+        'browser_audio_devices_unavailable' => l10n.errorBrowserAudioDevices,
+        'browser_microphone_unavailable' => l10n.errorBrowserMicrophone,
         'avatar_image' => l10n.avatarInvalidImage,
         'timeout' => l10n.errorTimeout,
         'command_failed' => l10n.errorCommandFailed,

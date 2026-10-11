@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
 import 'package:nightcord_client/features/screen/detached/detached_screen.dart';
@@ -29,6 +30,7 @@ void main() {
         session: 1,
         clientId: 2,
         title: 'test',
+        locale: Locale('en'),
         channelName: 'nightcord/screen-window/regression',
       );
       final transport = _Transport();
@@ -40,6 +42,7 @@ void main() {
         if (call.method == 'createWindow') {
           final json = jsonDecode(call.arguments['arguments'] as String);
           expectSync(json['channel'], args.channelName);
+          expectSync(json['locale'], 'en');
           scheduleMicrotask(
             () => messenger.handlePlatformMessage(
               channels.name,
@@ -61,6 +64,11 @@ void main() {
         calls.add(call.method);
         if (call.method == 'invokeMethod') {
           calls.add(call.arguments['method'] as String);
+        }
+        if (call.method == 'invokeMethod' &&
+            call.arguments['method'] == 'locale') {
+          expectSync(call.arguments['channel'], args.channelName);
+          expectSync(call.arguments['arguments'], 'zh-Hant');
         }
         if (call.method == 'invokeMethod' &&
             call.arguments['method'] == 'status') {
@@ -89,6 +97,10 @@ void main() {
         await expectLater(opening, throwsStateError);
       } else {
         final screen = await opening;
+        await screen.setLocale(
+          const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+        );
+        expect(calls, contains('locale'));
         transport.incoming.add(
           const CommandResultEvent(
             CommandResult(

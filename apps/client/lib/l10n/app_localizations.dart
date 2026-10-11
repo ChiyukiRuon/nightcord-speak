@@ -2076,6 +2076,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline.'**
   String get settingsMicBoostHint;
+
+  /// No description provided for @errorGatewayCommandRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The gateway rejected the command. Reconnect and try again.'**
+  String get errorGatewayCommandRejected;
+
+  /// No description provided for @errorGatewayInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The gateway returned an invalid response. Reconnect and try again.'**
+  String get errorGatewayInvalidResponse;
+
+  /// No description provided for @errorGatewayConnectFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to the gateway first.'**
+  String get errorGatewayConnectFirst;
+
+  /// No description provided for @errorBrowserAudioDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot list browser audio devices. Check microphone permissions and try again.'**
+  String get errorBrowserAudioDevices;
+
+  /// No description provided for @errorBrowserMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone unavailable. Allow microphone access and enable audio again.'**
+  String get errorBrowserMicrophone;
 }
 
 class _AppLocalizationsDelegate

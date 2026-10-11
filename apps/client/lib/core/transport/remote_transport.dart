@@ -208,7 +208,7 @@ class RemoteTransport implements ClientTransport {
                   : 'Gateway authentication failed',
             );
           } else {
-            _result('gateway', error: 'Gateway rejected the command');
+            _result('gateway', error: 'gateway_command_rejected');
           }
         default:
           if (state == GatewayState.ready) {
@@ -276,14 +276,14 @@ class RemoteTransport implements ClientTransport {
           }
       }
     } catch (_) {
-      _result('gateway', error: 'Invalid gateway response');
+      _result('gateway', error: 'gateway_invalid_response');
     }
   }
 
   void _send(String command, [Object? payload]) {
     if (_disposed) throw StateError('Transport disposed');
     if (state != GatewayState.ready) {
-      _result(command, error: 'Connect to the gateway first');
+      _result(command, error: 'gateway_connect_first');
       return;
     }
     _socket!.sendText(jsonEncode({'command': command, 'payload': ?payload}));
@@ -299,9 +299,7 @@ class RemoteTransport implements ClientTransport {
           data: data,
           outcome: CommandOutcome(
             ok: error == null,
-            error: error == null
-                ? null
-                : ClientError(kind: 'network', detail: {'message': error}),
+            error: error == null ? null : ClientError(kind: error),
           ),
         ),
       ),
@@ -390,7 +388,7 @@ class RemoteTransport implements ClientTransport {
           .catchError((Object error) {
             _result(
               'audio_devices',
-              error: 'Browser audio devices unavailable',
+              error: 'browser_audio_devices_unavailable',
             );
           }),
     );
@@ -413,10 +411,7 @@ class RemoteTransport implements ClientTransport {
           })
           .catchError((Object error) {
             if (!_disposed && generation == _voiceGeneration) {
-              _result(
-                'voice_start',
-                error: 'Microphone unavailable. Allow microphone access and enable audio again.',
-              );
+              _result('voice_start', error: 'browser_microphone_unavailable');
             }
           }),
     );

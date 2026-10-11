@@ -161,6 +161,7 @@ class _ScreenPipState extends ConsumerState<ScreenPip> {
     if (client == null) return;
     // Leaving removes this widget; capture dependencies before that rebuild.
     final transport = ref.read(clientTransportProvider);
+    final locale = ref.read(localeProvider);
     final session = widget.view.session;
     final title =
         widget.view.clients[client]?.name ??
@@ -180,6 +181,7 @@ class _ScreenPipState extends ConsumerState<ScreenPip> {
             session: session,
             clientId: client,
             title: title,
+            locale: locale,
           ),
         ),
       );

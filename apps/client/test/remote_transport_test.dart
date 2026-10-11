@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nightcord_client/core/transport/gateway_config.dart';
 import 'package:nightcord_client/features/gateway/gateway_gate.dart';
 import 'package:nightcord_client/l10n/app_localizations.dart';
+import 'package:nightcord_client/l10n/errors.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -131,6 +132,52 @@ void main() {
   Future<void> open() => transport.openGateway(
     Uri.parse('ws://localhost:8787/ws'),
     'test-only-token',
+  );
+
+  testWidgets(
+    'gateway validation errors change language without recreating the form',
+    (tester) async {
+      // Previously the rendered sentence was stored, retaining the old language.
+      final locale = ValueNotifier(const Locale('en'));
+      addTearDown(locale.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [clientTransportProvider.overrideWithValue(transport)],
+          child: ValueListenableBuilder<Locale>(
+            valueListenable: locale,
+            builder: (_, value, _) => MaterialApp(
+              locale: value,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const GatewayGate(
+                config: GatewayConfig(),
+                child: SizedBox(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(TextField).first, 'invalid');
+      await tester.tap(
+        find.text(lookupAppLocalizations(locale.value).gatewayConnect),
+      );
+      await tester.pump();
+      expect(
+        find.text(lookupAppLocalizations(locale.value).gatewayInvalidUrl),
+        findsOneWidget,
+      );
+      for (final supported in AppLocalizations.supportedLocales) {
+        locale.value = supported;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.text(lookupAppLocalizations(supported).gatewayInvalidUrl),
+          findsOneWidget,
+        );
+        expect(find.byType(TextField), findsOneWidget);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
   );
 
   testWidgets(
@@ -515,7 +562,28 @@ void main() {
     await open();
     final result = transport.events.first;
     socket.incoming.add('not json');
-    expect((await result as CommandResultEvent).result.ok, isFalse);
+    final failure = (await result as CommandResultEvent).result;
+    expect(failure.ok, isFalse);
+    expect(failure.error!.kind, 'gateway_invalid_response');
+    expect(
+      failure.error!.describe(lookupAppLocalizations(const Locale('zh'))),
+      contains('无效响应'),
+    );
+  });
+
+  test('browser microphone failures keep a translatable kind instead of English text', () async {
+    await open();
+    voice.starting = Completer<void>();
+    final event = transport.events.first;
+    transport.voiceStart(1);
+    voice.starting!.completeError(StateError('denied'));
+    final error = (await event as CommandResultEvent).result.error!;
+    expect(error.kind, 'browser_microphone_unavailable');
+    expect(error.detail, isNull);
+    expect(
+      error.describe(lookupAppLocalizations(const Locale('zh'))),
+      contains('允许麦克风'),
+    );
   });
 
   test(

@@ -1140,4 +1140,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsMicBoostHint =>
       'Transmit volume includes a 6 dB boost. Microphone gain adjusts from this baseline.';
+
+  @override
+  String get errorGatewayCommandRejected =>
+      'The gateway rejected the command. Reconnect and try again.';
+
+  @override
+  String get errorGatewayInvalidResponse =>
+      'The gateway returned an invalid response. Reconnect and try again.';
+
+  @override
+  String get errorGatewayConnectFirst => 'Connect to the gateway first.';
+
+  @override
+  String get errorBrowserAudioDevices =>
+      'Cannot list browser audio devices. Check microphone permissions and try again.';
+
+  @override
+  String get errorBrowserMicrophone =>
+      'Microphone unavailable. Allow microphone access and enable audio again.';
 }

@@ -1,6 +1,6 @@
 # 本地化
 
-M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择随
+Flutter 客户端支持简体中文、繁体中文、英文、日文和韩文。语言选择随
 `settings.json` 持久化，可以在设置里切换，默认跟随操作系统。
 
 `DEVELOPMENT.md` §70 只列了「Localization」一词，本文记录实现时的全部决定。
@@ -22,6 +22,8 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 | `apps/client/lib/l10n/app_localizations*.dart` | **生成产物，提交进仓库** |
 | `apps/client/lib/l10n/labels.dart` | 枚举的 UI 标签（模型层不引入 l10n） |
 | `apps/client/lib/l10n/errors.dart` | `ClientError` 的句子（同上） |
+| `apps/client/lib/l10n/locale.dart` | 主窗口、独立窗口与启动失败页共用的语言解析 |
+| `apps/client/macos/Runner/*.lproj/{Menu,InfoPlist}.strings` | macOS 菜单与麦克风权限说明 |
 
 **为什么生成产物要提交**：`flutter pub get` / `run` / `build` 会自动跑 gen-l10n，
 但 **`flutter analyze` 与 `flutter test` 不会**——而这两条正是门禁。不提交的话，
@@ -37,10 +39,9 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 
 三层，从具体到兜底：
 
-1. `settings.json` 的 `ui.language`：`"zh"` 或 `"en"`；
+1. `settings.json` 的 `ui.language`：`"zh"`、`"zh_Hant"`、`"en"`、`"ja"` 或 `"ko"`；
 2. 值为 `null`（选「跟随系统」，或文件写在这些键之前）→ 操作系统语言；
-3. 系统语言既不是 zh 也不是 en → 回退**英文**（`l10n.yaml` 的
-   `preferred-supported-locales: [en, zh]` 决定顺序）。
+3. 系统语言不受支持 → 回退**英文**（`l10n.yaml` 的回退顺序以英文开头）。
 
 四个刻意的决定：
 
@@ -49,7 +50,7 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 - **不认识的值按「跟随系统」处理，而不是让文件算坏**（`UiSettings.requestedLanguage`）。
   手改一个 `"fr"` 只损失这一项偏好，不会连带重置昵称、设备、快捷键；值本身保留在
   文件里，将来支持法语时还在。
-- **解析只发生在一处**：`providers.dart` 的 `localeProvider` 返回一个具体的
+- **共用解析规则**：`lib/l10n/locale.dart` 的 `resolveAppLocale` 返回一个具体的
   `Locale`（绝不为 null），`MaterialApp.locale` 直接用它。这样系统通知那条路
   （没有 BuildContext）拿到的是同一个答案，窗口与通知不会说两种语言。
 - **启动失败屏只有系统语言**：`startup_failure.dart` 在 ProviderScope 之外，
@@ -57,6 +58,11 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 
 启动时的第一帧到设置返回之间，界面是系统语言；core 答完如果设置说别的，
 整棵树立即换过来。没有阻塞首帧，因为等一个文件 IO 才画界面更糟。
+
+独立屏幕共享窗口继承主窗口已解析的语言，并通过跨引擎通道同步后续切换。
+macOS 菜单通过 `nightcord/shell` 的 `setLanguage` 使用同一语言；只改标题，保留
+原生动作、快捷键与动态窗口名称。麦克风授权说明由 macOS 选择对应的
+`InfoPlist.strings`，跟随系统为该应用选择的语言。
 
 ---
 
@@ -135,7 +141,7 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 ## 7. 加一条文案 / 加一种语言
 
 **加文案**：`app_en.arb` 加 key 与 `@` 元数据（带占位符的必须写 `"type"`，否则生成
-的参数是 `Object`）→ `app_zh.arb` 加同一个 key → `flutter gen-l10n` → 一起提交。
+的参数是 `Object`）→ 所有语言的 ARB 加同一个 key → `flutter gen-l10n` → 一起提交。
 
 守卫：`test/l10n_test.dart` 把 `lib/l10n/` 里**每一个** ARB 的 key 集合与模板比一遍
 ——gen-l10n 对「翻译缺失」是**静默回退到英文**的，那会表现为界面里冒出一句英文，没人会
@@ -144,7 +150,7 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 
 **加一种语言**：加 `app_xx.arb` → 在 `l10n.yaml` 的 `preferred-supported-locales`
 里排出回退顺序 → `UiSettings.requestedLanguage` 的白名单加值 → 设置里的语言下拉加
-一项 → **字体**（见下）。除此之外没有别的地方认识具体的语言代码。
+一项 → **字体**（见下）→ macOS 原生 `.strings`、Xcode 资源组与原生语言映射。
 
 ### 字体：三处必须一起改
 
@@ -168,5 +174,5 @@ M0.6 的一项：Flutter 客户端支持 **zh + en** 两种语言。语言选择
 先匹配到我们那个光秃秃的 `zh`——简体——然后就此停下。繁体读者会拿到简体字形，而这恰恰
 是两个字体并存要避免的那件事。
 
-`providers.dart` 的 `_withChineseScript` 因此先把 `TW`/`HK`/`MO` 标成 `Hant`，其余标成
+`lib/l10n/locale.dart` 因此先把 `TW`/`HK`/`MO` 标成 `Hant`，其余标成
 `Hans`，再交给解析。加别的「同语言、不同文字」的组合时要照做。

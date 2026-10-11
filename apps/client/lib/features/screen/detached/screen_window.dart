@@ -32,6 +32,7 @@ import '../../../design/theme/app_theme.dart';
 import '../../../design/tokens/app_palette.dart';
 import '../../../models/events.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../l10n/locale.dart';
 
 /// The channel the pair talk over.
 ///
@@ -55,6 +56,7 @@ class ScreenWindowArgs {
     required this.session,
     required this.clientId,
     required this.title,
+    this.locale,
     this.channelName = 'nightcord/screen-window',
   });
 
@@ -65,6 +67,7 @@ class ScreenWindowArgs {
 
   /// What to put in the window's own title bar.
   final String title;
+  final Locale? locale;
   final String channelName;
 
   Map<String, dynamic> toJson() => {
@@ -73,6 +76,7 @@ class ScreenWindowArgs {
     'client_id': clientId,
     'title': title,
     'channel': channelName,
+    if (locale != null) 'locale': locale!.toLanguageTag(),
   };
 
   /// Parses the arguments of the engine this is running in, or null when this
@@ -85,7 +89,10 @@ class ScreenWindowArgs {
       return ScreenWindowArgs(
         session: (json['session'] as num?)?.toInt() ?? 0,
         clientId: (json['client_id'] as num?)?.toInt() ?? 0,
-        title: json['title'] as String? ?? 'Screen share',
+        title: json['title'] as String? ?? '',
+        locale: json['locale'] is String
+            ? localeFromTag(json['locale'] as String)
+            : null,
         channelName: json['channel'] as String? ?? 'nightcord/screen-window',
       );
     } catch (_) {
@@ -115,29 +122,45 @@ Future<void> runScreenWindow(ScreenWindowArgs args) async {
 }
 
 /// The detached window itself.
-class DetachedScreenApp extends StatelessWidget {
+class DetachedScreenApp extends StatefulWidget {
   const DetachedScreenApp({required this.args, super.key});
 
   final ScreenWindowArgs args;
 
   @override
+  State<DetachedScreenApp> createState() => _DetachedScreenAppState();
+}
+
+class _DetachedScreenAppState extends State<DetachedScreenApp> {
+  late Locale _locale = resolveAppLocale(
+    language: widget.args.locale?.toLanguageTag(),
+    systemLocales: PlatformDispatcher.instance.locales,
+  );
+
+  @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
+    locale: _locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: buildAppTheme(
-      AppPalette.nightcord,
-      PlatformDispatcher.instance.locale,
+    theme: buildAppTheme(AppPalette.nightcord, _locale),
+    home: DetachedScreenView(
+      args: widget.args,
+      onLocaleChanged: (locale) => setState(() => _locale = locale),
     ),
-    home: DetachedScreenView(args: args),
   );
 }
 
 /// Owns this window's `ScreenController` and keeps it fed from the main window.
 class DetachedScreenView extends StatefulWidget {
-  const DetachedScreenView({required this.args, super.key});
+  const DetachedScreenView({
+    required this.args,
+    this.onLocaleChanged,
+    super.key,
+  });
 
   final ScreenWindowArgs args;
+  final ValueChanged<Locale>? onLocaleChanged;
 
   @override
   State<DetachedScreenView> createState() => _DetachedScreenViewState();
@@ -176,6 +199,15 @@ class _DetachedScreenViewState extends State<DetachedScreenView>
       if (!mounted) return;
       await _channel.setMethodCallHandler((call) async {
         switch (call.method) {
+          case 'locale':
+            if (call.arguments is String) {
+              widget.onLocaleChanged?.call(
+                resolveAppLocale(
+                  language: call.arguments as String,
+                  systemLocales: PlatformDispatcher.instance.locales,
+                ),
+              );
+            }
           case 'start':
             if (!_started.isCompleted) _started.complete();
           case 'event':
@@ -187,10 +219,7 @@ class _DetachedScreenViewState extends State<DetachedScreenView>
               );
             }
           case 'status':
-            return {
-              'media': _controller.receiving,
-              'error': _controller.error,
-            };
+            return {'media': _controller.receiving, 'error': _controller.error};
           case 'command_failed':
             _controller.fail('connection');
         }
@@ -240,9 +269,13 @@ class _DetachedScreenViewState extends State<DetachedScreenView>
   /// Intercept native close so media is released while this engine is alive.
   Future<void> _ownTheWindow() async {
     await windowManager.ensureInitialized();
+    if (!mounted) return;
+    final title = widget.args.title.isEmpty
+        ? AppLocalizations.of(context).screenTitle
+        : widget.args.title;
     await windowManager.setPreventClose(true);
     windowManager.addListener(this);
-    await windowManager.setTitle(widget.args.title);
+    await windowManager.setTitle(title);
     await windowManager.setSize(const Size(960, 600));
     final controller = await WindowController.fromCurrentEngine();
     await controller.setWindowMethodHandler((MethodCall call) async {
@@ -326,8 +359,8 @@ class _DetachedScreenViewState extends State<DetachedScreenView>
                 Center(
                   child: Text(
                     _controller.error != null
-                        ? 'Screen sharing failed'
-                        : 'Connecting…',
+                        ? AppLocalizations.of(context).screenConnectionFailed
+                        : AppLocalizations.of(context).screenConnecting,
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(color: tokens.textSecondary),
                   ),

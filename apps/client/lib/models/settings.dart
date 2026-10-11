@@ -409,7 +409,7 @@ class PresenceSettings {
 class UiSettings {
   const UiSettings({this.language, this.theme});
 
-  /// The language the front-end renders in: `'zh'` or `'en'`.
+  /// The UI language: `zh`, `zh_Hant`, `en`, `ja`, or `ko`.
   ///
   /// Null means "follow the system", which is the default. A hand-edited value
   /// the UI does not know is kept in the file but read through

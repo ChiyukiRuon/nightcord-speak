@@ -350,5 +350,10 @@
   "settingsVadSmart": "スマート音声検出（デフォルト）",
   "settingsVadSmartHint": "音量のしきい値を手動で調整せずに、人の声を自動検出します。",
   "settingsVadWaiting": "音声の検出を待機中",
-  "settingsMicBoostHint": "送信音量は標準で 6 dB 上げています。マイクゲインはこの音量を基準に調整します。"
+  "settingsMicBoostHint": "送信音量は標準で 6 dB 上げています。マイクゲインはこの音量を基準に調整します。",
+  "errorGatewayCommandRejected": "ゲートウェイがコマンドを拒否しました。再接続してから再試行してください。",
+  "errorGatewayInvalidResponse": "ゲートウェイから無効な応答が返されました。再接続してから再試行してください。",
+  "errorGatewayConnectFirst": "先にゲートウェイに接続してください。",
+  "errorBrowserAudioDevices": "ブラウザーの音声デバイスを取得できません。マイクのアクセス許可を確認して再試行してください。",
+  "errorBrowserMicrophone": "マイクを使用できません。マイクへのアクセスを許可して、音声を再度有効にしてください。"
 }

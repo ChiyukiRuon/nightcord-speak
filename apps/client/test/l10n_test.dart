@@ -62,10 +62,19 @@ void main() {
 
     test('the Dart-side kinds speak both languages', () {
       expect(const ClientError(kind: 'command_failed').describe(zh), '命令执行失败');
-      expect(const ClientError(kind: 'command_failed').describe(en), 'The command failed');
-      expect(const ClientError(kind: 'join_denied').describe(en), contains('permission'));
+      expect(
+        const ClientError(kind: 'command_failed').describe(en),
+        'The command failed',
+      );
+      expect(
+        const ClientError(kind: 'join_denied').describe(en),
+        contains('permission'),
+      );
       expect(const ClientError(kind: 'core_gone').describe(zh), contains('重启'));
-      expect(const ClientError(kind: 'core_gone').describe(en), contains('Restart'));
+      expect(
+        const ClientError(kind: 'core_gone').describe(en),
+        contains('Restart'),
+      );
 
       // The one Dart-side kind that carries data.
       const lagged = ClientError(kind: 'lagged', detail: {'missed': 3});
@@ -76,7 +85,10 @@ void main() {
     test('an unknown variant with no payload falls back to its name', () {
       // A bare variant name beats invented words for a payload this build does
       // not understand.
-      expect(const ClientError(kind: 'something_new').describe(en), 'something_new');
+      expect(
+        const ClientError(kind: 'something_new').describe(en),
+        'something_new',
+      );
     });
   });
 
@@ -84,21 +96,66 @@ void main() {
     final now = DateTime(2026, 9, 30, 14, 0);
 
     test('today and yesterday are words', () {
-      expect(formatTimestamp(zh, DateTime(2026, 9, 30, 5, 4), now: now), '今天 5:04');
-      expect(formatTimestamp(en, DateTime(2026, 9, 30, 5, 4), now: now), 'Today 5:04');
-      expect(formatTimestamp(zh, DateTime(2026, 9, 29, 5, 4), now: now), '昨天 5:04');
-      expect(formatTimestamp(en, DateTime(2026, 9, 29, 5, 4), now: now), 'Yesterday 5:04');
+      expect(
+        formatTimestamp(zh, DateTime(2026, 9, 30, 5, 4), now: now),
+        '今天 5:04',
+      );
+      expect(
+        formatTimestamp(en, DateTime(2026, 9, 30, 5, 4), now: now),
+        'Today 5:04',
+      );
+      expect(
+        formatTimestamp(zh, DateTime(2026, 9, 29, 5, 4), now: now),
+        '昨天 5:04',
+      );
+      expect(
+        formatTimestamp(en, DateTime(2026, 9, 29, 5, 4), now: now),
+        'Yesterday 5:04',
+      );
     });
 
     test('an earlier day this year keeps the clock', () {
-      expect(formatTimestamp(zh, DateTime(2026, 9, 1, 5, 4), now: now), '9月1日 5:04');
-      expect(formatTimestamp(en, DateTime(2026, 9, 1, 5, 4), now: now), '9/1 5:04');
+      expect(
+        formatTimestamp(zh, DateTime(2026, 9, 1, 5, 4), now: now),
+        '9月1日 5:04',
+      );
+      expect(
+        formatTimestamp(en, DateTime(2026, 9, 1, 5, 4), now: now),
+        '9/1 5:04',
+      );
     });
 
     test('another year drops the clock', () {
-      expect(formatTimestamp(zh, DateTime(2025, 12, 31, 5, 4), now: now), '2025年12月31日');
-      expect(formatTimestamp(en, DateTime(2025, 12, 31, 5, 4), now: now), '2025/12/31');
+      expect(
+        formatTimestamp(zh, DateTime(2025, 12, 31, 5, 4), now: now),
+        '2025年12月31日',
+      );
+      expect(
+        formatTimestamp(en, DateTime(2025, 12, 31, 5, 4), now: now),
+        '2025/12/31',
+      );
     });
+  });
+
+  test('frontend gateway and audio failures speak every supported language', () {
+    // Browser failures used detail.message and bypassed localization entirely.
+    const kinds = [
+      'gateway_command_rejected',
+      'gateway_invalid_response',
+      'gateway_connect_first',
+      'browser_audio_devices_unavailable',
+      'browser_microphone_unavailable',
+    ];
+    for (final locale in AppLocalizations.supportedLocales) {
+      final strings = lookupAppLocalizations(locale);
+      for (final kind in kinds) {
+        final message = ClientError(kind: kind).describe(strings);
+        expect(message, isNot(kind));
+        if (locale.languageCode != 'en') {
+          expect(message, isNot(ClientError(kind: kind).describe(en)));
+        }
+      }
+    }
   });
 
   test('every ARB carries the same keys as the template', () {
@@ -112,18 +169,20 @@ void main() {
     // missing key would have fallen back to English with nothing to say so.
     // Reading the directory means a new ARB is covered the moment it exists.
     Set<String> keysOf(String path) =>
-        (jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>)
-            .keys
+        (jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>).keys
             .where((key) => !key.startsWith('@'))
             .toSet();
 
     final template = keysOf('lib/l10n/app_en.arb');
-    final translations = Directory('lib/l10n')
-        .listSync()
-        .map((entry) => entry.path)
-        .where((path) => path.endsWith('.arb') && !path.endsWith('app_en.arb'))
-        .toList()
-      ..sort();
+    final translations =
+        Directory('lib/l10n')
+            .listSync()
+            .map((entry) => entry.path)
+            .where(
+              (path) => path.endsWith('.arb') && !path.endsWith('app_en.arb'),
+            )
+            .toList()
+          ..sort();
 
     expect(translations, isNotEmpty, reason: 'no translation files found');
 
@@ -155,10 +214,34 @@ void main() {
     };
 
     for (final entry in expected.entries) {
-      final json =
-          jsonDecode(File('lib/l10n/${entry.key}').readAsStringSync())
-              as Map<String, dynamic>;
+      final json = jsonDecode(
+        File('lib/l10n/${entry.key}').readAsStringSync(),
+      ) as Map<String, dynamic>;
       expect(json['@@locale'], entry.value, reason: entry.key);
+    }
+  });
+
+  test('translations are nonempty and preserve all ICU placeholders', () {
+    // Missing placeholders compile but silently omit actionable data in the UI.
+    final placeholder = RegExp(r'\{\s*(\w+)\s*[,}]');
+    Set<String> placeholders(String value) =>
+        placeholder.allMatches(value).map((match) => match.group(1)!).toSet();
+    final template = jsonDecode(
+      File('lib/l10n/app_en.arb').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    for (final file in Directory('lib/l10n').listSync().whereType<File>()) {
+      if (!file.path.endsWith('.arb')) continue;
+      final translated =
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      for (final key in template.keys.where((key) => !key.startsWith('@'))) {
+        final value = translated[key] as String;
+        expect(value.trim(), isNotEmpty, reason: '${file.path}: $key');
+        expect(
+          placeholders(value),
+          placeholders(template[key] as String),
+          reason: '${file.path}: $key',
+        );
+      }
     }
   });
 

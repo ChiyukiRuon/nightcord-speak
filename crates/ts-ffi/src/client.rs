@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use ts_audio::{FRAME_MS, VoiceEngine};
 use ts_core::Client as CoreClient;
@@ -131,6 +131,8 @@ pub struct NightcordClient {
     /// Kept alive for the object's lifetime; dropping it stops every task.
     runtime: tokio::runtime::Runtime,
     commands: mpsc::UnboundedSender<Command>,
+    // Shutdown must not queue behind a handshake that may take twenty seconds.
+    stop: watch::Sender<bool>,
     events: EventQueue,
     worker: Mutex<Option<JoinHandle<()>>>,
     /// Whether the dead-worker error has been reported, so the first command
@@ -149,7 +151,10 @@ impl NightcordClient {
     /// sandbox path — or a network error if the runtime cannot be built.
     pub fn new() -> Result<Self, ClientError> {
         let core = CoreClient::with_platform_store()?;
+        Self::with_core(core)
+    }
 
+    fn with_core(core: CoreClient) -> Result<Self, ClientError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             // The audio callback lives on a cpal thread, not here, so two is
@@ -161,13 +166,15 @@ impl NightcordClient {
 
         let events = EventQueue::default();
         let (commands, receiver) = mpsc::unbounded_channel();
+        let (stop, stopped) = watch::channel(false);
 
-        let worker = runtime.spawn(run(core, receiver, events.clone()));
+        let worker = runtime.spawn(run(core, receiver, stopped, events.clone()));
 
         tracing::info!("nightcord core started");
         Ok(Self {
             runtime,
             commands,
+            stop,
             events,
             worker: Mutex::new(Some(worker)),
             reported_core_gone: AtomicBool::new(false),
@@ -179,6 +186,12 @@ impl NightcordClient {
     /// Returns `false` when the worker is gone, which means the client was
     /// already destroyed; the caller should not treat that as a normal failure.
     pub(crate) fn send(&self, command: Command) -> bool {
+        if command.is_shutdown() {
+            return self.stop.send(true).is_ok();
+        }
+        if *self.stop.borrow() {
+            return false;
+        }
         match self.commands.send(command) {
             Ok(()) => true,
             Err(error) => {
@@ -253,7 +266,7 @@ impl NightcordClient {
     /// panic — the task is dead but the process is not — must not be recorded
     /// as a clean exit: the crash evidence has to survive to the next start.
     pub fn shutdown(&mut self) -> bool {
-        let _ = self.commands.send(Command::Shutdown);
+        let _ = self.stop.send(true);
 
         let worker = self
             .worker
@@ -302,6 +315,7 @@ impl std::fmt::Debug for NightcordClient {
 async fn run(
     mut core: CoreClient,
     mut commands: mpsc::UnboundedReceiver<Command>,
+    mut stopped: watch::Receiver<bool>,
     events: EventQueue,
 ) {
     // A development aid next to `NIGHTCORD_AUTO_CONNECT`, and the only way to
@@ -335,6 +349,8 @@ async fn run(
 
     loop {
         tokio::select! {
+            biased;
+            _ = stopped.changed() => break,
             command = commands.recv() => match command {
                 Some(command) if command.is_shutdown() => {
                     // The doc on `NightcordClient::shutdown` has always claimed
@@ -346,6 +362,15 @@ async fn run(
                     // already in use".
                     close_every_session(&mut core).await;
                     break;
+                }
+                Some(command @ Command::Connect(_)) => {
+                    // Core registers the session before awaiting the handshake.
+                    // Cancelling that wait leaves it available to disconnect_all.
+                    tokio::select! {
+                        biased;
+                        _ = stopped.changed() => break,
+                        () = handle(command, &mut core, &mut voice, &mut voice_intent, &events) => {}
+                    }
                 }
                 Some(command) => {
                     handle(command, &mut core, &mut voice, &mut voice_intent, &events).await;
@@ -1153,6 +1178,43 @@ mod tests {
         let mut client = NightcordClient::new().expect("start the core");
         client.shutdown();
         client.shutdown();
+    }
+
+    #[test]
+    fn shutdown_interrupts_a_pending_handshake_and_finishes_cleanly() {
+        // Closing during a handshake used to time out shutdown and leave the
+        // crash marker behind, even though the user had requested normal exit.
+        let directory = std::env::temp_dir().join(format!(
+            "nightcord-exit-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let core = CoreClient::new(
+            ts_identity::IdentityStore::new(directory.join("identities")),
+            ts_settings::SettingsStore::new(&directory),
+            ts_settings::BookmarkStore::new(&directory),
+        );
+        let mut client = NightcordClient::with_core(core).unwrap();
+        // A local UDP sink proves the handshake actually started without
+        // contacting a real server or relying on an unreachable public host.
+        let sink = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        sink.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        assert!(
+            client.send(Command::Connect(Box::new(ts_core::ConnectRequest::new(
+                sink.local_addr().unwrap().to_string(),
+                "exit-regression",
+            ))))
+        );
+        sink.recv_from(&mut [0; 2048]).expect("handshake started");
+        assert!(client.send(Command::Shutdown));
+        assert!(client.shutdown(), "a cancelled handshake is a clean exit");
+        assert!(!client.worker_alive());
+        assert!(!client.poll_events().contains("\"command\":\"connect\""));
+        drop(client);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
