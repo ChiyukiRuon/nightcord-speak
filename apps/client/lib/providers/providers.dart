@@ -577,9 +577,8 @@ class VoiceStatusNotifier extends Notifier<VoiceStatus?> {
 
 /// The saved servers (§40).
 ///
-/// Null until the core has answered once, like [settingsProvider] and for the
-/// same reason: the core owns the file, and a list drawn from anything else
-/// could disagree with what is stored.
+/// Null until the transport has read its store: the embedded core owns the
+/// native file, while the web transport owns the browser's address book.
 class BookmarksNotifier extends Notifier<BookmarkList?> {
   @override
   BookmarkList? build() {
@@ -590,10 +589,10 @@ class BookmarksNotifier extends Notifier<BookmarkList?> {
     return null;
   }
 
-  /// Asks the core for the address book.
+  /// Asks the transport for the persisted address book.
   void refresh() => ref.read(clientTransportProvider).requestBookmarks();
 
-  /// Records an edit, and sends it to the core to be stored.
+  /// Records an edit, and asks the transport to persist it.
   ///
   /// Applied locally first so the list does not flicker while the round trip
   /// happens; a failed write is reported like any other command failure, and

@@ -4,10 +4,12 @@ import argparse
 import hashlib
 import json
 import os
+import plistlib
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,15 +113,27 @@ def package(root, version, build_number, platform, arch, revision):
                     output.write(file, Path(stem) / file.relative_to(bundle))
     else:
         bundle = root / "apps/client/build/macos/Build/Products/Release/Nightcord Speak.app"
+        helper = bundle / "Contents/Helpers/NightcordUpdater.app"
+        for relative in ("Contents/MacOS/NightcordUpdater", "Contents/Info.plist"):
+            if not (helper / relative).is_file():
+                raise ValueError(f"Missing macOS updater component: {relative}")
         native_arch = "arm64" if arch == "arm64" else "x86_64"
         for relative in ("Contents/MacOS/Nightcord Speak",
                          "Contents/Frameworks/libnightcord_ffi.dylib"):
             subprocess.run(["lipo", str(bundle / relative), "-verify_arch", native_arch],
                            check=True)
         # Rust is copied by an Xcode script phase; sign the complete final bundle.
-        subprocess.run(["codesign", "--force", "--deep", "--sign", "-", "--entitlements",
-                        str(root / "apps/client/macos/Runner/Release.entitlements"),
-                        str(bundle)], check=True)
+        # Nested code is signed by Xcode and the build phases. Re-sign only the
+        # outer app: --deep would apply its sandbox entitlement to the updater.
+        # AMFI's parser rejects CRLF XML despite plutil accepting it. Normalize
+        # through plistlib, including when source was overlaid from Windows.
+        entitlements = plistlib.loads(
+            (root / "apps/client/macos/Runner/Release.entitlements").read_bytes())
+        with tempfile.TemporaryDirectory(prefix="nightcord-sign-") as signing:
+            normalized = Path(signing) / "entitlements.plist"
+            normalized.write_bytes(plistlib.dumps(entitlements))
+            subprocess.run(["codesign", "--force", "--sign", "-", "--entitlements",
+                            str(normalized), str(bundle)], check=True)
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
         # ditto preserves framework symlinks, executable modes and bundle metadata.
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",

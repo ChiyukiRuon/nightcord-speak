@@ -2,10 +2,15 @@
   "updateCheck": "檢查更新",
   "updateChecking": "正在檢查…",
   "updateCurrent": "目前已是最新版本。",
-  "updateError": "無法檢查更新或開啟發佈頁面，請檢查網路後重試。",
+  "updateError": "更新失敗，請檢查網路、可用磁碟空間及應用程式目錄的更新權限後重試。",
   "updateAvailable": "發現新版本 {version}",
-  "updateDownload": "開啟下載頁面",
-  "updateDownloadHint": "Windows：下載並執行安裝程式覆蓋升級。macOS：選擇對應處理器的 ZIP，替換「應用程式」中的用戶端。更新前請退出用戶端。",
+  "updateDownload": "下載更新",
+  "updateDownloadHint": "直接下載更新，校驗完成後安裝並重新啟動。連線會正常中斷，身分、設定與自訂音效保留。",
+  "updateProgress": "正在下載：{percent}%",
+  "updateCancel": "取消下載",
+  "updateReady": "下載已校驗，可以安裝。",
+  "updateInstall": "安裝並重新啟動",
+  "updateInstalling": "正在準備更新…",
   "@@locale": "zh_Hant",
 
   "backButton": "返回",
@@ -88,6 +93,9 @@
   "connectButton": "連線",
   "connectSavedServers": "已儲存的伺服器",
   "connectMoreTooltip": "更多",
+  "connectEdit": "編輯",
+  "connectCancelChanges": "取消變更",
+  "connectSaveChanges": "儲存變更",
   "connectRename": "重新命名",
   "connectDelete": "刪除",
   "connectSaveServerTitle": "儲存伺服器",
@@ -355,5 +363,6 @@
   "errorGatewayInvalidResponse": "閘道傳回了無效回應，請重新連線後重試。",
   "errorGatewayConnectFirst": "請先連線至閘道。",
   "errorBrowserAudioDevices": "無法讀取瀏覽器音訊裝置，請檢查麥克風權限後重試。",
-  "errorBrowserMicrophone": "麥克風無法使用，請允許存取麥克風後重新啟用音訊。"
+  "errorBrowserMicrophone": "麥克風無法使用，請允許存取麥克風後重新啟用音訊。",
+  "errorBrowserBookmarks": "無法在瀏覽器中讀取或儲存書籤，請允許網站儲存並檢查可用儲存空間。"
 }

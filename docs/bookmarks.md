@@ -23,6 +23,12 @@
 
 ## 文件
 
+原生客户端使用以下文件。Flutter Web 改用页面 Origin 下的 localStorage
+`nightcord.bookmarks.v1`，列表与旧 Gateway 迁移标记一起保存；更换 Gateway 不更换列表。
+旧设备书签首次连接各网关时合并，本地同地址书签优先；迁移保留服务器原文件。
+网页新书签通过网关 `bookmark_prepare` 复用 Rust 地址解析，解析不持久化到服务器。
+浏览器里的服务器密码同样是明文，清除网站数据会删除书签，没有跨浏览器同步。
+
 ```text
 <应用数据目录>/bookmarks.json
 ```

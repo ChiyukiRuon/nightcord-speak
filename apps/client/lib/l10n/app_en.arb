@@ -2,11 +2,17 @@
   "updateCheck": "Check for updates",
   "updateChecking": "Checking…",
   "updateCurrent": "You are using the latest version.",
-  "updateError": "Could not check for updates or open the release page. Check your network and try again.",
+  "updateError": "Update failed. Check your network, free disk space and permission to update the application, then try again.",
   "updateAvailable": "Version {version} is available",
   "@updateAvailable": {"placeholders": {"version": {"type": "String"}}},
-  "updateDownload": "Open download page",
-  "updateDownloadHint": "Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.",
+  "updateDownload": "Download update",
+  "updateDownloadHint": "Download the update here. After verification, install and restart to apply it. Your connections will close normally; identities, settings and custom sounds are preserved.",
+  "updateProgress": "Downloading: {percent}%",
+  "@updateProgress": {"placeholders": {"percent": {"type": "int"}}},
+  "updateCancel": "Cancel download",
+  "updateReady": "Download verified and ready to install.",
+  "updateInstall": "Install and restart",
+  "updateInstalling": "Preparing update…",
   "@@locale": "en",
 
   "backButton": "Back",
@@ -332,6 +338,9 @@
   "@connectMoreTooltip": {
     "description": "Tooltip of a saved server's overflow menu"
   },
+  "connectEdit": "Edit",
+  "connectCancelChanges": "Cancel changes",
+  "connectSaveChanges": "Save changes",
   "connectRename": "Rename",
   "@connectRename": {
     "description": "Menu entry that renames a saved server"
@@ -1107,5 +1116,6 @@
   "errorGatewayInvalidResponse": "The gateway returned an invalid response. Reconnect and try again.",
   "errorGatewayConnectFirst": "Connect to the gateway first.",
   "errorBrowserAudioDevices": "Cannot list browser audio devices. Check microphone permissions and try again.",
-  "errorBrowserMicrophone": "Microphone unavailable. Allow microphone access and enable audio again."
+  "errorBrowserMicrophone": "Microphone unavailable. Allow microphone access and enable audio again.",
+  "errorBrowserBookmarks": "Cannot read or save bookmarks in this browser. Allow site storage and check available storage space."
 }

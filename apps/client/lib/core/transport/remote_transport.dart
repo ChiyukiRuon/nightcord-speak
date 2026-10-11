@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import '../../models/bookmarks.dart';
@@ -12,6 +13,7 @@ import 'client_transport.dart';
 import '../../models/shortcuts.dart';
 import 'remote_socket.dart';
 import 'device_store.dart';
+import 'bookmark_store.dart';
 
 enum GatewayState { disconnected, connecting, ready }
 
@@ -21,7 +23,9 @@ class RemoteTransport implements ClientTransport {
     required this.socketFactory,
     required this.voice,
     DeviceStore? deviceStore,
+    this.bookmarkStore,
   }) : deviceStore = deviceStore ?? MemoryDeviceStore() {
+    _bookmarkChanges = bookmarkStore?.changes.listen((_) => requestBookmarks());
     _capture = voice.captured.listen((frame) {
       final socket = _socket;
       // Old audio is less valuable than the next frame. Bound socket backlog.
@@ -41,6 +45,16 @@ class RemoteTransport implements ClientTransport {
   final RemoteSocket Function(Uri) socketFactory;
   final VoiceBackend voice;
   final DeviceStore deviceStore;
+  final BookmarkStore? bookmarkStore;
+  StreamSubscription<void>? _bookmarkChanges;
+  String? _migrationGateway;
+  final _bookmarkRequests = <String, Timer>{};
+  final _bookmarkPrefix = List.generate(
+    4,
+    (_) =>
+        Random.secure().nextInt(0x100000000).toRadixString(16).padLeft(8, '0'),
+  ).join();
+  int _bookmarkSequence = 0;
   Uri? _gateway;
   late final _events = StreamController<FfiEvent>.broadcast(
     onListen: () {
@@ -139,6 +153,12 @@ class RemoteTransport implements ClientTransport {
   }
 
   void closeGateway() {
+    _migrationGateway = null;
+    for (final timer in _bookmarkRequests.values) {
+      timer.cancel();
+      _result('bookmark_add', error: 'gateway_connect_first');
+    }
+    _bookmarkRequests.clear();
     _voiceGeneration++;
     _pttHeld = false;
     voice.stop();
@@ -196,6 +216,7 @@ class RemoteTransport implements ClientTransport {
             deviceStore.save(_gateway!, credential);
           }
           _setState(GatewayState.ready);
+          _migrateBookmarks();
           if (!(_authenticated?.isCompleted ?? true)) {
             _authenticated!.complete();
           }
@@ -213,6 +234,10 @@ class RemoteTransport implements ClientTransport {
         default:
           if (state == GatewayState.ready) {
             var event = FfiEvent.fromJson(json);
+            if (event is CommandResultEvent &&
+                _receiveBookmarks(event.result)) {
+              return;
+            }
             if (event case CommandResultEvent(
               result: CommandResult(
                 command: 'voice_status',
@@ -462,18 +487,166 @@ class RemoteTransport implements ClientTransport {
   }
 
   @override
-  void requestBookmarks() => _send('bookmarks');
+  void requestBookmarks() {
+    if (_disposed) throw StateError('Transport disposed');
+    final store = bookmarkStore;
+    if (store == null) {
+      _send('bookmarks');
+      return;
+    }
+    try {
+      _result('bookmarks', data: StoredBookmarks.read(store).list.toJson());
+    } catch (_) {
+      _result('bookmarks', error: 'browser_bookmarks_unavailable');
+    }
+  }
+
   @override
-  void updateBookmarks(BookmarkList bookmarks) =>
+  void updateBookmarks(BookmarkList bookmarks) {
+    if (_disposed) throw StateError('Transport disposed');
+    final store = bookmarkStore;
+    if (store == null) {
       _send('bookmarks_update', bookmarks.toJson());
+      return;
+    }
+    try {
+      final saved = StoredBookmarks.read(store);
+      StoredBookmarks(list: bookmarks, migrated: saved.migrated).save(store);
+      _result('bookmarks_update');
+      requestBookmarks();
+    } catch (_) {
+      _result('bookmarks_update', error: 'browser_bookmarks_unavailable');
+      // Undo the provider's optimistic edit with the last persisted list.
+      requestBookmarks();
+    }
+  }
+
   @override
-  void addBookmark(NewBookmark bookmark) =>
+  void addBookmark(NewBookmark bookmark) {
+    if (_disposed) throw StateError('Transport disposed');
+    if (bookmarkStore == null) {
       _send('bookmark_add', bookmark.toJson());
+      return;
+    }
+    if (state != GatewayState.ready) {
+      _result('bookmark_add', error: 'gateway_connect_first');
+      return;
+    }
+    final id = '$_bookmarkPrefix.${++_bookmarkSequence}';
+    _bookmarkRequests[id] = Timer(const Duration(seconds: 15), () {
+      _bookmarkRequests.remove(id);
+      _result('bookmark_add', error: 'timeout');
+    });
+    _send('bookmark_prepare', {
+      'request_id': id,
+      'bookmark': bookmark.toJson(),
+    });
+  }
+
+  void _migrateBookmarks() {
+    final store = bookmarkStore;
+    if (store == null) return;
+    try {
+      final gateway = _gateway.toString();
+      if (!StoredBookmarks.read(store).migrated.contains(gateway)) {
+        _migrationGateway = gateway;
+        _send('bookmarks');
+      }
+    } catch (_) {
+      _result('bookmarks', error: 'browser_bookmarks_unavailable');
+    }
+  }
+
+  bool _receiveBookmarks(CommandResult result) {
+    final store = bookmarkStore;
+    if (store == null) return false;
+    if (result.command == 'bookmarks') {
+      final gateway = _migrationGateway;
+      _migrationGateway = null;
+      if (gateway != null && result.ok && result.data != null) {
+        try {
+          final saved = StoredBookmarks.read(store);
+          if (!saved.migrated.contains(gateway)) {
+            var list = saved.list;
+            for (final bookmark in BookmarkList.fromJson(
+              result.data!,
+            ).bookmarks) {
+              if (!list.bookmarks.any(
+                (entry) =>
+                    entry.host == bookmark.host && entry.port == bookmark.port,
+              )) {
+                list = list.upsert(bookmark);
+              }
+            }
+            StoredBookmarks(
+              list: list,
+              migrated: {...saved.migrated, gateway},
+            ).save(store);
+          }
+          requestBookmarks();
+        } catch (_) {
+          _result('bookmarks', error: 'browser_bookmarks_unavailable');
+        }
+      }
+      // Gateway snapshots must never replace browser-owned bookmarks.
+      return true;
+    }
+    if (result.command == 'bookmark_add' ||
+        result.command == 'bookmarks_update') {
+      return true;
+    }
+    if (result.command != 'bookmark_prepare') return false;
+    final timer = _bookmarkRequests.remove(result.data?['request_id']);
+    if (timer == null) return true;
+    timer.cancel();
+    if (!result.ok) {
+      _emit(
+        CommandResultEvent(
+          CommandResult(
+            command: 'bookmark_add',
+            session: null,
+            outcome: result.outcome,
+          ),
+        ),
+      );
+      return true;
+    }
+    try {
+      final saved = StoredBookmarks.read(store);
+      final data = result.data!;
+      final bookmark = Bookmark.fromJson(
+        (data['bookmark'] as Map).cast<String, dynamic>(),
+      );
+      final replaces = data['replaces'] as Map?;
+      var list = saved.list;
+      if (replaces != null &&
+          (replaces['host'] != bookmark.host ||
+              replaces['port'] != bookmark.port)) {
+        list = BookmarkList(
+          bookmarks: list.bookmarks
+              .where(
+                (entry) =>
+                    entry.host != replaces['host'] ||
+                    entry.port != replaces['port'],
+              )
+              .toList(),
+        );
+      }
+      list = list.upsert(bookmark);
+      StoredBookmarks(list: list, migrated: saved.migrated).save(store);
+      _result('bookmark_add', data: list.toJson());
+    } catch (_) {
+      _result('bookmark_add', error: 'browser_bookmarks_unavailable');
+    }
+    return true;
+  }
+
   @override
   void dispose() {
     if (_disposed) return;
     closeGateway();
     _disposed = true;
+    _bookmarkChanges?.cancel();
     _capture.cancel();
     _events.close();
     _states.close();

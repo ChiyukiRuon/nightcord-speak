@@ -2,10 +2,15 @@
   "updateCheck": "更新を確認",
   "updateChecking": "確認中…",
   "updateCurrent": "最新バージョンです。",
-  "updateError": "更新の確認または配布ページの表示に失敗しました。ネットワークを確認して再試行してください。",
+  "updateError": "更新に失敗しました。ネットワーク、空き容量、アプリフォルダの更新権限を確認して再試行してください。",
   "updateAvailable": "バージョン {version} が利用可能です",
-  "updateDownload": "ダウンロードページを開く",
-  "updateDownloadHint": "Windows：インストーラーを実行して更新します。macOS：プロセッサに対応する ZIP を選び、アプリケーション内のアプリを置き換えます。更新前にクライアントを終了してください。",
+  "updateDownload": "更新をダウンロード",
+  "updateDownloadHint": "ここで更新をダウンロードし、検証後にインストールして再起動します。接続は正常に終了し、ID、設定、カスタム音声は保持されます。",
+  "updateProgress": "ダウンロード中：{percent}%",
+  "updateCancel": "ダウンロードをキャンセル",
+  "updateReady": "ダウンロードの検証が完了しました。",
+  "updateInstall": "インストールして再起動",
+  "updateInstalling": "更新を準備中…",
   "@@locale": "ja",
 
   "backButton": "戻る",
@@ -88,6 +93,9 @@
   "connectButton": "接続",
   "connectSavedServers": "保存済みのサーバー",
   "connectMoreTooltip": "その他",
+  "connectEdit": "編集",
+  "connectCancelChanges": "変更をキャンセル",
+  "connectSaveChanges": "変更を保存",
   "connectRename": "名前を変更",
   "connectDelete": "削除",
   "connectSaveServerTitle": "サーバーを保存",
@@ -355,5 +363,6 @@
   "errorGatewayInvalidResponse": "ゲートウェイから無効な応答が返されました。再接続してから再試行してください。",
   "errorGatewayConnectFirst": "先にゲートウェイに接続してください。",
   "errorBrowserAudioDevices": "ブラウザーの音声デバイスを取得できません。マイクのアクセス許可を確認して再試行してください。",
-  "errorBrowserMicrophone": "マイクを使用できません。マイクへのアクセスを許可して、音声を再度有効にしてください。"
+  "errorBrowserMicrophone": "マイクを使用できません。マイクへのアクセスを許可して、音声を再度有効にしてください。",
+  "errorBrowserBookmarks": "ブラウザーでブックマークを読み込みまたは保存できません。サイトのストレージを許可し、空き容量を確認してください。"
 }

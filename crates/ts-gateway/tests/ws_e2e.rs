@@ -152,6 +152,59 @@ async fn a_browser_authenticates_and_reads_the_settings() {
 }
 
 #[tokio::test]
+async fn browser_bookmarks_are_normalised_without_persisting_on_the_gateway() {
+    // Saving in the web UI used to write bookmarks into the gateway's device store.
+    let (addr, _shutdown, dir) = start("bookmark-prepare").await;
+    let mut client = connect_authed(addr, TOKEN).await;
+    for (id, address, replaces, ok) in [
+        (
+            "valid",
+            "ts3://example.com:9990",
+            Some("old.example:9987"),
+            true,
+        ),
+        ("invalid", "", None, false),
+        ("invalid-old", "example.com", Some(""), false),
+    ] {
+        client
+            .send(Message::text(
+                serde_json::json!({
+                    "command": "bookmark_prepare",
+                    "payload": {"request_id": id, "bookmark": {
+                        "address": address, "replaces": replaces,
+                        "nickname": "Alice", "server_password": "secret"
+                    }}
+                })
+                .to_string(),
+            ))
+            .await
+            .unwrap();
+        let result = next_result(&mut client, "bookmark_prepare").await;
+        assert_eq!(result["data"]["request_id"], id);
+        assert_eq!(
+            result["outcome"]["status"],
+            if ok { "ok" } else { "failed" }
+        );
+        if ok {
+            assert_eq!(result["data"]["bookmark"]["host"], "example.com");
+            assert_eq!(result["data"]["bookmark"]["port"], 9990);
+            assert_eq!(result["data"]["bookmark"]["nickname"], "Alice");
+            assert_eq!(result["data"]["bookmark"]["server_password"], "secret");
+            assert_eq!(result["data"]["replaces"]["host"], "old.example");
+        }
+    }
+    client
+        .send(Message::text(r#"{"command":"bookmarks"}"#))
+        .await
+        .unwrap();
+    let result = next_result(&mut client, "bookmarks").await;
+    assert_eq!(result["data"]["bookmarks"], serde_json::json!([]));
+    for device in std::fs::read_dir(dir.0.join("devices")).unwrap() {
+        assert!(!device.unwrap().path().join("bookmarks.json").exists());
+    }
+}
+
+#[tokio::test]
 async fn settings_changes_survive_a_round_trip_through_the_gateway() {
     let (addr, _shutdown, _dir) = start("roundtrip").await;
     let mut client = connect_authed(addr, TOKEN).await;

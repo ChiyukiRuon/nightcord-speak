@@ -14,7 +14,7 @@ Flutter Native 通过 FFI、Flutter Web 通过 WebSocket 使用同一套 Rust Co
                    同一个 nightcord-gateway 进程
 ```
 
-每设备隔离身份、设置、书签、会话、事件与语音。同设备标签页共用一个 Core，
+每设备隔离身份、设置、会话、事件与语音。同设备标签页共用一个 Core，
 命令结果和音频会发送到这个设备的所有标签页；不同设备不能控制对方的会话。
 浏览器发送 `shutdown` 会被拒绝，网关退出由进程管理。
 
@@ -24,7 +24,10 @@ Web 的设备边界是浏览器个人资料、页面 Origin 与网关 URL。loca
 浏览器存储不可用时退化为当前页面的内存，无法保证跨刷新恢复。
 
 存储布局为 `<data-dir>/devices/<公开编号>/`，其中保存 `access.key`、身份、
-`settings.json` 与 `bookmarks.json`。恢复凭据形式为两个 32 位小写十六进制段，
+`settings.json`；旧版的 `bookmarks.json` 保留供迁移。新版 Flutter Web 的服务器书签
+保存在页面 Origin 的 localStorage（`nightcord.bookmarks.v1`），不按网关地址分开。
+首次连接每个网关会将旧设备书签合并到浏览器，保留本地同地址条目，并记录迁移完成，
+避免删除后再次导入。迁移不会删除服务器旧文件。恢复凭据形式为两个 32 位小写十六进制段，
 以点分隔；公开编号不能代替密钥。恢复时校验服务端密钥，路径只使用公开编号。
 Token 与设备凭据都不进入日志、Debug 或 URL；Unix 下新建 `access.key` 权限为 0600。
 旧版共享身份文件保留，新设备建立新身份，服务器权限需按新身份分配。
@@ -74,6 +77,11 @@ device 可缺省，由服务器生成并在 welcome 返回；产品浏览器在�
 | 音频 | 双向 | 二进制，tag 1 为上行 PCM，tag 2 为下行 PCM |
 
 设备内广播队列容量 1024；落后连接收到 `lagged` 标记，过期事件丢弃。
+
+网页版保存／编辑书签使用 `bookmark_prepare`：payload 包含随机前缀的 `request_id`
+及 `bookmark`（`NewBookmark`）。网关复用 Rust 地址解析，返回相同请求编号、归一化
+书签及被替换地址；成功与失败均携带编号，只由发起标签页处理，不写设备书签文件。
+原有书签读写命令保留兼容旧客户端；新版只在迁移时读取旧列表。
 
 ## 鉴权与部署边界
 

@@ -20,7 +20,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get updateError =>
-      '업데이트를 확인하거나 배포 페이지를 열 수 없습니다. 네트워크를 확인하고 다시 시도하세요.';
+      '업데이트에 실패했습니다. 네트워크, 디스크 여유 공간, 앱 폴더의 업데이트 권한을 확인하고 다시 시도하세요.';
 
   @override
   String updateAvailable(String version) {
@@ -28,11 +28,28 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
-  String get updateDownload => '다운로드 페이지 열기';
+  String get updateDownload => '업데이트 다운로드';
 
   @override
   String get updateDownloadHint =>
-      'Windows: 설치 프로그램을 실행하여 업데이트하세요. macOS: 프로세서에 맞는 ZIP을 선택하고 응용 프로그램의 앱을 교체하세요. 업데이트 전에 클라이언트를 종료하세요.';
+      '여기서 업데이트를 다운로드하고 검증 후 설치 및 재시작하세요. 연결은 정상 종료되며 ID, 설정 및 사용자 사운드는 유지됩니다.';
+
+  @override
+  String updateProgress(int percent) {
+    return '다운로드 중: $percent%';
+  }
+
+  @override
+  String get updateCancel => '다운로드 취소';
+
+  @override
+  String get updateReady => '다운로드 검증이 완료되어 설치할 수 있습니다.';
+
+  @override
+  String get updateInstall => '설치 및 재시작';
+
+  @override
+  String get updateInstalling => '업데이트 준비 중…';
 
   @override
   String get backButton => '뒤로';
@@ -272,6 +289,15 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get connectMoreTooltip => '더 보기';
+
+  @override
+  String get connectEdit => '편집';
+
+  @override
+  String get connectCancelChanges => '변경 취소';
+
+  @override
+  String get connectSaveChanges => '변경 저장';
 
   @override
   String get connectRename => '이름 변경';
@@ -1106,4 +1132,8 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get errorBrowserMicrophone =>
       '마이크를 사용할 수 없습니다. 마이크 접근을 허용한 후 오디오를 다시 활성화하세요.';
+
+  @override
+  String get errorBrowserBookmarks =>
+      '브라우저에서 북마크를 읽거나 저장할 수 없습니다. 사이트 저장소를 허용하고 사용 가능한 저장 공간을 확인하세요.';
 }

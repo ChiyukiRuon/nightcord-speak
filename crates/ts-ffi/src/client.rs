@@ -804,6 +804,13 @@ async fn handle(
 
         Command::Shutdown => unreachable!("filtered by the caller"),
 
+        // Browser storage is not reachable through the C ABI.
+        Command::BookmarksPrepare { .. } => events.push(FfiEvent::failed(
+            name,
+            None,
+            ClientError::Unsupported("bookmark_prepare over FFI".into()),
+        )),
+
         // A test seam, never reachable from the C ABI — see the variant's docs.
         Command::TestPanic => panic!("Command::TestPanic"),
     }

@@ -35,6 +35,7 @@ extension ClientErrorText on ClientError {
         'gateway_connect_first' => l10n.errorGatewayConnectFirst,
         'browser_audio_devices_unavailable' => l10n.errorBrowserAudioDevices,
         'browser_microphone_unavailable' => l10n.errorBrowserMicrophone,
+        'browser_bookmarks_unavailable' => l10n.errorBrowserBookmarks,
         'avatar_image' => l10n.avatarInvalidImage,
         'timeout' => l10n.errorTimeout,
         'command_failed' => l10n.errorCommandFailed,

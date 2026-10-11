@@ -30,23 +30,64 @@ class ReleaseVersion implements Comparable<ReleaseVersion> {
 }
 
 class DesktopUpdate {
-  const DesktopUpdate(this.version, this.page);
+  const DesktopUpdate(
+    this.version,
+    this.asset,
+    this.manifest, {
+    required this.platform,
+    required this.arch,
+    required this.fileName,
+    required this.size,
+    required this.installer,
+  });
   final String version;
-  final Uri page;
+  final Uri asset;
+  final Uri manifest;
+  final String platform;
+  final String arch;
+  final String fileName;
+  final int size;
+  final bool installer;
 }
+
+class PreparedUpdate {
+  const PreparedUpdate(this.update, this.directory, this.file, this.sha256);
+  final DesktopUpdate update;
+  final String directory;
+  final String file;
+  final String sha256;
+}
+
+class UpdateCancelled implements Exception {}
 
 abstract class UpdateService {
   bool get available;
   Future<DesktopUpdate?> check();
-  Future<void> open(DesktopUpdate update);
+  Future<PreparedUpdate> download(
+    DesktopUpdate update,
+    void Function(double) progress,
+  );
+  void cancelDownload();
+  Future<void> install(PreparedUpdate update, String language);
 }
+
+bool isReleaseAssetUrl(Uri uri, String tag, String name) =>
+    uri.scheme == 'https' &&
+    uri.host == 'github.com' &&
+    uri.userInfo.isEmpty &&
+    uri.port == 443 &&
+    uri.query.isEmpty &&
+    uri.fragment.isEmpty &&
+    uri.path == '/ChiyukiRuon/nightcord-speak/releases/download/$tag/$name';
 
 /// A platform-only patch must not advertise an update to the other platform.
 DesktopUpdate? selectDesktopUpdate(
   List<dynamic> releases,
   String current,
-  String platform,
-) {
+  String platform, {
+  String arch = 'x64',
+  bool installer = true,
+}) {
   final installed = ReleaseVersion.parse(current);
   if (installed == null) {
     throw const FormatException('Invalid installed version');
@@ -64,25 +105,45 @@ DesktopUpdate? selectDesktopUpdate(
     final assets = item['assets'];
     if (assets is! List) continue;
     final productVersion = tag.startsWith('v') ? tag.substring(1) : tag;
-    final names = platform == 'windows'
-        ? [
-            'Nightcord-Speak-$productVersion-windows-x64-setup.exe',
-            'Nightcord-Speak-$productVersion-windows-x64.zip',
-          ]
-        : [
-            'Nightcord-Speak-$productVersion-macos-arm64.zip',
-            'Nightcord-Speak-$productVersion-macos-x64.zip',
-          ];
-    if (!assets.whereType<Map>().any(
-      (asset) => names.contains(asset['name']) && asset['state'] == 'uploaded',
-    )) {
+    final setup = platform == 'windows' && installer;
+    final stem =
+        'Nightcord-Speak-$productVersion-$platform-$arch${setup ? '-setup' : ''}';
+    final name = '$stem.${setup ? 'exe' : 'zip'}';
+    Map? artifact;
+    Map? manifest;
+    for (final asset in assets.whereType<Map>()) {
+      if (asset['state'] != 'uploaded') continue;
+      if (asset['name'] == name) artifact = asset;
+      if (asset['name'] == '$stem.json') manifest = asset;
+    }
+    if (artifact == null || manifest == null) continue;
+    final url = Uri.tryParse(
+      artifact['browser_download_url']?.toString() ?? '',
+    );
+    final manifestUrl = Uri.tryParse(
+      manifest['browser_download_url']?.toString() ?? '',
+    );
+    final size = artifact['size'];
+    if (url == null ||
+        manifestUrl == null ||
+        size is! int ||
+        size <= 0 ||
+        size > 512 * 1024 * 1024 ||
+        !isReleaseAssetUrl(url, tag, name) ||
+        !isReleaseAssetUrl(manifestUrl, tag, '$stem.json')) {
       continue;
     }
-    final page = Uri.parse(
-      'https://github.com/ChiyukiRuon/nightcord-speak/releases/tag/$tag',
-    );
     newest = version;
-    result = DesktopUpdate(productVersion, page);
+    result = DesktopUpdate(
+      productVersion,
+      url,
+      manifestUrl,
+      platform: platform,
+      arch: arch,
+      fileName: name,
+      size: size,
+      installer: setup,
+    );
   }
   return result;
 }

@@ -265,6 +265,14 @@ pub enum Command {
     #[serde(rename = "bookmark_add")]
     BookmarksAdd(Box<NewBookmark>),
 
+    /// Normalise a browser-owned bookmark without writing the core's stores.
+    /// The request id keeps device-wide broadcasts from saving in other tabs.
+    #[serde(rename = "bookmark_prepare")]
+    BookmarksPrepare {
+        request_id: String,
+        bookmark: Box<NewBookmark>,
+    },
+
     /// Stop the worker.
     Shutdown,
 
@@ -319,6 +327,7 @@ impl Command {
             Self::BookmarksGet => "bookmarks",
             Self::BookmarksUpdate(_) => "bookmarks_update",
             Self::BookmarksAdd(_) => "bookmark_add",
+            Self::BookmarksPrepare { .. } => "bookmark_prepare",
             Self::Shutdown => "shutdown",
             Self::TestPanic => "test_panic",
         }

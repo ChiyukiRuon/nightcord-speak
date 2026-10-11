@@ -19,7 +19,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get updateCurrent => '最新バージョンです。';
 
   @override
-  String get updateError => '更新の確認または配布ページの表示に失敗しました。ネットワークを確認して再試行してください。';
+  String get updateError => '更新に失敗しました。ネットワーク、空き容量、アプリフォルダの更新権限を確認して再試行してください。';
 
   @override
   String updateAvailable(String version) {
@@ -27,11 +27,28 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get updateDownload => 'ダウンロードページを開く';
+  String get updateDownload => '更新をダウンロード';
 
   @override
   String get updateDownloadHint =>
-      'Windows：インストーラーを実行して更新します。macOS：プロセッサに対応する ZIP を選び、アプリケーション内のアプリを置き換えます。更新前にクライアントを終了してください。';
+      'ここで更新をダウンロードし、検証後にインストールして再起動します。接続は正常に終了し、ID、設定、カスタム音声は保持されます。';
+
+  @override
+  String updateProgress(int percent) {
+    return 'ダウンロード中：$percent%';
+  }
+
+  @override
+  String get updateCancel => 'ダウンロードをキャンセル';
+
+  @override
+  String get updateReady => 'ダウンロードの検証が完了しました。';
+
+  @override
+  String get updateInstall => 'インストールして再起動';
+
+  @override
+  String get updateInstalling => '更新を準備中…';
 
   @override
   String get backButton => '戻る';
@@ -268,6 +285,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get connectMoreTooltip => 'その他';
+
+  @override
+  String get connectEdit => '編集';
+
+  @override
+  String get connectCancelChanges => '変更をキャンセル';
+
+  @override
+  String get connectSaveChanges => '変更を保存';
 
   @override
   String get connectRename => '名前を変更';
@@ -1093,4 +1119,8 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get errorBrowserMicrophone =>
       'マイクを使用できません。マイクへのアクセスを許可して、音声を再度有効にしてください。';
+
+  @override
+  String get errorBrowserBookmarks =>
+      'ブラウザーでブックマークを読み込みまたは保存できません。サイトのストレージを許可し、空き容量を確認してください。';
 }

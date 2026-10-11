@@ -19,7 +19,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateCurrent => '当前已是最新版本。';
 
   @override
-  String get updateError => '无法检查更新或打开发布页面，请检查网络后重试。';
+  String get updateError => '更新失败，请检查网络、可用磁盘空间及应用目录的更新权限后重试。';
 
   @override
   String updateAvailable(String version) {
@@ -27,11 +27,27 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get updateDownload => '打开下载页面';
+  String get updateDownload => '下载更新';
 
   @override
-  String get updateDownloadHint =>
-      'Windows：下载并运行安装程序覆盖升级。macOS：选择对应处理器的 ZIP，替换“应用程序”中的客户端。更新前请退出客户端。';
+  String get updateDownloadHint => '直接下载更新，校验完成后安装并重启。连接会正常断开，身份、设置与自定义音效保留。';
+
+  @override
+  String updateProgress(int percent) {
+    return '正在下载：$percent%';
+  }
+
+  @override
+  String get updateCancel => '取消下载';
+
+  @override
+  String get updateReady => '下载已校验，可以安装。';
+
+  @override
+  String get updateInstall => '安装并重启';
+
+  @override
+  String get updateInstalling => '正在准备更新…';
 
   @override
   String get backButton => '返回';
@@ -267,6 +283,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get connectMoreTooltip => '更多';
+
+  @override
+  String get connectEdit => '编辑';
+
+  @override
+  String get connectCancelChanges => '取消更改';
+
+  @override
+  String get connectSaveChanges => '保存更改';
 
   @override
   String get connectRename => '重命名';
@@ -1079,6 +1104,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorBrowserMicrophone => '麦克风不可用，请允许麦克风访问后重新启用音频。';
+
+  @override
+  String get errorBrowserBookmarks => '无法在浏览器中读取或保存书签，请允许网站存储并检查可用存储空间。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1095,7 +1123,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get updateCurrent => '目前已是最新版本。';
 
   @override
-  String get updateError => '無法檢查更新或開啟發佈頁面，請檢查網路後重試。';
+  String get updateError => '更新失敗，請檢查網路、可用磁碟空間及應用程式目錄的更新權限後重試。';
 
   @override
   String updateAvailable(String version) {
@@ -1103,11 +1131,27 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get updateDownload => '開啟下載頁面';
+  String get updateDownload => '下載更新';
 
   @override
-  String get updateDownloadHint =>
-      'Windows：下載並執行安裝程式覆蓋升級。macOS：選擇對應處理器的 ZIP，替換「應用程式」中的用戶端。更新前請退出用戶端。';
+  String get updateDownloadHint => '直接下載更新，校驗完成後安裝並重新啟動。連線會正常中斷，身分、設定與自訂音效保留。';
+
+  @override
+  String updateProgress(int percent) {
+    return '正在下載：$percent%';
+  }
+
+  @override
+  String get updateCancel => '取消下載';
+
+  @override
+  String get updateReady => '下載已校驗，可以安裝。';
+
+  @override
+  String get updateInstall => '安裝並重新啟動';
+
+  @override
+  String get updateInstalling => '正在準備更新…';
 
   @override
   String get backButton => '返回';
@@ -1343,6 +1387,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get connectMoreTooltip => '更多';
+
+  @override
+  String get connectEdit => '編輯';
+
+  @override
+  String get connectCancelChanges => '取消變更';
+
+  @override
+  String get connectSaveChanges => '儲存變更';
 
   @override
   String get connectRename => '重新命名';
@@ -2155,4 +2208,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get errorBrowserMicrophone => '麥克風無法使用，請允許存取麥克風後重新啟用音訊。';
+
+  @override
+  String get errorBrowserBookmarks => '無法在瀏覽器中讀取或儲存書籤，請允許網站儲存並檢查可用儲存空間。';
 }

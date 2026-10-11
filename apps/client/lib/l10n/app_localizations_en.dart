@@ -20,7 +20,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateError =>
-      'Could not check for updates or open the release page. Check your network and try again.';
+      'Update failed. Check your network, free disk space and permission to update the application, then try again.';
 
   @override
   String updateAvailable(String version) {
@@ -28,11 +28,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateDownload => 'Open download page';
+  String get updateDownload => 'Download update';
 
   @override
   String get updateDownloadHint =>
-      'Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.';
+      'Download the update here. After verification, install and restart to apply it. Your connections will close normally; identities, settings and custom sounds are preserved.';
+
+  @override
+  String updateProgress(int percent) {
+    return 'Downloading: $percent%';
+  }
+
+  @override
+  String get updateCancel => 'Cancel download';
+
+  @override
+  String get updateReady => 'Download verified and ready to install.';
+
+  @override
+  String get updateInstall => 'Install and restart';
+
+  @override
+  String get updateInstalling => 'Preparing update…';
 
   @override
   String get backButton => 'Back';
@@ -282,6 +299,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectMoreTooltip => 'More';
+
+  @override
+  String get connectEdit => 'Edit';
+
+  @override
+  String get connectCancelChanges => 'Cancel changes';
+
+  @override
+  String get connectSaveChanges => 'Save changes';
 
   @override
   String get connectRename => 'Rename';
@@ -1159,4 +1185,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get errorBrowserMicrophone =>
       'Microphone unavailable. Allow microphone access and enable audio again.';
+
+  @override
+  String get errorBrowserBookmarks =>
+      'Cannot read or save bookmarks in this browser. Allow site storage and check available storage space.';
 }

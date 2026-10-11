@@ -1,7 +1,5 @@
 // The screen shown before anything is connected.
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/bookmarks.dart';
 import '../../models/connect_request.dart';
 import '../../models/domain.dart';
+import '../../models/events.dart';
 import '../../models/settings.dart';
 import '../../providers/providers.dart';
 import '../settings/settings_page.dart';
@@ -34,6 +33,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   bool _connecting = false;
 
   ProtocolKind _protocol = ProtocolKind.ts3;
+  Bookmark? _editingBookmark;
+  NewBookmark? _pendingSave;
 
   @override
   void initState() {
@@ -44,6 +45,17 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final client = ref.read(clientTransportProvider);
     client.requestSettings();
     client.requestBookmarks();
+    ref.listenManual(eventStreamProvider, (_, next) {
+      final event = next.value;
+      if (event is! CommandResultEvent ||
+          event.result.command != 'bookmark_add' ||
+          _pendingSave == null) {
+        return;
+      }
+      setState(() => _pendingSave = null);
+      // Keep the draft on failure so it can be corrected and submitted again.
+      if (event.result.ok) _resetForm();
+    });
     ref.listenManual(settingsProvider, (_, settings) {
       if (settings == null || !mounted) return;
       // Not while the user is typing, and not after a bookmark filled it in:
@@ -54,15 +66,22 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
         _nickname.text = _nicknameFromSettings;
       }
     });
+    ref.listenManual(bookmarksProvider, (_, bookmarks) {
+      if (_editingBookmark != null &&
+          _pendingSave == null &&
+          bookmarks != null &&
+          !bookmarks.bookmarks.any(
+            (entry) => entry.address == _editingBookmark!.address,
+          )) {
+        _resetForm();
+      }
+    });
   }
 
-  /// Fills the form from a saved server.
-  ///
-  /// Fills rather than connects: the point of this screen is that the details
-  /// can still be changed before the connection is made, and a bookmark that
-  /// dialled out the moment it was touched would take that away.
+  /// Opens a saved server for explicit editing from its menu.
   void _fillFrom(Bookmark bookmark) {
     setState(() {
+      _editingBookmark = bookmark;
       _address.text = bookmark.address;
       // Remembered as "not from settings" so the settings arriving later do not
       // quietly put the default back.
@@ -75,7 +94,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     // An entry saved without a nickname means "use the default", so the field
     // shows what that currently is — and still counts as untouched.
     if (bookmark.nickname == null) {
-      final nickname = ref.read(settingsProvider)?.connection.nickname ?? _nicknameFromSettings;
+      final nickname =
+          ref.read(settingsProvider)?.connection.nickname ??
+          _nicknameFromSettings;
       setState(() {
         _nicknameFromSettings = nickname;
         _nickname.text = nickname;
@@ -83,19 +104,18 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     }
   }
 
-  /// Connects straight to a saved server, past the form.
-  ///
-  /// A double click on a row. The request is built by
-  /// `ConnectRequest.fromBookmark` — the same rule the server switcher uses, so
-  /// "which of the bookmark and the settings wins" has one answer. The form is
-  /// deliberately left alone: this is the shortcut for someone who already
-  /// knows which server they want, and rewriting the fields under them would
-  /// make the click feel like two.
+  /// Connecting a saved entry never changes the draft in the form.
   void _connectTo(Bookmark bookmark) {
+    if (_connecting || _pendingSave != null) return;
     setState(() => _connecting = true);
     ref
         .read(clientTransportProvider)
-        .connect(ConnectRequest.fromBookmark(bookmark, ref.read(settingsProvider) ?? const Settings()));
+        .connect(
+          ConnectRequest.fromBookmark(
+            bookmark,
+            ref.read(settingsProvider) ?? const Settings(),
+          ),
+        );
   }
 
   /// Saves what the form currently holds.
@@ -103,6 +123,11 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final address = _address.text.trim();
     if (address.isEmpty) return;
 
+    final editing = _currentEditingBookmark();
+    if (editing != null) {
+      _saveEdited();
+      return;
+    }
     final name = await showDialog<String>(
       context: context,
       builder: (_) => _NameDialog(initial: address),
@@ -110,15 +135,61 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     if (name == null || !mounted) return;
 
     final nickname = _nickname.text.trim();
-    ref.read(bookmarksProvider.notifier).add(
-      NewBookmark(
-        name: name,
-        address: address,
-        nickname: nickname.isEmpty ? null : nickname,
-        protocol: _protocol,
-        serverPassword: _password.text.isEmpty ? null : _password.text,
-      ),
+    final request = NewBookmark(
+      name: name,
+      address: address,
+      nickname: nickname.isEmpty ? null : nickname,
+      protocol: _protocol,
+      serverPassword: _password.text.isEmpty ? null : _password.text,
     );
+    setState(() => _pendingSave = request);
+    ref.read(bookmarksProvider.notifier).add(request);
+  }
+
+  void _resetForm() {
+    setState(() {
+      _editingBookmark = null;
+      _address.clear();
+      _password.clear();
+      _nicknameFromSettings =
+          ref.read(settingsProvider)?.connection.nickname ?? 'Nightcord User';
+      _nickname.text = _nicknameFromSettings;
+      _protocol = ProtocolKind.ts3;
+    });
+  }
+
+  void _saveEdited() {
+    if (_pendingSave != null) return;
+    final editing = _currentEditingBookmark();
+    final address = _address.text.trim();
+    if (editing == null || address.isEmpty) return;
+    final nickname = _nickname.text.trim();
+    final request = NewBookmark(
+      name: editing.name,
+      address: address,
+      // Showing the inherited default must not turn it into an override.
+      nickname:
+          nickname.isEmpty ||
+              (editing.nickname == null && nickname == _nicknameFromSettings)
+          ? null
+          : nickname,
+      protocol: _protocol,
+      serverPassword: _password.text.isEmpty ? null : _password.text,
+      replaces: editing.address,
+    );
+    setState(() => _pendingSave = request);
+    ref.read(bookmarksProvider.notifier).add(request);
+  }
+
+  /// Resolve the current entry so a rename or deletion cannot reuse stale data.
+  Bookmark? _currentEditingBookmark() {
+    final address = _editingBookmark?.address;
+    if (address == null) return null;
+    for (final bookmark
+        in ref.read(bookmarksProvider)?.bookmarks ?? const <Bookmark>[]) {
+      if (bookmark.address == address) return bookmark;
+    }
+    return null;
   }
 
   /// Renames a saved server, keeping everything else about it.
@@ -140,6 +211,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final bookmarks = ref.read(bookmarksProvider);
     if (bookmarks == null) return;
     ref.read(bookmarksProvider.notifier).update(bookmarks.removeAt(index));
+    if (bookmarks.bookmarks[index].address == _editingBookmark?.address) {
+      _resetForm();
+    }
   }
 
   /// The nickname the settings last put in the field.
@@ -157,6 +231,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   }
 
   void _connect() {
+    if (_connecting || _pendingSave != null) return;
     final address = _address.text.trim();
     if (address.isEmpty) return;
 
@@ -167,15 +242,17 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final profile = ref.read(settingsProvider)?.connection.profile ?? 'default';
 
     setState(() => _connecting = true);
-    ref.read(clientTransportProvider).connect(
-      ConnectRequest(
-        address: address,
-        nickname: _nickname.text.trim(),
-        serverPassword: _password.text.isEmpty ? null : _password.text,
-        protocol: _protocol,
-        profile: profile,
-      ),
-    );
+    ref
+        .read(clientTransportProvider)
+        .connect(
+          ConnectRequest(
+            address: address,
+            nickname: _nickname.text.trim(),
+            serverPassword: _password.text.isEmpty ? null : _password.text,
+            protocol: _protocol,
+            profile: profile,
+          ),
+        );
     // Deliberately not awaited. The core answers on its own thread and the
     // store is what reacts to the result: on success the shell switches to the
     // server, and on failure the listener below re-enables the button. Nothing
@@ -245,37 +322,46 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 // Saved servers first, because coming back to one is the common
                 // case; typing an address is what you do the first time.
                 _SavedServers(
-                  onPick: _fillFrom,
+                  enabled: _pendingSave == null && !_connecting,
+                  onEdit: _fillFrom,
                   onConnect: _connectTo,
                   onRename: _rename,
                   onDelete: _delete,
                 ),
 
                 TextField(
+                  enabled: _pendingSave == null,
                   controller: _address,
                   autofocus: true,
                   decoration: InputDecoration(
                     labelText: l10n.connectAddressLabel,
                   ),
-                  onSubmitted: (_) => _connect(),
+                  onSubmitted: (_) =>
+                      _editingBookmark == null ? _connect() : _saveEdited(),
                 ),
                 SizedBox(height: tokens.space3),
 
                 TextField(
+                  enabled: _pendingSave == null,
                   controller: _nickname,
-                  decoration: InputDecoration(labelText: l10n.connectNicknameLabel),
-                  onSubmitted: (_) => _connect(),
+                  decoration: InputDecoration(
+                    labelText: l10n.connectNicknameLabel,
+                  ),
+                  onSubmitted: (_) =>
+                      _editingBookmark == null ? _connect() : _saveEdited(),
                 ),
                 SizedBox(height: tokens.space3),
 
                 TextField(
+                  enabled: _pendingSave == null,
                   controller: _password,
                   obscureText: true,
                   decoration: InputDecoration(
                     labelText: l10n.connectServerPasswordLabel,
                     hintText: l10n.connectServerPasswordHint,
                   ),
-                  onSubmitted: (_) => _connect(),
+                  onSubmitted: (_) =>
+                      _editingBookmark == null ? _connect() : _saveEdited(),
                 ),
                 SizedBox(height: tokens.space5),
 
@@ -292,42 +378,76 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 // stock Material version rendered in its own palette.
                 SegmentedButton<ProtocolKind>(
                   segments: const [
-                    ButtonSegment(value: ProtocolKind.ts3, label: Text('TeamSpeak 3')),
-                    ButtonSegment(value: ProtocolKind.ts6, label: Text('TeamSpeak 6')),
+                    ButtonSegment(
+                      value: ProtocolKind.ts3,
+                      label: Text('TeamSpeak 3'),
+                    ),
+                    ButtonSegment(
+                      value: ProtocolKind.ts6,
+                      label: Text('TeamSpeak 6'),
+                    ),
                   ],
                   selected: {_protocol},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _protocol = selection.first),
+                  onSelectionChanged: _pendingSave != null
+                      ? null
+                      : (selection) {
+                          setState(() => _protocol = selection.first);
+                        },
                 ),
                 SizedBox(height: tokens.space6),
 
-                // Saving is offered next to connecting rather than in a menu:
-                // the moment someone has just typed an address they are happy
-                // with is the moment they want to keep it.
                 ValueListenableBuilder<TextEditingValue>(
                   valueListenable: _address,
-                  builder: (context, value, _) => Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: value.text.trim().isEmpty ? null : _save,
-                      icon: const Icon(Icons.bookmark_add_outlined),
-                      label: Text(l10n.connectSaveServer),
-                    ),
-                  ),
+                  builder: (context, value, _) {
+                    final canSave =
+                        value.text.trim().isNotEmpty && _pendingSave == null;
+                    if (_editingBookmark != null) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: _pendingSave == null
+                                  ? _resetForm
+                                  : null,
+                              child: Text(l10n.connectCancelChanges),
+                            ),
+                          ),
+                          SizedBox(width: tokens.space3),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: canSave ? _saveEdited : null,
+                              child: Text(l10n.connectSaveChanges),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: canSave ? _save : null,
+                        icon: const Icon(Icons.bookmark_add_outlined),
+                        label: Text(l10n.connectSaveServer),
+                      ),
+                    );
+                  },
                 ),
                 SizedBox(height: tokens.space3),
 
                 // §17.1's colours, height and radius all come from the theme.
-                FilledButton(
-                  onPressed: _connecting ? null : _connect,
-                  child: _connecting
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(l10n.connectButton),
-                ),
+                if (_editingBookmark == null)
+                  FilledButton(
+                    onPressed: _connecting || _pendingSave != null
+                        ? null
+                        : _connect,
+                    child: _connecting
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(l10n.connectButton),
+                  ),
               ],
             ),
           ),
@@ -343,15 +463,17 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
 /// box on the first run is noise, and the form below already says what to do.
 class _SavedServers extends ConsumerWidget {
   const _SavedServers({
-    required this.onPick,
+    required this.enabled,
+    required this.onEdit,
     required this.onConnect,
     required this.onRename,
     required this.onDelete,
   });
 
-  final ValueChanged<Bookmark> onPick;
+  final ValueChanged<Bookmark> onEdit;
+  final bool enabled;
 
-  /// Opens the connection straight away, for a double click.
+  /// Opens the saved entry with one click.
   final ValueChanged<Bookmark> onConnect;
 
   final void Function(int index, Bookmark bookmark) onRename;
@@ -360,7 +482,8 @@ class _SavedServers extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = DesignTokens.of(context);
-    final bookmarks = ref.watch(bookmarksProvider)?.bookmarks ?? const <Bookmark>[];
+    final bookmarks =
+        ref.watch(bookmarksProvider)?.bookmarks ?? const <Bookmark>[];
     if (bookmarks.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -372,8 +495,9 @@ class _SavedServers extends ConsumerWidget {
           SizedBox(height: tokens.space2),
           for (var index = 0; index < bookmarks.length; index++)
             _SavedServerRow(
+              enabled: enabled,
               bookmark: bookmarks[index],
-              onPick: () => onPick(bookmarks[index]),
+              onEdit: () => onEdit(bookmarks[index]),
               onConnect: () => onConnect(bookmarks[index]),
               onRename: () => onRename(index, bookmarks[index]),
               onDelete: () => onDelete(index),
@@ -384,116 +508,70 @@ class _SavedServers extends ConsumerWidget {
   }
 }
 
-/// One saved server.
-/// One saved server: click to fill the form, click twice to connect.
-///
-/// Stateful because the double click is detected here rather than by
-/// `GestureDetector.onDoubleTap`, and that needs to remember when the last
-/// click was.
-class _SavedServerRow extends StatefulWidget {
+/// Saved entries connect on tap; editing is an explicit menu action.
+class _SavedServerRow extends StatelessWidget {
   const _SavedServerRow({
+    required this.enabled,
     required this.bookmark,
-    required this.onPick,
+    required this.onEdit,
     required this.onConnect,
     required this.onRename,
     required this.onDelete,
   });
 
   final Bookmark bookmark;
-  final VoidCallback onPick;
+  final bool enabled;
+  final VoidCallback onEdit;
   final VoidCallback onConnect;
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
   @override
-  State<_SavedServerRow> createState() => _SavedServerRowState();
-}
-
-class _SavedServerRowState extends State<_SavedServerRow> {
-  /// How long after a click a second one still counts as a double click.
-  ///
-  /// Flutter's own `kDoubleTapTimeout`, spelled out rather than imported so
-  /// that changing it here is a decision rather than a consequence of a
-  /// framework bump.
-  static const Duration _doubleClickWindow = Duration(milliseconds: 300);
-
-  /// Armed while a second click would still make the last one a double click.
-  ///
-  /// A `Timer` rather than a recorded timestamp: a timestamp would have to be
-  /// read against a clock, and the only clocks available here are the wall
-  /// clock — which a widget test does not control — or the monotonic one. A
-  /// timer runs on the scheduler's clock, which is the one the rest of the
-  /// frame schedule uses and the one `flutter_test` can advance.
-  Timer? _doubleClickWindowOpen;
-
-  @override
-  void dispose() {
-    _doubleClickWindowOpen?.cancel();
-    super.dispose();
-  }
-
-  void _onTap() {
-    if (_doubleClickWindowOpen?.isActive ?? false) {
-      // The second click of a pair. Cancel first, so a third click starts a
-      // fresh pair rather than chaining into another connect.
-      _doubleClickWindowOpen!.cancel();
-      _doubleClickWindowOpen = null;
-      widget.onConnect();
-      return;
-    }
-
-    // The form fills on the click itself, which is the whole point of doing
-    // this by hand: a second click connects *in addition*, rather than the
-    // first having been held back to find out.
-    widget.onPick();
-
-    _doubleClickWindowOpen = Timer(_doubleClickWindow, () {
-      _doubleClickWindowOpen = null;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tokens = DesignTokens.of(context);
-    final bookmark = widget.bookmark;
 
     return ListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        // Icon colour and size come from the theme's `listTileTheme` and
-        // `iconTheme` (§16): 20px, `textSecondary`.
-        //
-        // The inset is because the tile's own padding is zero — the rows line
-        // up with the form fields below, and the glyph was landing flush
-        // against that edge with nothing between it and the border.
-        leading: Padding(
-          padding: EdgeInsets.only(left: tokens.space2),
-          child: const Icon(Icons.dns_outlined),
-        ),
-        title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          bookmark.address,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: tokens.textTertiary),
-        ),
-        // Fills the form, or connects if this is the second click of a pair:
-        // see [_SavedServerRowState._onTap]. Left to Flutter, a `ListTile` that
-        // also had an `onDoubleTap` would hold every single click back for the
-        // double-tap timeout, so the form filled a beat after the click — which
-        // is the whole reason this is hand-rolled.
-        onTap: _onTap,
-        trailing: PopupMenuButton<String>(
-          tooltip: l10n.connectMoreTooltip,
-          icon: const Icon(Icons.more_vert),
-          onSelected: (choice) =>
-              choice == 'rename' ? widget.onRename() : widget.onDelete(),
-          itemBuilder: (_) => [
-            PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
-            PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
-          ],
-        ),
+      enabled: enabled,
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      // Icon colour and size come from the theme's `listTileTheme` and
+      // `iconTheme` (§16): 20px, `textSecondary`.
+      //
+      // The inset is because the tile's own padding is zero — the rows line
+      // up with the form fields below, and the glyph was landing flush
+      // against that edge with nothing between it and the border.
+      leading: Padding(
+        padding: EdgeInsets.only(left: tokens.space2),
+        child: const Icon(Icons.dns_outlined),
+      ),
+      title: Text(bookmark.displayName, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        bookmark.address,
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: tokens.textTertiary),
+      ),
+      onTap: enabled ? onConnect : null,
+      trailing: PopupMenuButton<String>(
+        enabled: enabled,
+        tooltip: l10n.connectMoreTooltip,
+        icon: const Icon(Icons.more_vert),
+        onSelected: (choice) {
+          switch (choice) {
+            case 'edit':
+              onEdit();
+            case 'rename':
+              onRename();
+            case 'delete':
+              onDelete();
+          }
+        },
+        itemBuilder: (_) => [
+          PopupMenuItem(value: 'edit', child: Text(l10n.connectEdit)),
+          PopupMenuItem(value: 'rename', child: Text(l10n.connectRename)),
+          PopupMenuItem(value: 'delete', child: Text(l10n.connectDelete)),
+        ],
+      ),
     );
   }
 }
@@ -509,7 +587,9 @@ class _NameDialog extends StatefulWidget {
 }
 
 class _NameDialogState extends State<_NameDialog> {
-  late final TextEditingController _name = TextEditingController(text: widget.initial);
+  late final TextEditingController _name = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {

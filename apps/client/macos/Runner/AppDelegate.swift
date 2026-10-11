@@ -52,6 +52,11 @@ class AppDelegate: FlutterAppDelegate {
     let channel = FlutterMethodChannel(name: "nightcord/lifecycle", binaryMessenger: messenger)
     lifecycleChannel = channel
     channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "quitForUpdate" {
+        result(nil)
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+        return
+      }
       guard call.method == "ready" else { result(FlutterMethodNotImplemented); return }
       result(nil)
       // AppKit must receive NSTerminateLater before its deferred reply.

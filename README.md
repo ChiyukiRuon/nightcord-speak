@@ -16,9 +16,10 @@ Web 界面支持 PC 与手机，每个浏览器设备使用独立身份。
 - macOS：按处理器选择 `macos-arm64.zip`（Apple Silicon）或 `macos-x64.zip`（Intel），
   解压后将 `Nightcord Speak.app` 复制到“应用程序”。
 
-Windows 和 macOS 可在“设置 → 关于 → 检查更新”查询适用于当前平台的新版本，
-然后打开下载页面。更新前退出客户端：Windows 运行新版安装程序覆盖升级；
-macOS 用新版应用替换旧版。普通版本只提示不带 alpha/beta/rc 后缀的更新，
+Windows 和 macOS 可在“设置 → 关于 → 检查更新”找到新版本，点击“下载更新”，
+下载校验完成后点击“安装并重启”，客户端会正常退出、完成更新并重新启动。
+支持 Windows 安装版与便携版、macOS Apple Silicon 与 Intel，保留身份、设置与自定义音效。
+macOS 应用应放在当前用户可写的本地目录中。普通版本只提示不带 alpha/beta/rc 后缀的更新，
 预览版本也检查这些预览发布；`0.x` 公开测试版正常参与检查。
 
 ## Web 使用

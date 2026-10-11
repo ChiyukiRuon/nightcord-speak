@@ -595,6 +595,38 @@ impl Worker {
 
             Command::BookmarksGet => self.send_bookmarks(name),
 
+            Command::BookmarksPrepare {
+                request_id,
+                bookmark,
+            } => {
+                let prepared = (|| {
+                    let replaces = bookmark
+                        .replaces
+                        .as_deref()
+                        .map(ts_model::ConnectionTarget::parse)
+                        .transpose()
+                        .map_err(ClientError::InvalidAddress)?;
+                    let bookmark = ts_settings::Bookmark::from_new((**bookmark).clone())
+                        .map_err(ClientError::InvalidAddress)?;
+                    Ok::<_, ClientError>(serde_json::json!({
+                        "request_id": request_id,
+                        "bookmark": bookmark,
+                        "replaces": replaces.map(|old| serde_json::json!({"host": old.host, "port": old.port})),
+                    }))
+                })();
+                let event = match prepared {
+                    Ok(data) => FfiEvent::with_data(name, None, data),
+                    Err(error) => {
+                        let mut event = FfiEvent::failed(name, None, error);
+                        if let FfiEvent::CommandResult { data, .. } = &mut event {
+                            *data = Some(serde_json::json!({"request_id": request_id}));
+                        }
+                        event
+                    }
+                };
+                self.send(event);
+            }
+
             Command::BookmarksUpdate(bookmarks) => {
                 match self.core.update_bookmarks((**bookmarks).clone()) {
                     Ok(()) => self.send(FfiEvent::ok(name, None)),

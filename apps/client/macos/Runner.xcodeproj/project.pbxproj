@@ -237,6 +237,7 @@
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				A7F3C1D2E4B5089A6C0D1234 /* Build Nightcord Rust core */,
+				A7F3C1D2E4B5089A6C0D1235 /* Build Nightcord updater */,
 			);
 			buildRules = (
 			);
@@ -331,6 +332,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A7F3C1D2E4B5089A6C0D1235 /* Build Nightcord updater */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			outputPaths = ();
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$PROJECT_DIR/Updater/build.sh\"";
+		};
 		A7F3C1D2E4B5089A6C0D1234 /* Build Nightcord Rust core */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

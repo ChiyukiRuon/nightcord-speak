@@ -16,6 +16,34 @@ SPEC.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_macos_package_requires_updater(self):
+        # Publishing a bundle without its helper makes install-and-restart fail.
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "Missing macOS updater"):
+                release.package(Path(directory), "0.2.1", "1", "macos", "arm64", "commit")
+
+    def test_macos_signing_preserves_unsandboxed_helper_and_normalizes_xml(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            helper = root / "apps/client/build/macos/Build/Products/Release/Nightcord Speak.app/Contents/Helpers/NightcordUpdater.app/Contents"
+            (helper / "MacOS").mkdir(parents=True)
+            (helper / "MacOS/NightcordUpdater").write_bytes(b"fixture")
+            (helper / "Info.plist").write_bytes(b"fixture")
+            source = root / "apps/client/macos/Runner/Release.entitlements"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(plistlib.dumps({"com.apple.security.app-sandbox": True}).replace(b"\n", b"\r\n"))
+            def invoke(arguments, **kwargs):
+                if arguments[:2] == ["codesign", "--force"]:
+                    self.assertNotIn("--deep", arguments)
+                    normalized = Path(arguments[arguments.index("--entitlements") + 1]).read_bytes()
+                    self.assertNotIn(b"\r", normalized)
+                    self.assertEqual(plistlib.loads(normalized), {"com.apple.security.app-sandbox": True})
+                if arguments[0] == "ditto":
+                    Path(arguments[-1]).write_bytes(b"fixture-archive")
+            with patch.object(release.subprocess, "run", side_effect=invoke) as command:
+                release.package(root, "0.2.1", "1", "macos", "arm64", "commit")
+            self.assertTrue(any(call.args[0][:4] == ["codesign", "--verify", "--deep", "--strict"] for call in command.call_args_list))
+
     def test_macos_release_allows_udp_send_and_receive(self):
         # Release builds failed at UDP bind despite the user granting local network access.
         for name in ("Release", "DebugProfile"):

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/updates/update_service.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
@@ -10,15 +13,23 @@ Map<String, dynamic> release(
   String tag,
   String platform, {
   bool draft = false,
+  String arch = 'x64',
 }) => {
   'tag_name': tag,
   'draft': draft,
   'prerelease': true,
   'assets': [
-    {
-      'name': 'Nightcord-Speak-${tag.substring(1)}-$platform-x64.zip',
-      'state': 'uploaded',
-    },
+    for (final name in [
+      'Nightcord-Speak-${tag.substring(1)}-$platform-$arch${platform == 'windows' ? '-setup.exe' : '.zip'}',
+      'Nightcord-Speak-${tag.substring(1)}-$platform-$arch${platform == 'windows' ? '-setup' : ''}.json',
+    ])
+      {
+        'name': name,
+        'state': 'uploaded',
+        'size': 100,
+        'browser_download_url':
+            'https://github.com/ChiyukiRuon/nightcord-speak/releases/download/$tag/$name',
+      },
   ],
 };
 
@@ -26,8 +37,11 @@ class FakeUpdates implements UpdateService {
   @override
   bool available = true;
   bool fail = false;
+  bool failInstall = false;
   DesktopUpdate? result;
-  DesktopUpdate? opened;
+  PreparedUpdate? installed;
+  Completer<PreparedUpdate>? pending;
+  int cancellations = 0;
   @override
   Future<DesktopUpdate?> check() async {
     if (fail) throw Exception('offline');
@@ -35,8 +49,27 @@ class FakeUpdates implements UpdateService {
   }
 
   @override
-  Future<void> open(DesktopUpdate update) async {
-    opened = update;
+  Future<PreparedUpdate> download(
+    DesktopUpdate update,
+    void Function(double) progress,
+  ) async {
+    progress(0.5);
+    if (pending != null) return pending!.future;
+    return PreparedUpdate(update, 'temporary', 'package', 'hash');
+  }
+
+  @override
+  void cancelDownload() {
+    cancellations++;
+    if (pending != null && !pending!.isCompleted) {
+      pending!.completeError(UpdateCancelled());
+    }
+  }
+
+  @override
+  Future<void> install(PreparedUpdate update, String language) async {
+    if (failInstall) throw Exception('helper not ready');
+    installed = update;
   }
 }
 
@@ -97,46 +130,64 @@ void main() {
     expect(selectDesktopUpdate([item], '0.1.0', 'windows'), isNull);
   });
 
-  Future<void> pump(WidgetTester tester, FakeUpdates service) async {
+  Future<void> pump(
+    WidgetTester tester,
+    FakeUpdates service, {
+    Future<void> Function()? exit,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(AppPalette.nightcord, const Locale('en')),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
-        home: Scaffold(body: UpdateCheck(service: service)),
+        home: Scaffold(
+          body: UpdateCheck(service: service, exitApplication: exit),
+        ),
       ),
     );
     await tester.pumpAndSettle();
   }
 
   testWidgets(
-    'check shows current version, failures can be retried, download opens release',
+    'download stays in the client and installation precedes clean exit',
     (tester) async {
       final service = FakeUpdates()..fail = true;
-      await pump(tester, service);
+      var exited = false;
+      await pump(
+        tester,
+        service,
+        exit: () async {
+          expect(service.installed, isNotNull);
+          exited = true;
+        },
+      );
       await tester.tap(find.text('Check for updates'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Could not check'), findsOneWidget);
+      expect(find.textContaining('Update failed.'), findsOneWidget);
       service.fail = false;
       await tester.tap(find.text('Check for updates'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('You are using the latest version.'),
-        findsOneWidget,
-      );
-      service.result = DesktopUpdate(
-        '0.2.0',
-        Uri.parse(
-          'https://github.com/ChiyukiRuon/nightcord-speak/releases/tag/v0.2.0',
-        ),
+      expect(find.text('You are using the latest version.'), findsOneWidget);
+      service.result = selectDesktopUpdate(
+        [release('v0.2.0', 'windows')],
+        '0.1.0',
+        'windows',
       );
       await tester.tap(find.text('Check for updates'));
       await tester.pumpAndSettle();
       expect(find.text('Version 0.2.0 is available'), findsOneWidget);
-      await tester.tap(find.text('Open download page'));
+      await tester.tap(find.text('Download update'));
       await tester.pumpAndSettle();
-      expect(service.opened, same(service.result));
+      expect(
+        find.text('Download verified and ready to install.'),
+        findsOneWidget,
+      );
+      expect(exited, isFalse);
+      await tester.tap(find.text('Install and restart'));
+      await tester.pumpAndSettle();
+      expect(service.installed!.update, same(service.result));
+      expect(exited, isTrue);
     },
   );
 
@@ -146,4 +197,88 @@ void main() {
     await pump(tester, FakeUpdates()..available = false);
     expect(find.text('Check for updates'), findsNothing);
   });
+
+  testWidgets('failed helper preparation keeps the client open for retry', (
+    tester,
+  ) async {
+    final service = FakeUpdates()
+      ..result = selectDesktopUpdate(
+        [release('v0.2.0', 'windows')],
+        '0.1.0',
+        'windows',
+      )
+      ..failInstall = true;
+    var exited = false;
+    await pump(
+      tester,
+      service,
+      exit: () async {
+        exited = true;
+      },
+    );
+    await tester.tap(find.text('Check for updates'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Download update'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Install and restart'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Update failed.'), findsOneWidget);
+    expect(exited, isFalse);
+    expect(service.installed, isNull);
+    service.failInstall = false;
+    await tester.tap(find.text('Install and restart'));
+    await tester.pumpAndSettle();
+    expect(exited, isTrue);
+  });
+
+  test(
+    'mac architecture and paired manifest determine the selected artifact',
+    () {
+      final builds = [
+        release('v0.3.0', 'macos', arch: 'x64'),
+        release('v0.2.0', 'macos', arch: 'arm64'),
+      ];
+      expect(
+        selectDesktopUpdate(builds, '0.1.0', 'macos', arch: 'arm64')!.version,
+        '0.2.0',
+      );
+      final missing = release('v0.4.0', 'macos', arch: 'arm64');
+      (missing['assets'] as List).removeLast();
+      expect(
+        selectDesktopUpdate([missing], '0.1.0', 'macos', arch: 'arm64'),
+        isNull,
+      );
+    },
+  );
+
+  test('release-controlled external URLs are not trusted for execution', () {
+    final item = release('v0.2.0', 'windows');
+    (item['assets'] as List).first['browser_download_url'] =
+        'https://example.com/setup.exe';
+    expect(selectDesktopUpdate([item], '0.1.0', 'windows'), isNull);
+  });
+
+  testWidgets(
+    'download progress can be cancelled without an error or exiting',
+    (tester) async {
+      final service = FakeUpdates()
+        ..result = selectDesktopUpdate(
+          [release('v0.2.0', 'windows')],
+          '0.1.0',
+          'windows',
+        )
+        ..pending = Completer<PreparedUpdate>();
+      await pump(tester, service);
+      await tester.tap(find.text('Check for updates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download update'));
+      await tester.pump();
+      expect(find.text('Downloading: 50%'), findsOneWidget);
+      await tester.tap(find.text('Cancel download'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Update failed.'), findsNothing);
+      expect(find.text('Install and restart'), findsNothing);
+      expect(service.cancellations, 1);
+    },
+  );
 }

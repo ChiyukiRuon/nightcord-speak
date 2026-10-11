@@ -177,10 +177,13 @@ class _SilentTransport implements ClientTransport {
   /// `NewBookmark`, and what comes back is a list — testing the toggle means
   /// holding one.
   BookmarkList bookmarks = const BookmarkList();
+  final List<NewBookmark> bookmarkEdits = [];
 
   @override
-  void addBookmark(NewBookmark bookmark) =>
-      calls.add('addBookmark:${bookmark.address}');
+  void addBookmark(NewBookmark bookmark) {
+    bookmarkEdits.add(bookmark);
+    calls.add('addBookmark:${bookmark.address}');
+  }
 
   @override
   void updateBookmarks(BookmarkList value) {
@@ -1410,75 +1413,253 @@ void main() {
     );
   });
 
-  testWidgets('a saved server fills the form on one click, connects on two', (
+  Future<void> openSavedEditor(WidgetTester tester) async {
+    await tester.tap(find.byIcon(Icons.more_vert).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'a saved server connects on one click without changing the form',
+    (tester) async {
+      // A row used to fill the form and require a second click to connect.
+      final transport = _SilentTransport();
+      await tester.pumpWidget(
+        _app(
+          _container(bookmarks: true, transport: transport),
+          const ConnectPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'draft.example.com');
+      await tester.tap(find.text('局域网测试服'));
+      await tester.pump();
+      expect(transport.calls, ['connect:192.168.31.128:9987']);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        'draft.example.com',
+      );
+      expect(find.text('保存服务器'), findsOneWidget);
+      expect(find.text('保存更改'), findsNothing);
+      await tester.tap(find.text('局域网测试服'));
+      await tester.pump();
+      expect(
+        transport.calls,
+        hasLength(1),
+        reason: 'do not connect twice while connecting',
+      );
+    },
+  );
+
+  testWidgets(
+    'only menu editing fills the form and save updates the original entry',
+    (tester) async {
+      // Typing must stay a draft until Save changes, with no name dialog and
+      // with the original address supplied when a new address replaces it.
+      final transport = _SilentTransport();
+      final container = _container(transport: transport);
+      const original = Bookmark(name: 'Saved', host: 'example.com');
+      container
+          .read(bookmarksProvider.notifier)
+          .update(const BookmarkList(bookmarks: [original]));
+      transport.calls.clear();
+      await tester.pumpWidget(_app(container, const ConnectPage()));
+      await tester.pumpAndSettle();
+      await openSavedEditor(tester);
+      final fields = find.byType(TextField);
+      expect(
+        tester.widget<TextField>(fields.first).controller!.text,
+        original.address,
+      );
+      expect(find.text('保存服务器'), findsNothing);
+      expect(find.text('取消更改'), findsOneWidget);
+      expect(find.text('保存更改'), findsOneWidget);
+      expect(find.text('连接'), findsNothing);
+      await tester.enterText(fields.first, 'ts6://new.example.com');
+      await tester.enterText(fields.at(1), 'Alice');
+      await tester.enterText(fields.at(2), 'secret');
+      await tester.tap(find.text('TeamSpeak 6'));
+      await tester.pump();
+      expect(transport.calls, isEmpty);
+      await tester.tap(find.text('保存更改'));
+      await tester.pump();
+      final edit = transport.bookmarkEdits.single;
+      expect(edit.name, 'Saved');
+      expect(edit.address, 'ts6://new.example.com');
+      expect(edit.replaces, original.address);
+      expect(edit.nickname, 'Alice');
+      expect(edit.serverPassword, 'secret');
+      expect(edit.protocol, ProtocolKind.ts6);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.widget<TextField>(fields.first).enabled, isFalse);
+      final saved = original.copyWith(
+        host: 'new.example.com',
+        nickname: 'Alice',
+        serverPassword: 'secret',
+        protocol: ProtocolKind.ts6,
+      );
+      transport.emit(
+        CommandResultEvent(
+          CommandResult(
+            command: 'bookmark_add',
+            session: null,
+            outcome: const CommandOutcome(ok: true),
+            data: BookmarkList(bookmarks: [saved]).toJson(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        container.read(bookmarksProvider)!.bookmarks.single.address,
+        saved.address,
+      );
+      expect(find.text('保存服务器'), findsOneWidget);
+      expect(find.text('保存更改'), findsNothing);
+      expect(tester.widget<TextField>(fields.first).controller!.text, isEmpty);
+      expect(tester.widget<TextField>(fields.at(2)).controller!.text, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'cancel changes discards the draft and restores the initial form',
+    (tester) async {
+      final transport = _SilentTransport();
+      final container = _container(
+        bookmarks: true,
+        transport: transport,
+        settings: const Settings(
+          connection: ConnectionSettings(nickname: 'Default'),
+        ),
+      );
+      await tester.pumpWidget(_app(container, const ConnectPage()));
+      await tester.pumpAndSettle();
+      final before = container.read(bookmarksProvider)!.toJson();
+      await openSavedEditor(tester);
+      await tester.enterText(
+        find.byType(TextField).first,
+        'changed.example.com',
+      );
+      await tester.enterText(find.byType(TextField).at(1), 'Changed');
+      await tester.enterText(find.byType(TextField).at(2), 'secret');
+      await tester.tap(find.text('TeamSpeak 6'));
+      await tester.tap(find.text('取消更改'));
+      await tester.pumpAndSettle();
+      expect(transport.bookmarkEdits, isEmpty);
+      expect(container.read(bookmarksProvider)!.toJson(), before);
+      final fields = find.byType(TextField);
+      expect(tester.widget<TextField>(fields.first).controller!.text, isEmpty);
+      expect(
+        tester.widget<TextField>(fields.at(1)).controller!.text,
+        'Default',
+      );
+      expect(tester.widget<TextField>(fields.at(2)).controller!.text, isEmpty);
+      expect(
+        tester
+            .widget<SegmentedButton<ProtocolKind>>(
+              find.byType(SegmentedButton<ProtocolKind>),
+            )
+            .selected,
+        {ProtocolKind.ts3},
+      );
+      expect(find.text('保存服务器'), findsOneWidget);
+      expect(find.text('取消更改'), findsNothing);
+    },
+  );
+
+  testWidgets('a failed edit keeps the draft for an explicit retry', (
     tester,
   ) async {
-    // The connect page's row has both gestures: one click fills the form, so
-    // the details can still be changed; two connect straight away, for someone
-    // who already knows which server they want.
     final transport = _SilentTransport();
     final container = _container(bookmarks: true, transport: transport);
-
     await tester.pumpWidget(_app(container, const ConnectPage()));
     await tester.pumpAndSettle();
-
-    final row = find.text('局域网测试服');
-    expect(row, findsOneWidget);
-
-    // One click: the form fills, nothing is dialled.
-    //
-    // **A single `pump`, with no timeout waited out.** This used to need a
-    // 400 ms pump because `GestureDetector.onDoubleTap` made Flutter hold every
-    // single tap back until it knew a second one was not coming. The row now
-    // times the clicks itself, so the form fills on the frame of the click —
-    // and that immediacy is what this asserts.
-    await tester.tap(row);
-    await tester.pump();
-    expect(transport.calls, isEmpty, reason: 'a single click connected');
-    final address = tester.widget<TextField>(find.byType(TextField).first);
-    expect(address.controller?.text, '192.168.31.128:9987');
-
-    // Two clicks: it connects, without waiting for the button.
-    await tester.tap(row);
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(row);
-    // `pump`, not `pumpAndSettle`: connecting turns the button into a
-    // `CircularProgressIndicator`, which schedules frames for as long as it is
-    // on screen. Waiting for the tree to go quiet would wait forever.
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump();
-    expect(transport.calls, contains('connect:192.168.31.128:9987'));
-  });
-
-  testWidgets('two clicks far apart are two single clicks', (tester) async {
-    // The other half of the hand-rolled double click: a click that arrives
-    // after the window must fill the form again rather than dial. Getting this
-    // backwards would connect on any two clicks on the same row, however far
-    // apart — including a click, a minute of typing, and another click.
-    final transport = _SilentTransport();
-    await tester.pumpWidget(
-      _app(
-        _container(bookmarks: true, transport: transport),
-        const ConnectPage(),
+    await openSavedEditor(tester);
+    await tester.enterText(find.byType(TextField).first, 'example.com:');
+    await tester.tap(find.text('保存更改'));
+    transport.emit(
+      const CommandResultEvent(
+        CommandResult(
+          command: 'bookmark_add',
+          session: null,
+          outcome: CommandOutcome(
+            ok: false,
+            error: ClientError(kind: 'invalid_address'),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
-
-    final row = find.text('局域网测试服');
-    await tester.tap(row);
-    await tester.pump();
-    // Long enough for the row's window to close. Without this the two clicks
-    // below would be a double click, which is the case the other test covers.
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(row);
-    await tester.pump();
-
+    expect(find.text('保存更改'), findsOneWidget);
     expect(
-      transport.calls,
-      isEmpty,
-      reason: 'a click 500 ms after the last one is not a double click',
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      'example.com:',
+    );
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).enabled,
+      isTrue,
+    );
+    await tester.enterText(find.byType(TextField).first, 'example.com:9987');
+    expect(transport.bookmarkEdits, hasLength(1));
+    await tester.tap(find.text('保存更改'));
+    await tester.pump();
+    expect(transport.bookmarkEdits, hasLength(2));
+    expect(transport.bookmarkEdits.last.replaces, '192.168.31.128:9987');
+    expect(
+      transport.bookmarkEdits.last.nickname,
+      isNull,
+      reason: 'an inherited nickname stays inherited',
     );
   });
+
+  testWidgets('the initial form saves a new server through the name dialog', (
+    tester,
+  ) async {
+    final transport = _SilentTransport();
+    await tester.pumpWidget(
+      _app(_container(transport: transport), const ConnectPage()),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'new.example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'Alice');
+    expect(transport.bookmarkEdits, isEmpty);
+    await tester.tap(find.text('保存服务器'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'New',
+    );
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    final saved = transport.bookmarkEdits.single;
+    expect(saved.name, 'New');
+    expect(saved.nickname, 'Alice');
+    expect(saved.address, 'new.example.com');
+    expect(saved.replaces, isNull);
+  });
+
+  testWidgets(
+    'deleting the edited server resets the form without resurrecting it',
+    (tester) async {
+      final transport = _SilentTransport();
+      final container = _container(bookmarks: true, transport: transport);
+      await tester.pumpWidget(_app(container, const ConnectPage()));
+      await tester.pumpAndSettle();
+      await openSavedEditor(tester);
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      expect(container.read(bookmarksProvider)!.bookmarks, isEmpty);
+      expect(find.text('保存服务器'), findsOneWidget);
+      expect(find.text('保存更改'), findsNothing);
+      expect(transport.bookmarkEdits, isEmpty);
+    },
+  );
 
   testWidgets('the error bar centres its buttons on the bar', (tester) async {
     // Regression: the close button sat high, because Material's `SnackBar` lays

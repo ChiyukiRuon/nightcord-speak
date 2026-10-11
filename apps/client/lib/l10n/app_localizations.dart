@@ -124,7 +124,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateError.
   ///
   /// In en, this message translates to:
-  /// **'Could not check for updates or open the release page. Check your network and try again.'**
+  /// **'Update failed. Check your network, free disk space and permission to update the application, then try again.'**
   String get updateError;
 
   /// No description provided for @updateAvailable.
@@ -136,14 +136,44 @@ abstract class AppLocalizations {
   /// No description provided for @updateDownload.
   ///
   /// In en, this message translates to:
-  /// **'Open download page'**
+  /// **'Download update'**
   String get updateDownload;
 
   /// No description provided for @updateDownloadHint.
   ///
   /// In en, this message translates to:
-  /// **'Windows: download and run Setup to upgrade. macOS: choose your processor’s ZIP and replace the app in Applications. Quit the client before updating.'**
+  /// **'Download the update here. After verification, install and restart to apply it. Your connections will close normally; identities, settings and custom sounds are preserved.'**
   String get updateDownloadHint;
+
+  /// No description provided for @updateProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading: {percent}%'**
+  String updateProgress(int percent);
+
+  /// No description provided for @updateCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get updateCancel;
+
+  /// No description provided for @updateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Download verified and ready to install.'**
+  String get updateReady;
+
+  /// No description provided for @updateInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install and restart'**
+  String get updateInstall;
+
+  /// No description provided for @updateInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing update…'**
+  String get updateInstalling;
 
   /// Tooltip of the button that leaves a page, such as the settings page
   ///
@@ -600,6 +630,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get connectMoreTooltip;
+
+  /// No description provided for @connectEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get connectEdit;
+
+  /// No description provided for @connectCancelChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel changes'**
+  String get connectCancelChanges;
+
+  /// No description provided for @connectSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get connectSaveChanges;
 
   /// Menu entry that renames a saved server
   ///
@@ -2106,6 +2154,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Microphone unavailable. Allow microphone access and enable audio again.'**
   String get errorBrowserMicrophone;
+
+  /// No description provided for @errorBrowserBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot read or save bookmarks in this browser. Allow site storage and check available storage space.'**
+  String get errorBrowserBookmarks;
 }
 
 class _AppLocalizationsDelegate
