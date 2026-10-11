@@ -56,7 +56,8 @@ Name: korean; MessagesFile: "compiler:Languages\Korean.isl"
 Name: desktopicon; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#BundleDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,nightcord_client.exe,sounds\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Anchor user packs to the bundle root; an unanchored pattern also removes Flutter assets.
+Source: "{#BundleDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,nightcord_client.exe,\sounds\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Nightcord Speak"; Filename: "{app}\Nightcord Speak.exe"

@@ -96,7 +96,11 @@ def package(root, version, build_number, platform, arch, revision):
         bundle = root / "apps/client/build/windows/x64/runner/Release"
         for name in ("Nightcord Speak.exe", "nightcord_ffi.dll", "flutter_windows.dll",
                      "libwebrtc.dll", "msvcp140.dll", "vcruntime140.dll",
-                     "vcruntime140_1.dll", "data/flutter_assets"):
+                     "vcruntime140_1.dll", "data/flutter_assets",
+                     "data/flutter_assets/assets/sounds/nightcord/config.json",
+                     "data/flutter_assets/assets/sounds/nightcord/connected.wav",
+                     "data/flutter_assets/assets/sounds/nightcord/disconnected.wav",
+                     "data/flutter_assets/assets/sounds/nightcord/new_message.wav"):
             if not (bundle / name).exists():
                 raise ValueError(f"Missing Windows bundle component: {name}")
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:

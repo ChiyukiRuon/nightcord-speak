@@ -1,6 +1,7 @@
 """Exercise release selection and reject incomplete or inconsistent artifacts."""
 
 import importlib.util
+import plistlib
 from pathlib import Path
 import re
 import tempfile
@@ -15,6 +16,22 @@ SPEC.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_macos_release_allows_udp_send_and_receive(self):
+        # Release builds failed at UDP bind despite the user granting local network access.
+        for name in ("Release", "DebugProfile"):
+            with self.subTest(configuration=name):
+                with (release.ROOT / f"apps/client/macos/Runner/{name}.entitlements").open("rb") as stream:
+                    entitlements = plistlib.load(stream)
+                for key in ("com.apple.security.network.client", "com.apple.security.network.server"):
+                    self.assertIs(entitlements.get(key), True)
+
+    def test_installer_excludes_only_root_user_sound_packs(self):
+        # Unanchored sounds\* also removed assets/sounds and broke first-run extraction.
+        script = (release.ROOT / "scripts/windows-installer.iss").read_text(encoding="utf-8")
+        excludes = re.search(r'Excludes: "([^"]+)"', script).group(1).split(',')
+        self.assertIn(r"\sounds\*", excludes)
+        self.assertNotIn(r"sounds\*", excludes)
+
     def test_installer_detects_display_language_instead_of_previous_english(self):
         # Older installers only had English; upgrades must detect the system again.
         script = (release.ROOT / "scripts/windows-installer.iss").read_text(encoding="utf-8")
@@ -95,6 +112,10 @@ class ReleaseTests(unittest.TestCase):
     def make_windows_bundle(self, root):
         bundle = root / "apps/client/build/windows/x64/runner/Release"
         (bundle / "data/flutter_assets").mkdir(parents=True)
+        sounds = bundle / "data/flutter_assets/assets/sounds/nightcord"
+        sounds.mkdir(parents=True)
+        for name in ("config.json", "connected.wav", "disconnected.wav", "new_message.wav"):
+            (sounds / name).write_bytes(b"bundled-sound")
         for name in ("Nightcord Speak.exe", "nightcord_ffi.dll", "flutter_windows.dll",
                      "libwebrtc.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll",
                      "data/flutter_assets/AssetManifest.bin", "Nightcord Speak.pdb"):
@@ -119,7 +140,19 @@ class ReleaseTests(unittest.TestCase):
                 self.assertTrue(any(n.endswith("data/flutter_assets/AssetManifest.bin") for n in names))
                 self.assertTrue(any(n.endswith("vcruntime140_1.dll") for n in names))
                 self.assertFalse(any(n.endswith(".pdb") for n in names))
-                self.assertFalse(any("/sounds/" in n for n in names))
+                self.assertFalse(any(n.startswith("Nightcord-Speak-0.2.1-windows-x64/sounds/") for n in names))
+                for name in ("config.json", "connected.wav", "disconnected.wav", "new_message.wav"):
+                    self.assertTrue(any(n.endswith(f"/data/flutter_assets/assets/sounds/nightcord/{name}") for n in names))
+
+    def test_missing_bundled_sound_prevents_packaging(self):
+        # The manifest alone is insufficient: extraction loads every shipped default.
+        for name in ("config.json", "connected.wav", "disconnected.wav", "new_message.wav"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bundle = self.make_windows_bundle(root)
+                (bundle / "data/flutter_assets/assets/sounds/nightcord" / name).unlink()
+                with self.assertRaisesRegex(ValueError, re.escape(name)):
+                    release.package(root, "0.2.1", "19", "windows", "x64", "commit")
 
     def test_missing_core_prevents_packaging(self):
         with tempfile.TemporaryDirectory() as directory:

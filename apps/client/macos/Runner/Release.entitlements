@@ -10,6 +10,9 @@
 	     one nobody is running under a debugger, so the failure has no audience. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- TeamSpeak binds a UDP socket and receives replies, requiring both network entitlements. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
 	<!-- External sound packs are editable; bookmarks restore user-selected access. -->
