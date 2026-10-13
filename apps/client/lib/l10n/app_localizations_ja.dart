@@ -759,6 +759,14 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String aboutGatewayVersion(String version) {
+    return 'ゲートウェイのバージョン $version';
+  }
+
+  @override
+  String get aboutGatewayVersionUnknown => '不明';
+
+  @override
   String get aboutDescription =>
       '本プロジェクトは、非公式のサードパーティ製 TeamSpeak 3 / TeamSpeak 6 クライアントであり、TeamSpeak 公式とは一切の所属関係がありません。\n\nNightcord は、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』に登場する架空のボイスチャットソフトウェアです。本プロジェクトは、ゲーム『プロジェクトセカイ カラフルステージ！ feat. 初音ミク』および関連する美術・音声などの素材に関する著作権その他の知的財産権を主張しません。関連する権利は、それぞれの権利者に帰属します。本プロジェクトは SEGA、Colorful Palette、Nuverse と一切の所属・提携・許諾関係がなく、これらの企業の見解を代表するものではありません。';
 

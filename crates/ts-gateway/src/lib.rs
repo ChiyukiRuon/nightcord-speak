@@ -20,6 +20,9 @@ use devices::{Devices, RESTORE_WINDOW};
 use http::Route;
 use ws::ConnectionContext;
 
+/// 与客户端共用 pubspec.yaml 中的产品版本，独立于内部 crate 版本。
+pub const VERSION: &str = env!("NIGHTCORD_PRODUCT_VERSION");
+
 /// How many outbound messages may queue before a connection counts as lagged.
 ///
 /// The same order of magnitude as the FFI's event queue: a connection that

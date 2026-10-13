@@ -14,7 +14,7 @@ use ts_gateway::{Gateway, GatewayConfig};
 
 /// Runs a Nightcord Speak core behind a WebSocket for browser front-ends.
 #[derive(Debug, Parser)]
-#[command(name = "nightcord-gateway", version, about)]
+#[command(name = "nightcord-gateway", version = ts_gateway::VERSION, about)]
 struct Args {
     /// Addresses to listen on, e.g. `127.0.0.1:8787`.
     ///

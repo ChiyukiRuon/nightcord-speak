@@ -35,6 +35,17 @@ final clientTransportProvider = Provider<ClientTransport>((ref) {
   return client;
 });
 
+/// 首次订阅读取当前值，后续握手与断开连接实时更新版本。
+final gatewayVersionProvider = StreamProvider<String?>((ref) async* {
+  final client = ref.watch(clientTransportProvider);
+  if (client case final GatewayInfoTransport gateway) {
+    yield gateway.gatewayVersion;
+    yield* gateway.gatewayVersions;
+  } else {
+    yield null;
+  }
+});
+
 /// Every envelope the core publishes.
 final eventStreamProvider = StreamProvider<FfiEvent>((ref) {
   return ref.watch(clientTransportProvider).events;

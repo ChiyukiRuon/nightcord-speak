@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../design/components/app_logo.dart';
@@ -10,6 +11,8 @@ import '../../../design/components/github_icon.dart';
 import '../../../design/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_info.dart';
+import '../../../core/transport/client_transport.dart';
+import '../../../providers/providers.dart';
 import 'update_check.dart';
 
 Future<void>? _licensesLoaded;
@@ -32,14 +35,19 @@ Future<void> _registerLicenses() async {
 }
 
 /// Product information is available even before settings arrive from the core.
-class AboutSection extends StatelessWidget {
+class AboutSection extends ConsumerWidget {
   const AboutSection({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final hasGateway =
+        ref.watch(clientTransportProvider) is GatewayInfoTransport;
+    final gatewayVersion = hasGateway
+        ? ref.watch(gatewayVersionProvider).asData?.value
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -58,6 +66,15 @@ class AboutSection extends StatelessWidget {
                       color: tokens.textSecondary,
                     ),
                   ),
+                  if (hasGateway)
+                    Text(
+                      l10n.aboutGatewayVersion(
+                        gatewayVersion ?? l10n.aboutGatewayVersionUnknown,
+                      ),
+                      style: text.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                    ),
                 ],
               ),
             ),

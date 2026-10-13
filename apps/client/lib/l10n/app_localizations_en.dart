@@ -808,6 +808,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aboutGatewayVersion(String version) {
+    return 'Gateway version $version';
+  }
+
+  @override
+  String get aboutGatewayVersionUnknown => 'Unknown';
+
+  @override
   String get aboutDescription =>
       'This project is an unofficial third-party TeamSpeak 3 / TeamSpeak 6 client and is not affiliated with TeamSpeak.\n\nNightcord is a fictional voice chat application in HATSUNE MIKU: COLORFUL STAGE! This project claims no copyright or other intellectual property rights in HATSUNE MIKU: COLORFUL STAGE! or its associated artwork, sound effects and other resources; those rights belong to their respective rights holders. This project is not affiliated with, partnered with, or authorized by SEGA, Colorful Palette or Nuverse, and does not represent their views.';
 

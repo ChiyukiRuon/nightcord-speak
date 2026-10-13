@@ -26,6 +26,12 @@ import '../../models/events.dart';
 import '../../models/settings.dart';
 import '../../models/shortcuts.dart';
 
+/// 提供远程网关版本的可选传输能力。
+abstract interface class GatewayInfoTransport {
+  String? get gatewayVersion;
+  Stream<String?> get gatewayVersions;
+}
+
 /// What the app may ask of a client core, and what the core reports back.
 abstract interface class ClientTransport {
   /// Every envelope the core publishes: domain events, command results, and

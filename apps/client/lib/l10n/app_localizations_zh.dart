@@ -756,6 +756,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aboutGatewayVersion(String version) {
+    return '网关版本 $version';
+  }
+
+  @override
+  String get aboutGatewayVersionUnknown => '未知';
+
+  @override
   String get aboutDescription =>
       '本项目是第三方 TeamSpeak 3 / TeamSpeak 6 客户端，与 TeamSpeak 官方无任何隶属关系。\n\nNightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对游戏《初音未来：缤纷舞台》及其相关的美术、音效等资源享有版权或其他知识产权；相关权利归各自权利人所有。本项目与 SEGA、Colorful Palette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。';
 
@@ -1861,6 +1869,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String aboutVersion(String version) {
     return '版本 $version';
   }
+
+  @override
+  String aboutGatewayVersion(String version) {
+    return '閘道版本 $version';
+  }
+
+  @override
+  String get aboutGatewayVersionUnknown => '未知';
 
   @override
   String get aboutDescription =>

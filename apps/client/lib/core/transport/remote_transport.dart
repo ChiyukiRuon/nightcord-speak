@@ -18,7 +18,7 @@ import 'bookmark_store.dart';
 enum GatewayState { disconnected, connecting, ready }
 
 /// The same command/event vocabulary as FFI, carried over an authenticated socket.
-class RemoteTransport implements ClientTransport {
+class RemoteTransport implements ClientTransport, GatewayInfoTransport {
   RemoteTransport({
     required this.socketFactory,
     required this.voice,
@@ -81,6 +81,19 @@ class RemoteTransport implements ClientTransport {
   Stream<GatewayState> get states => _states.stream;
   GatewayState state = GatewayState.disconnected;
   String? failure;
+  String? _gatewayVersion;
+  final _gatewayVersions = StreamController<String?>.broadcast();
+  @override
+  String? get gatewayVersion => _gatewayVersion;
+  @override
+  Stream<String?> get gatewayVersions => _gatewayVersions.stream;
+
+  void _setGatewayVersion(String? version) {
+    if (_gatewayVersion == version) return;
+    _gatewayVersion = version;
+    if (!_gatewayVersions.isClosed) _gatewayVersions.add(version);
+  }
+
   RemoteSocket? _socket;
   StreamSubscription<Object>? _subscription;
   late final StreamSubscription<Uint8List> _capture;
@@ -153,6 +166,7 @@ class RemoteTransport implements ClientTransport {
   }
 
   void closeGateway() {
+    _setGatewayVersion(null);
     _migrationGateway = null;
     for (final timer in _bookmarkRequests.values) {
       timer.cancel();
@@ -212,6 +226,12 @@ class RemoteTransport implements ClientTransport {
             return;
           }
           final credential = json['device'];
+          final version = json['version'];
+          _setGatewayVersion(
+            version is String && version.trim().isNotEmpty
+                ? version.trim()
+                : null,
+          );
           if (credential is String && _gateway != null) {
             deviceStore.save(_gateway!, credential);
           }
@@ -650,6 +670,7 @@ class RemoteTransport implements ClientTransport {
     _capture.cancel();
     _events.close();
     _states.close();
+    _gatewayVersions.close();
   }
 }
 

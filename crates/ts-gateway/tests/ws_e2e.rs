@@ -87,6 +87,7 @@ async fn connect_device(
     let hello = next_json(&mut client).await;
     assert_eq!(hello["kind"], "hello");
     assert_eq!(hello["device"], "required");
+    assert_eq!(hello["version"], ts_gateway::VERSION);
     let frame = if let Some(token) = token {
         serde_json::json!({"kind":"auth", "token":token, "device":device})
     } else {
@@ -98,6 +99,7 @@ async fn connect_device(
         .expect("attach device");
     let welcome = next_json(&mut client).await;
     assert_eq!(welcome["kind"], "welcome", "{welcome}");
+    assert_eq!(welcome["version"], hello["version"]);
     (
         client,
         welcome["device"]

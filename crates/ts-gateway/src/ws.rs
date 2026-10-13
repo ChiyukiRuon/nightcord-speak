@@ -131,6 +131,7 @@ pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<Conne
     let hello = serde_json::json!({
         "kind": "hello",
         "protocol": 1,
+        "version": crate::VERSION,
         "device": "required",
         "auth": if context.config.token.is_empty() { "none" } else { "required" },
     });
@@ -187,8 +188,10 @@ pub(crate) async fn serve(socket: WebSocketStream<TcpStream>, context: Arc<Conne
     else {
         return;
     };
-    let welcome =
-        serde_json::json!({ "kind": "welcome", "protocol": 1, "device": device.credential });
+    let welcome = serde_json::json!({
+        "kind": "welcome", "protocol": 1,
+        "version": crate::VERSION, "device": device.credential,
+    });
     if sink.send(Message::text(welcome.to_string())).await.is_err() {
         return;
     }

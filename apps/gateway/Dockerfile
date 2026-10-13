@@ -14,6 +14,7 @@ COPY .cargo/config.toml .cargo/config.toml
 COPY crates/ crates/
 COPY apps/cli/ apps/cli/
 COPY apps/gateway/ apps/gateway/
+COPY apps/client/pubspec.yaml apps/client/pubspec.yaml
 COPY vendor/tsclientlib/ vendor/tsclientlib/
 
 # Cargo does not initialize the nested declarations submodule itself.

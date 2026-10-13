@@ -1465,6 +1465,18 @@ abstract class AppLocalizations {
   /// **'Version {version}'**
   String aboutVersion(String version);
 
+  /// Connected gateway version shown in About
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway version {version}'**
+  String aboutGatewayVersion(String version);
+
+  /// No description provided for @aboutGatewayVersionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get aboutGatewayVersionUnknown;
+
   /// No description provided for @aboutDescription.
   ///
   /// In en, this message translates to:

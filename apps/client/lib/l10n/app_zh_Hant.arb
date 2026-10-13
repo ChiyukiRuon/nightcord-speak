@@ -246,6 +246,8 @@
   "voiceHoldToTalk": "按住說話",
   "settingsAboutSection": "關於",
   "aboutVersion": "版本 {version}",
+  "aboutGatewayVersion": "閘道版本 {version}",
+  "aboutGatewayVersionUnknown": "未知",
   "aboutDescription": "本專案是第三方 TeamSpeak 3 / TeamSpeak 6 用戶端，與 TeamSpeak 官方無任何隸屬關係。\n\nNightcord 是遊戲《世界計畫 繽紛舞台！feat.初音ミク》中虛構的語音聊天軟體。本專案不主張對遊戲《世界計畫 繽紛舞台！feat.初音ミク》及其相關的美術、音效等資源享有著作權或其他智慧財產權；相關權利歸各自權利人所有。本專案與 SEGA、Colorful Palette、Nuverse 無任何隸屬、合作或授權關係，亦不代表上述公司的立場。",
   "aboutProject": "專案網址",
   "aboutLicense": "專案授權",

@@ -767,6 +767,14 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
+  String aboutGatewayVersion(String version) {
+    return '게이트웨이 버전 $version';
+  }
+
+  @override
+  String get aboutGatewayVersionUnknown => '알 수 없음';
+
+  @override
   String get aboutDescription =>
       '본 프로젝트는 비공식 서드파티 TeamSpeak 3 / TeamSpeak 6 클라이언트이며, TeamSpeak 공식과 어떠한 소속 관계도 없습니다.\n\nNightcord는 게임 《프로젝트 세카이 컬러풀 스테이지! feat.하츠네 미쿠》에 등장하는 가상의 음성 채팅 소프트웨어입니다. 본 프로젝트는 게임 《프로젝트 세카이 컬러풀 스테이지! feat.하츠네 미쿠》 및 관련 미술, 음향 등의 리소스에 대한 저작권이나 기타 지식재산권을 주장하지 않으며, 관련 권리는 각 권리자에게 귀속됩니다. 본 프로젝트는 SEGA, Colorful Palette, Nuverse와 어떠한 소속, 제휴 또는 사용 허가 관계도 없으며, 해당 기업들의 입장을 대변하지 않습니다.';
 

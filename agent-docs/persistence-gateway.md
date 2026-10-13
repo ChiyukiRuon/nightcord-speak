@@ -42,6 +42,8 @@ Web bookmarks live in page-Origin localStorage (`nightcord.bookmarks.v1`), indep
 
 `hello` negotiates protocol/auth/device requirements. Initial client frame is `attach` without gateway auth or `auth` with Token, including device credentials; validated welcome/snapshots precede commands. Preserve handshake timeouts and message limits.
 
+`hello` and `welcome` include the gateway product `version`, compiled from `apps/client/pubspec.yaml`; `nightcord-gateway --version` uses the same value. Keep this input in Docker builds and image-workflow path filters. Rust package versions remain internal. The client displays the authenticated welcome version in About, accepts older gateways without it, and clears it on disconnect.
+
 Only nonempty `NIGHTCORD_GATEWAY_TOKEN` enables authentication. Token controls entry; device secret controls ownership. Token travels in the initial WebSocket frame, never query parameters. Origin checks do not replace authentication.
 
 Bindings default to loopback port 8787. Explicit `--allow-origin` replaces defaults; current checks compare scheme/host, not port. No-Origin native clients still follow Token policy.

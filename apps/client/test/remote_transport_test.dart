@@ -13,6 +13,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nightcord_client/main.dart';
 import 'package:nightcord_client/providers/providers.dart';
 import 'package:nightcord_client/features/server/server_page.dart';
+import 'package:nightcord_client/features/settings/sections/about_section.dart';
+import 'package:nightcord_client/design/theme/app_theme.dart';
+import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/core/transport/remote_socket.dart';
 import 'package:nightcord_client/core/transport/remote_transport.dart';
 import 'package:nightcord_client/core/voice/voice_backend.dart';
@@ -28,6 +31,7 @@ class FakeSocket implements RemoteSocket {
   bool rejectAuth = false;
   bool noAuth = false;
   bool requireDevice = false;
+  Object? version;
   Completer<void>? opening;
   static const credential =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -45,7 +49,9 @@ class FakeSocket implements RemoteSocket {
       }),
     );
     if (noAuth && !requireDevice) {
-      incoming.add(jsonEncode({'kind': 'welcome', 'protocol': 1}));
+      incoming.add(
+        jsonEncode({'kind': 'welcome', 'protocol': 1, 'version': version}),
+      );
     }
   }
 
@@ -63,6 +69,7 @@ class FakeSocket implements RemoteSocket {
       incoming.add(
         jsonEncode({
           'kind': 'welcome',
+          'version': version,
           'protocol': 1,
           if (requireDevice) 'device': frame['device'] ?? credential,
         }),
@@ -135,6 +142,74 @@ void main() {
     Uri.parse('ws://localhost:8787/ws'),
     'test-only-token',
   );
+
+  test(
+    'gateway version follows connection and tolerates older gateways',
+    () async {
+      final versions = <String?>[];
+      final subscription = transport.gatewayVersions.listen(versions.add);
+      socket.version = '0.5.2';
+      await open();
+      expect(transport.gatewayVersion, '0.5.2');
+      transport.closeGateway();
+      expect(transport.gatewayVersion, isNull);
+      await Future<void>.delayed(Duration.zero);
+      expect(versions, ['0.5.2', null]);
+      await socket.incoming.close();
+      socket = FakeSocket();
+      await open();
+      expect(transport.gatewayVersion, isNull);
+      await socket.incoming.close();
+      socket = FakeSocket()..version = '0.6.0';
+      await transport.openGateway(
+        Uri.parse('ws://other-gateway:8787/ws'),
+        'test-only-token',
+      );
+      expect(transport.gatewayVersion, '0.6.0');
+      await subscription.cancel();
+    },
+  );
+
+  for (final version in [null, '', 123]) {
+    test(
+      'missing or invalid gateway version remains compatible: $version',
+      () async {
+        socket.version = version;
+        await open();
+        expect(transport.state, GatewayState.ready);
+        expect(transport.gatewayVersion, isNull);
+      },
+    );
+  }
+
+  testWidgets('About displays gateway version and clears it on disconnect', (
+    tester,
+  ) async {
+    socket.version = '0.5.2';
+    await open();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [clientTransportProvider.overrideWithValue(transport)],
+        child: MaterialApp(
+          theme: buildAppTheme(AppPalette.nightcord, const Locale('en')),
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
+            body: SingleChildScrollView(child: AboutSection()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Gateway version 0.5.2'), findsOneWidget);
+    transport.closeGateway();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Gateway version 0.5.2'), findsNothing);
+    expect(find.text('Gateway version Unknown'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   Future<void> pumpConfiguredGate(WidgetTester tester, GatewayConfig config) =>
       tester.pumpWidget(

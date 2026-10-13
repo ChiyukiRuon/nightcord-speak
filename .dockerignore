@@ -15,6 +15,7 @@
 !apps/gateway/
 !apps/gateway/**
 !apps/client/
+!apps/client/pubspec.yaml
 !apps/client/assets/
 !apps/client/assets/licenses/
 !apps/client/assets/licenses/third_party.json
