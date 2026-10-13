@@ -6,8 +6,8 @@
 
 所有命令未特别说明时均在仓库根目录执行。以下域名需要替换成自己的域名：
 
-| 用途               | 示例地址                         |
-| ------------------ | -------------------------------- |
+| 用途               | 示例地址                       |
+|--------------------|--------------------------------|
 | 用户访问的网页     | `https://speak.example.com`    |
 | 网页连接的网关     | `wss://gateway.example.com/ws` |
 | 宿主机上的网关入口 | `http://127.0.0.1:8787`        |
@@ -67,16 +67,16 @@ NIGHTCORD_GATEWAY_TZ=Asia/Shanghai
 下面列出 `.env.example` 中的全部变量。默认值来自 `docker-compose.yaml`，未设置或
 留空时使用该默认值；Token 和允许来源的空值行为见表中说明。
 
-| 变量                          | 默认值                                               | 用途与配置示例                                                                                                                                                                                                                             |
-| ----------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NIGHTCORD_GATEWAY_IMAGE`   | `ghcr.io/chiyukiruon/nightcord-speak-gateway:main` | 指定要拉取、运行或本地构建所用的镜像名称与标签。`main` 跟随主分支，可改成完整版本、`sha-<完整提交哈希>` 或 `镜像名@sha256:<digest>` 固定部署版本。                                                                                   |
-| `NIGHTCORD_GATEWAY_HOST`    | `127.0.0.1`                                        | 网关端口在**宿主机**上绑定的地址。默认供同机 Nginx 或隧道访问；局域网直连时可设为 `0.0.0.0`，监听所有 IPv4 网卡。这是监听地址，不是网页构建使用的网关 URL。                                                                        |
-| `NIGHTCORD_GATEWAY_PORT`    | `8787`                                             | 发布到宿主机的 TCP 端口。容器内部仍使用 8787；例如设为`18787` 后，宿主机代理的上游改为 `http://127.0.0.1:18787`。                                                                                                                      |
-| `NIGHTCORD_GATEWAY_ORIGINS` | 空                                                   | 允许访问网关的**浏览器网页来源**，多个值用逗号分隔且不加空格，例如 `https://speak.example.com,https://your-project.pages.dev`。非空时替换默认列表；留空只允许 `localhost`、`127.0.0.1`、`::1` 等本机来源，并非允许任意网站。 |
-| `NIGHTCORD_GATEWAY_TOKEN`   | 空                                                   | 网关访问令牌，非空时要求客户端通过 Token 鉴权，空字符串表示关闭鉴权。预设网关地址的网页必须在构建时配置相同 Token。使用自己生成的随机值，不要使用示例占位文字。                                                                            |
-| `NIGHTCORD_GATEWAY_PROFILE` | `web`                                              | 连接请求未指定档名时使用的默认身份档名。身份档由使用者在网页的「设置 → 连接 → 身份配置」里自选，各设备独立保存；修改本值只影响未指定档名的连接，已选定的设备不受影响。                                                                   |
-| `NIGHTCORD_GATEWAY_LOG`     | `info`                                             | 网关日志过滤条件，Compose 将其传给容器的`RUST_LOG`。可设为 `warn`、`info`、`debug`，或使用 `info,ts_gateway=debug` 只提高网关模块的日志详细程度。                                                                                |
-| `NIGHTCORD_GATEWAY_TZ`      | `Asia/Shanghai`                                    | 容器时区，影响日志时间及按本地日期轮转。可使用`Asia/Shanghai`、`Asia/Hong_Kong`、`UTC` 等时区名称。                                                                                                                                  |
+| 变量                        | 默认值                                             | 用途与配置示例                                                                                                                                                                                                               |
+|-----------------------------|----------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `NIGHTCORD_GATEWAY_IMAGE`   | `ghcr.io/chiyukiruon/nightcord-speak-gateway:main` | 指定要拉取、运行或本地构建所用的镜像名称与标签。`main` 跟随主分支，可改成完整版本、`sha-<完整提交哈希>` 或 `镜像名@sha256:<digest>` 固定部署版本。                                                                           |
+| `NIGHTCORD_GATEWAY_HOST`    | `127.0.0.1`                                        | 网关端口在**宿主机**上绑定的地址。默认供同机 Nginx 或隧道访问；局域网直连时可设为 `0.0.0.0`，监听所有 IPv4 网卡。这是监听地址，不是网页构建使用的网关 URL。                                                                  |
+| `NIGHTCORD_GATEWAY_PORT`    | `8787`                                             | 发布到宿主机的 TCP 端口。容器内部仍使用 8787；例如设为`18787` 后，宿主机代理的上游改为 `http://127.0.0.1:18787`。                                                                                                            |
+| `NIGHTCORD_GATEWAY_ORIGINS` | 空                                                 | 允许访问网关的**浏览器网页来源**，多个值用逗号分隔且不加空格，例如 `https://speak.example.com,https://your-project.pages.dev`。非空时替换默认列表；留空只允许 `localhost`、`127.0.0.1`、`::1` 等本机来源，并非允许任意网站。 |
+| `NIGHTCORD_GATEWAY_TOKEN`   | 空                                                 | 网关访问令牌，非空时要求客户端通过 Token 鉴权，空字符串表示关闭鉴权。预设网关地址的网页必须在构建时配置相同 Token。使用自己生成的随机值，不要使用示例占位文字。                                                              |
+| `NIGHTCORD_GATEWAY_PROFILE` | `web`                                              | 连接请求未指定档名时使用的默认身份档名。身份档由使用者在网页的「设置 → 连接 → 身份配置」里自选，各设备独立保存；修改本值只影响未指定档名的连接，已选定的设备不受影响。                                                       |
+| `NIGHTCORD_GATEWAY_LOG`     | `info`                                             | 网关日志过滤条件，Compose 将其传给容器的`RUST_LOG`。可设为 `warn`、`info`、`debug`，或使用 `info,ts_gateway=debug` 只提高网关模块的日志详细程度。                                                                            |
+| `NIGHTCORD_GATEWAY_TZ`      | `Asia/Shanghai`                                    | 容器时区，影响日志时间及按本地日期轮转。可使用`Asia/Shanghai`、`Asia/Hong_Kong`、`UTC` 等时区名称。                                                                                                                          |
 
 允许来源按协议与主机名匹配，当前实现不区分端口、不支持通配符；需要使用的每个
 网页域名应分别列出。来源限制用于浏览器连接，Token 则用于网关鉴权。
@@ -195,17 +195,17 @@ sudo certbot renew --dry-run
 在 Cloudflare 控制台创建 Pages 项目，连接包含部署脚本的 GitHub 仓库。
 按以下内容配置构建：
 
-| 配置项                              | 值                               |
-| ----------------------------------- | -------------------------------- |
-| 生产分支                            | `main`                         |
-| Framework preset                    | `None`                         |
-| Root directory                      | 仓库根目录，留空                 |
-| Build command                       | `bash scripts/build-pages.sh`  |
-| Build output directory              | `apps/client/build/web`        |
-| 环境变量`FLUTTER_VERSION`         | `3.47.5`                       |
-| 环境变量`PYTHON_VERSION`          | `3.12`                         |
-| 环境变量`NIGHTCORD_GATEWAY_URL`   | `wss://gateway.example.com/ws` |
-| 环境变量`NIGHTCORD_GATEWAY_TOKEN` | 与网关相同；网关免 Token 时留空  |
+| 配置项                            | 值                              |
+|-----------------------------------|---------------------------------|
+| 生产分支                          | `main`                          |
+| Framework preset                  | `None`                          |
+| Root directory                    | 仓库根目录，留空                |
+| Build command                     | `bash scripts/build-pages.sh`   |
+| Build output directory            | `apps/client/build/web`         |
+| 环境变量`FLUTTER_VERSION`         | `3.47.5`                        |
+| 环境变量`PYTHON_VERSION`          | `3.12`                          |
+| 环境变量`NIGHTCORD_GATEWAY_URL`   | `wss://gateway.example.com/ws`  |
+| 环境变量`NIGHTCORD_GATEWAY_TOKEN` | 与网关相同；网关免 Token 时留空 |
 
 构建脚本准备 Flutter SDK 和字体，并调用现有发布构建脚本。Pages 不需要编译 Rust。
 构建配置与 Python 版本选择参见 [Pages 构建配置](https://developers.cloudflare.com/pages/configuration/build-configuration/)
@@ -224,17 +224,48 @@ docker compose up -d --no-build
 
 生产与预览环境分别配置构建变量。使用预览站点时，网关也需允许该预览域名。
 
-### 方式 B：腾讯云 EdgeOne Pages
+### 方式 B：GitHub Actions 构建并上传服务器（推荐）
 
-构建配置使用：框架预设 `Other`，根目录 `./`，输出目录
-`apps/client/build/web`，编译命令 `bash scripts/build-pages.sh`，安装命令留空。
-网关地址与 Token 使用方式 A 中的同名构建环境变量。
+`.github/workflows/deploy-web.yml` 在 GitHub Actions 中安装固定版本的 Flutter，
+准备字体和 FFI，完成静态分析后构建网页，再通过 SSH／SCP 上传到
+`/var/www/nightcord.chiyukiruon.top/`。网页相关文件推送到 `main` 时自动部署，
+也可在 Actions → Web Deploy → Run workflow 手动运行；其他分支手动运行只生成
+构建产物。每次符合触发条件的推送都会构建，不按产品版本号跳过。
 
-EO 可能将仓库和 `TMPDIR` 都放在 `/dev/shm`。脚本将临时 SDK 安装在 `/tmp`，
-并在下载前检查 `find` 是否能执行 `chmod`、SDK 目录是否允许执行原生程序。
-需要指定其他可执行的临时目录时，设置 `NIGHTCORD_FLUTTER_TMPDIR`（目录须已存在）。
-如果权限检查失败，说明当前构建环境仍不满足 Flutter 的运行条件；可以在本地按
-方式 C 构建，然后上传 `apps/client/build/web/` 的完整产物部署。
+在 GitHub 仓库 Settings → Secrets and variables → Actions → New repository secret
+中填写：
+
+| Secret | 是否必填 | 内容 |
+| --- | --- | --- |
+| `SERVER_IP` | 是 | 服务器公网 IP 或 SSH 域名，不带协议和路径 |
+| `SERVER_USER` | 是 | SSH 登录用户，须能写入 `/var/www/` 和正式网页目录 |
+| `SERVER_SSH_KEY` | 是 | SSH 私钥全文，包括 BEGIN／END 行；对应公钥须已加入服务器用户的 `authorized_keys` |
+| `SERVER_PORT` | 否 | SSH 端口，默认 `22` |
+| `SERVER_SSH_PASSPHRASE` | 否 | 私钥的加密口令；私钥未加密时留空 |
+| `NIGHTCORD_GATEWAY_URL` | 否 | 预设网关地址，例如 `wss://gateway.example.com/ws`；留空让访问者手动填写 |
+| `NIGHTCORD_GATEWAY_TOKEN` | 否 | 预设网关启用鉴权时填写与网关相同的 Token |
+
+`NIGHTCORD_GATEWAY_URL` 也可填写为仓库 Actions Variable；同名 Secret 优先。
+手动运行的 `gateway_url` 输入优先于两者。GitHub 工作流不会读取 EO 的构建变量，
+修改地址或 Token 后需重新运行。预设 Token 会写入网页，对访问者可见。
+
+服务器需安装 `rsync`，并提供 `tar`、`sha256sum`、`realpath`（Ubuntu 通常已预装
+后三项）。Ubuntu 可先运行：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y rsync
+```
+
+部署用户需要有 `/var/www/` 和正式网页目录的写权限，Nginx 须能读取该网页目录。
+Nginx 的 `root` 配置为 `/var/www/nightcord.chiyukiruon.top`，HTTPS 配置参考方式 C；
+网页文件更新不需要重启网关或 Nginx。工作流先上传到本次运行的临时目录，
+校验主要入口文件后用 `rsync` 同步正式目录，并清理该目录中不再使用的旧文件。
+正式目录应只存放网页产物，不存放网关数据或其他手工文件。
+
+部署成功后，正式目录的 `deployed-commit.txt` 记录本次提交哈希；Actions 中保留
+带流水号与重试次数的网页产物 14 天。把 `https://nightcord.chiyukiruon.top`
+加入网关 `NIGHTCORD_GATEWAY_ORIGINS` 并应用配置，再按第 6 节验证连接与语音。
 
 ### 方式 C：自行托管静态网页
 
@@ -257,7 +288,7 @@ python scripts/build-web.py
 ```
 
 将 `apps/client/build/web/` 中的**全部文件和子目录**上传到静态服务器，例如
-`/srv/nightcord/web/`，并确保 Nginx 用户可以读取。上传的是构建产物，不是
+`/var/www/nightcord.chiyukiruon.top/`，并确保 Nginx 用户可以读取。上传的是构建产物，不是
 `apps/client/web/` 源码目录。
 
 使用宿主机 Nginx 时，可另建 `/etc/nginx/conf.d/nightcord-web.conf`：
@@ -266,7 +297,7 @@ python scripts/build-web.py
 server {
     listen 80;
     server_name speak.example.com;
-    root /srv/nightcord/web;
+    root /var/www/nightcord.chiyukiruon.top;
     index index.html;
 
     add_header Cache-Control "no-cache" always;
