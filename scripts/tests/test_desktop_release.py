@@ -1,6 +1,8 @@
 """Exercise release selection and reject incomplete or inconsistent artifacts."""
 
 import importlib.util
+import json
+import os
 import plistlib
 from pathlib import Path
 import re
@@ -16,6 +18,74 @@ SPEC.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def make_web_bundle(self, root, version="0.2.1", build_number="19"):
+        bundle = root / "apps/client/build/web"
+        (bundle / "assets/fonts").mkdir(parents=True)
+        for name in ("index.html", "flutter_bootstrap.js", "main.dart.js",
+                     "assets/fonts/font.ttf", ".last_build_id"):
+            (bundle / name).write_bytes(b"web-content")
+        (bundle / "version.json").write_text(json.dumps({
+            "version": version, "build_number": build_number,
+        }), encoding="utf-8")
+        return bundle
+
+    def test_web_archive_is_deployable_and_verified_with_desktop_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_web_bundle(root)
+            self.make_windows_bundle(root)
+            release.package(root, "0.2.1", "19", "web", "universal", "commit")
+            release.package(root, "0.2.1", "19", "windows", "x64", "commit")
+            plan = release.plan("v0.2.1", {"platforms": ["windows", "web"]})
+            release.verify(root, plan, "19", "commit")
+            archive_path = root / "dist/Nightcord-Speak-0.2.1-web-universal.zip"
+            with zipfile.ZipFile(archive_path) as archive:
+                self.assertIn("index.html", archive.namelist())
+                self.assertIn("assets/fonts/font.ttf", archive.namelist())
+                self.assertIn(".last_build_id", archive.namelist())
+                self.assertEqual(json.loads(archive.read("version.json"))["version"], "0.2.1")
+            archive_path.write_bytes(archive_path.read_bytes() + b"tampered")
+            with self.assertRaises(ValueError):
+                release.verify(root, plan, "19", "commit")
+
+    def test_missing_or_stale_web_bundle_cannot_be_packaged(self):
+        for missing in ("index.html", "flutter_bootstrap.js", "main.dart.js", "version.json"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bundle = self.make_web_bundle(root)
+                (bundle / missing).unlink()
+                with self.assertRaisesRegex(ValueError, re.escape(missing)):
+                    release.package(root, "0.2.1", "19", "web", "universal", "commit")
+        for version, build_number in (("0.2.0", "19"), ("0.2.1", "18")):
+            with self.subTest(version=version, build_number=build_number), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.make_web_bundle(root, version, build_number)
+                with self.assertRaisesRegex(ValueError, "Web bundle version"):
+                    release.package(root, "0.2.1", "19", "web", "universal", "commit")
+
+    def test_web_plan_and_manual_release_use_selected_tag_revision(self):
+        plan = release.plan("v0.2.1-beta.2", {"platforms": ["web"]})
+        self.assertEqual(plan["matrix"]["include"], [
+            {"os": "ubuntu-24.04", "platform": "web", "arch": "universal"},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_web_bundle(root, "0.2.1-beta.2")
+            (root / ".github").mkdir()
+            (root / ".github/release-platforms.json").write_text(
+                json.dumps({"platforms": ["web"]}), encoding="utf-8")
+            environment = {
+                "RELEASE_TAG": "v0.2.1-beta.2", "RELEASE_REVISION": "tag-commit",
+                "GITHUB_REF_NAME": "main", "GITHUB_SHA": "dispatch-commit",
+                "GITHUB_RUN_NUMBER": "19",
+            }
+            with patch.object(release, "ROOT", root), patch.dict(os.environ, environment), patch(
+                    "sys.argv", ["desktop-release.py", "package", "--platform", "web", "--arch", "universal"]):
+                release.main()
+            manifest = json.loads((root / "dist/Nightcord-Speak-0.2.1-beta.2-web-universal.json").read_text())
+            self.assertEqual(manifest["revision"], "tag-commit")
+            self.assertEqual(manifest["build_number"], "19")
+
     def test_macos_package_requires_updater(self):
         # Publishing a bundle without its helper makes install-and-restart fail.
         with tempfile.TemporaryDirectory() as directory:

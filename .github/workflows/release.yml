@@ -1,6 +1,12 @@
-name: Desktop Release
+name: Client Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已有且尚未发布的版本标签，例如 v0.4.1'
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
@@ -9,13 +15,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: client-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   FLUTTER_VERSION: '3.47.5'
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   plan:
@@ -26,8 +33,11 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       build_name: ${{ steps.plan.outputs.build_name }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
+      revision: ${{ steps.plan.outputs.revision }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -35,7 +45,9 @@ jobs:
         run: python -m unittest discover -s scripts/tests -p 'test_desktop_release.py'
       - name: Plan release
         id: plan
-        run: python scripts/desktop-release.py plan
+        run: |
+          python scripts/desktop-release.py plan
+          printf 'revision=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   check:
     name: Rust quality checks
@@ -44,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.revision }}
           submodules: recursive
       - name: Install audio build dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config cmake
@@ -60,6 +73,8 @@ jobs:
     needs: [plan, check]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    env:
+      RELEASE_REVISION: ${{ needs.plan.outputs.revision }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -69,6 +84,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.revision }}
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -91,6 +107,11 @@ jobs:
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
           cmake --version
           pod --version
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'web'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libssl-dev pkg-config cmake
       - name: Fetch UI fonts
         run: bash scripts/fetch-fonts.sh
       - name: Set product version from tag
@@ -98,11 +119,11 @@ jobs:
       - name: Resolve Flutter dependencies
         working-directory: apps/client
         run: flutter pub get
+      - name: Build the real FFI library for tests
+        run: cargo build --locked -p ts-ffi --all-features
       - name: Analyze Flutter
         working-directory: apps/client
         run: flutter analyze
-      - name: Build the real FFI library for tests
-        run: cargo build --locked -p ts-ffi --all-features
       - name: Test Flutter
         working-directory: apps/client
         run: flutter test --reporter expanded
@@ -145,6 +166,17 @@ jobs:
         env:
           BUILD_NAME: ${{ needs.plan.outputs.build_name }}
         run: flutter build macos --release --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER"
+      - name: Build web bundle
+        if: matrix.platform == 'web'
+        env:
+          NIGHTCORD_GATEWAY_URL: ${{ secrets.NIGHTCORD_GATEWAY_URL || vars.NIGHTCORD_GATEWAY_URL }}
+          NIGHTCORD_GATEWAY_TOKEN: ${{ secrets.NIGHTCORD_GATEWAY_TOKEN }}
+        run: |
+          if [[ -n "$NIGHTCORD_GATEWAY_URL" && "$NIGHTCORD_GATEWAY_URL" != wss://* ]]; then
+            echo 'HTTPS hosting requires a wss:// gateway URL.' >&2
+            exit 1
+          fi
+          python scripts/build-web.py
       - name: Install Windows installer compiler
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -167,7 +199,7 @@ jobs:
         run: python scripts/desktop-release.py package --platform "$RELEASE_PLATFORM" --arch "$RELEASE_ARCH"
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          name: client-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
           retention-days: 14
@@ -183,16 +215,18 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_VERSION: ${{ needs.plan.outputs.version }}
       PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+      RELEASE_REVISION: ${{ needs.plan.outputs.revision }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.revision }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          pattern: desktop-*
+          pattern: client-*
           merge-multiple: true
           path: dist
       - name: Verify complete artifact set
@@ -211,19 +245,21 @@ jobs:
           if 'macos' in platforms:
               lines.append('macOS：按处理器选择 Apple Silicon（arm64）或 Intel（x64）ZIP，解压后将应用复制到「应用程序」。')
               lines.append('macOS 目前使用临时签名，尚未经过 Apple 公证。')
+          if 'web' in platforms:
+              lines.append('网页版：下载 web-universal.zip，解压后将全部文件上传到 HTTPS 静态服务器；ZIP 根目录的 index.html 即为网页入口。')
           lines.append('每个安装包附带 SHA-256 校验文件及记录源码提交、版本和构建编号的 JSON 清单。')
           Path('release-notes.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
-          if existing=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
+          if existing=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
             if [[ "$existing" != true ]]; then
               echo 'Release already published; use a new version tag instead of replacing public assets.' >&2
               exit 1
             fi
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
               --title "Nightcord Speak $RELEASE_VERSION" --generate-notes --notes-file release-notes.md
           fi
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          gh release upload "$RELEASE_TAG" dist/* --clobber
           latest=true
           if [[ "$PRERELEASE" == true ]]; then latest=false; fi
-          gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease="$PRERELEASE" --latest="$latest"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$PRERELEASE" --latest="$latest"

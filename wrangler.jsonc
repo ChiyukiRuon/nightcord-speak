@@ -1,0 +1,8 @@
+{
+  "name": "nightcord-speak",
+  "compatibility_date": "2026-10-13",
+  "assets": {
+    "directory": "./apps/client/build/web",
+    "not_found_handling": "single-page-application"
+  }
+}

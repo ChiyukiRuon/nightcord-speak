@@ -224,50 +224,52 @@ docker compose up -d --no-build
 
 生产与预览环境分别配置构建变量。使用预览站点时，网关也需允许该预览域名。
 
-### 方式 B：GitHub Actions 构建并上传服务器（推荐）
+#### 使用 Cloudflare Workers Builds
 
-`.github/workflows/deploy-web.yml` 在 GitHub Actions 中安装固定版本的 Flutter，
-准备字体和 FFI，完成静态分析后构建网页，再通过 SSH／SCP 上传到
-`/var/www/nightcord.chiyukiruon.top/`。网页相关文件推送到 `main` 时自动部署，
-也可在 Actions → Web Deploy → Run workflow 手动运行；其他分支手动运行只生成
-构建产物。每次符合触发条件的推送都会构建，不按产品版本号跳过。
+如果控制台要求填写「部署命令」，并使用 `npx wrangler deploy`，则当前项目采用
+Workers Builds。仓库根目录的 `wrangler.jsonc` 已指定静态产物目录
+`apps/client/build/web`，并配置单页应用路由回退。
 
-在 GitHub 仓库 Settings → Secrets and variables → Actions → New repository secret
-中填写：
+| 配置项 | 值 |
+| --- | --- |
+| Worker 名称 | `nightcord-speak`（与 `wrangler.jsonc` 的 `name` 一致） |
+| 根目录 | 仓库根目录 |
+| 构建命令 | `bash scripts/build-pages.sh` |
+| 部署命令 | `npx wrangler deploy` |
 
-| Secret | 是否必填 | 内容 |
+构建环境变量沿用上表。`NIGHTCORD_GATEWAY_URL` 必须为公开的 WSS 地址；这些值
+在 Flutter 构建阶段写入网页，不能通过仅设置 Worker 运行时变量改变。
+配置说明见 [Workers 静态资源](https://developers.cloudflare.com/workers/static-assets/)。
+
+### 方式 B：从 GitHub Release 下载网页产物（推荐）
+
+网页与 Windows、macOS 客户端由 `.github/workflows/release.yml` 的同一发布流程
+构建。推送 `vX.Y.Z` 或支持的预发布标签时自动运行；也可打开 Actions →
+Client Release → Run workflow，填写已有且尚未公开发布的版本标签。
+手动运行同样检出该标签的源码，所有平台使用同一版本、构建编号和提交哈希。
+已公开的 Release 不会覆盖，后续修改须发布新版本标签。
+
+`.github/release-platforms.json` 默认选择 `windows`、`macos`、`web`。
+只有选中的全部平台构建成功且产物校验通过，才会发布 GitHub Release。
+网页产物包括：
+
+- `Nightcord-Speak-<版本>-web-universal.zip`
+- 同名的 `.sha256` 校验文件
+- 同名的 `.json` 版本、构建编号和源码提交清单
+
+ZIP 根目录直接包含 `index.html` 和全部网页资源，解压后可部署到 HTTPS 静态
+服务器，步骤参考方式 C。工作流不再上传服务器，无需配置 `SERVER_*` Secrets。
+
+如需预设网关，可在仓库 Settings → Secrets and variables → Actions 中配置：
+
+| 名称 | 类型 | 内容 |
 | --- | --- | --- |
-| `SERVER_IP` | 是 | 服务器公网 IP 或 SSH 域名，不带协议和路径 |
-| `SERVER_USER` | 是 | SSH 登录用户，须能写入 `/home/www/` 和正式网页目录 |
-| `SERVER_SSH_KEY` | 是 | SSH 私钥全文，包括 BEGIN／END 行；对应公钥须已加入服务器用户的 `authorized_keys` |
-| `SERVER_PORT` | 否 | SSH 端口，默认 `22` |
-| `SERVER_SSH_PASSPHRASE` | 否 | 私钥的加密口令；私钥未加密时留空 |
-| `NIGHTCORD_GATEWAY_URL` | 否 | 预设网关地址，例如 `wss://gateway.example.com/ws`；留空让访问者手动填写 |
-| `NIGHTCORD_GATEWAY_TOKEN` | 否 | 预设网关启用鉴权时填写与网关相同的 Token |
+| `NIGHTCORD_GATEWAY_URL` | Secret 或 Variable | 公开的 `wss://…/ws` 地址；同名 Secret 优先 |
+| `NIGHTCORD_GATEWAY_TOKEN` | Secret | 预设网关启用鉴权时填写与网关相同的 Token |
 
-`NIGHTCORD_GATEWAY_URL` 也可填写为仓库 Actions Variable；同名 Secret 优先。
-手动运行的 `gateway_url` 输入优先于两者。GitHub 工作流不会读取 EO 的构建变量，
-修改地址或 Token 后需重新运行。预设 Token 会写入网页，对访问者可见。
-
-服务器需安装 `rsync`，并提供 `tar`、`sha256sum`、`realpath`（Ubuntu 通常已预装
-后三项）。Ubuntu 可先运行：
-
-```bash
-sudo apt-get update
-sudo apt-get install -y rsync
-```
-
-正式目录 `/var/www/nightcord.chiyukiruon.top/` 须提前创建，部署用户需要有
-`/home/www/` 和正式网页目录的写权限，无需向 `/var/www/` 创建目录的权限。
-Nginx 须能读取正式网页目录。
-Nginx 的 `root` 配置为 `/var/www/nightcord.chiyukiruon.top`，HTTPS 配置参考方式 C；
-网页文件更新不需要重启网关或 Nginx。工作流先上传到 `/home/www/` 下本次运行的临时目录，
-校验主要入口文件后用 `rsync` 同步正式目录，并清理该目录中不再使用的旧文件。
-正式目录应只存放网页产物，不存放网关数据或其他手工文件。
-
-部署成功后，正式目录的 `deployed-commit.txt` 记录本次提交哈希；Actions 中保留
-带流水号与重试次数的网页产物 14 天。把 `https://nightcord.chiyukiruon.top`
-加入网关 `NIGHTCORD_GATEWAY_ORIGINS` 并应用配置，再按第 6 节验证连接与语音。
+两者均可留空，让访问者在网页中手动填写网关地址与 Token。预设 Token 会写入
+网页，对访问者可见。发布流程不会读取 EO 的构建变量；修改构建配置后需要发布
+新版本。部署网页后，把其 HTTPS Origin 加入网关 `NIGHTCORD_GATEWAY_ORIGINS`。
 
 ### 方式 C：自行托管静态网页
 

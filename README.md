@@ -24,6 +24,9 @@ macOS 应用应放在当前用户可写的本地目录中。普通版本只提�
 
 ## Web 使用
 
+网页版与客户端一起发布，可从 [GitHub Releases](https://github.com/ChiyukiRuon/nightcord-speak/releases)
+下载 `web-universal.zip`，解压后部署全部文件。
+
 正式网页部署步骤见 [DEPLOY.md](DEPLOY.md)，包含 Docker Compose 网关、HTTPS／WSS
 与 Cloudflare Pages／自托管网页。
 

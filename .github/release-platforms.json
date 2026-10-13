@@ -1,3 +1,3 @@
 {
-  "platforms": ["windows", "macos"]
+  "platforms": ["windows", "macos", "web"]
 }

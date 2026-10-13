@@ -55,11 +55,11 @@ Windows screenshot/DPI probes must set PerMonitorV2 awareness before measuring. 
 
 ## Release Maintenance
 
-Publishing requires explicit authorization. `release.yml` runs on `v*` tags; ordinary Rust CI runs on PR/manual triggers. Gateway image publishing uses its own workflow/conditions.
+Publishing requires explicit authorization. `release.yml` builds Windows, macOS, and Web on `v*` tags or manual dispatch with an existing version tag. Every job checks out the resolved tag revision; never package the dispatch branch under another tag's version. Ordinary Rust CI runs on PR/manual triggers. Gateway image publishing uses its own workflow/conditions.
 
 Accepted tags are `vX.Y.Z` or `vX.Y.Z-{alpha,beta,rc}.N` (N starts at 1). `desktop-release.py prepare` derives product versions/build numbers; internal Rust versions need not follow every product release. Review `.github/release-platforms.json` for selected platforms.
 
-Use the workflow's current artifact set: Windows bundles/installers and architecture-specific macOS bundles with hashes/manifests. Preserve resources, native libraries, permissions/symlinks, and architecture consistency; an EXE alone is not a working package. Keep corresponding symbols for crash analysis.
+Use the workflow's current artifact set: Windows bundles/installers, architecture-specific macOS bundles, and the Web universal ZIP, all with hashes/manifests. Web archives put `index.html` at the root and must match the release version/build number in `version.json`. Verify every selected platform before publishing. Server upload is not part of the workflow. Preserve resources, native libraries, permissions/symlinks, and architecture consistency; an EXE alone is not a working package. Keep corresponding symbols for crash analysis.
 
 Submodule commits must be remotely available before pushing a release tag. Publish only after all selected platforms and manifests/hashes validate. Never replace public attachments; fixes need a new patch tag. Inspect signing configuration rather than assuming notarization/publisher signing from build success.
 

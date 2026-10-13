@@ -1,4 +1,4 @@
-"""Plan tag releases and package desktop bundles without third-party dependencies."""
+"""Plan tag releases and package client bundles without third-party dependencies."""
 
 import argparse
 import hashlib
@@ -19,6 +19,7 @@ TARGETS = {
         {"os": "macos-15", "platform": "macos", "arch": "arm64"},
         {"os": "macos-15-intel", "platform": "macos", "arch": "x64"},
     ],
+    "web": [{"os": "ubuntu-24.04", "platform": "web", "arch": "universal"}],
 }
 TAG_PATTERN = re.compile(
     r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
@@ -34,7 +35,7 @@ def plan(tag, config):
     if (not isinstance(platforms, list) or not platforms
             or any(not isinstance(p, str) or p not in TARGETS for p in platforms)
             or len(set(platforms)) != len(platforms)):
-        raise ValueError("platforms must be a nonempty, unique list of windows / macos")
+        raise ValueError("platforms must be a nonempty, unique list of windows / macos / web")
     return {
         "version": tag[1:],
         "build_name": ".".join(match.group(1, 2, 3)),
@@ -111,6 +112,19 @@ def package(root, version, build_number, platform, arch, revision):
                         and file.relative_to(bundle).parts[0] != "sounds"
                         and file.name != "nightcord_client.exe"):
                     output.write(file, Path(stem) / file.relative_to(bundle))
+    elif platform == "web":
+        bundle = root / "apps/client/build/web"
+        for name in ("index.html", "flutter_bootstrap.js", "main.dart.js", "version.json"):
+            if not (bundle / name).is_file() or (bundle / name).stat().st_size == 0:
+                raise ValueError(f"Missing Web bundle component: {name}")
+        web_version = json.loads((bundle / "version.json").read_text(encoding="utf-8"))
+        if (web_version.get("version") != version
+                or web_version.get("build_number") != build_number):
+            raise ValueError("Web bundle version does not match the release")
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
+            for file in sorted(bundle.rglob("*")):
+                if file.is_file():
+                    output.write(file, file.relative_to(bundle))
     else:
         bundle = root / "apps/client/build/macos/Build/Products/Release/Nightcord Speak.app"
         helper = bundle / "Contents/Helpers/NightcordUpdater.app"
@@ -174,11 +188,14 @@ def verify(root, release, build_number, revision):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "prepare", "package", "verify"))
-    parser.add_argument("--tag", default=os.environ.get("GITHUB_REF_NAME", ""))
+    parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG", os.environ.get("GITHUB_REF_NAME", "")))
     parser.add_argument("--build-number", default=os.environ.get("GITHUB_RUN_NUMBER", ""))
     parser.add_argument("--platform", choices=TARGETS)
-    parser.add_argument("--arch", choices=("x64", "arm64"))
+    parser.add_argument("--arch", choices=("x64", "arm64", "universal"))
+    parser.add_argument("--revision", default=os.environ.get("RELEASE_REVISION", os.environ.get("GITHUB_SHA", "")))
     args = parser.parse_args()
+    if args.command in ("package", "verify") and not args.revision:
+        raise ValueError("A source revision is required for release artifacts")
     release = plan(args.tag, json.loads(
         (ROOT / ".github/release-platforms.json").read_text(encoding="utf-8")))
     if args.command == "plan":
@@ -193,9 +210,9 @@ def main():
                    for t in release["matrix"]["include"]):
             raise ValueError("Target is not selected by release-platforms.json")
         package(ROOT, release["version"], args.build_number, args.platform, args.arch,
-                os.environ["GITHUB_SHA"])
+                args.revision)
     else:
-        verify(ROOT, release, args.build_number, os.environ["GITHUB_SHA"])
+        verify(ROOT, release, args.build_number, args.revision)
 
 
 if __name__ == "__main__":
