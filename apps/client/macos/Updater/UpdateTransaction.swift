@@ -10,6 +10,7 @@ struct UpdateRequest: Decodable {
   let version: String
   let nonce: String
   let language: String
+  let log_file: String?
 }
 
 /// Preserve the old bundle until the replacement is verified on the same volume.
@@ -23,6 +24,7 @@ final class UpdateTransaction {
   var oldMoved = false
   var newMoved = false
   var parentExited = false
+  private let started = Date()
 
   init(configuration: URL, allowedTarget: URL) throws {
     root = configuration.deletingLastPathComponent().standardizedFileURL
@@ -34,6 +36,26 @@ final class UpdateTransaction {
     else { throw NSError(domain: "NightcordUpdater", code: 1) }
     stage = target.deletingLastPathComponent().appendingPathComponent(".nightcord-update-stage-" + request.nonce)
     backup = target.deletingLastPathComponent().appendingPathComponent(".nightcord-update-backup-" + request.nonce)
+    log("info", "started", "version=\(request.version) parent_pid=\(request.parent_pid) attempt=\(request.nonce) target=\(target.path)")
+  }
+
+  /// Keep helper diagnostics after the client core shuts down and staging is removed.
+  func log(_ level: String, _ stage: String, _ message: String = "") {
+    let path = request.log_file.map { URL(fileURLWithPath: $0) }
+      ?? root.appendingPathComponent("updater-trace.log")
+    let text = message.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+    let line = "\(ISO8601DateFormatter().string(from: Date())) [\(level)] pid=\(getpid()) elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000)) stage=\(stage) \(text.prefix(4096))\n"
+    do {
+      if !files.fileExists(atPath: path.path) {
+        guard files.createFile(atPath: path.path, contents: nil) else { return }
+      }
+      let handle = try FileHandle(forWritingTo: path)
+      defer { try? handle.close() }
+      try handle.seekToEnd()
+      try handle.write(contentsOf: Data(line.utf8))
+    } catch {
+      // A diagnostic failure must not change installation or rollback behavior.
+    }
   }
 
   @discardableResult
@@ -43,17 +65,30 @@ final class UpdateTransaction {
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
     process.standardOutput = output
-    process.standardError = FileHandle.nullDevice
+    let diagnostic = root.appendingPathComponent("command-stderr-" + UUID().uuidString + ".log")
+    let errorOutput = files.createFile(atPath: diagnostic.path, contents: nil)
+      ? try? FileHandle(forWritingTo: diagnostic) : nil
+    process.standardError = errorOutput ?? FileHandle.nullDevice
+    defer { try? errorOutput?.close(); try? files.removeItem(at: diagnostic) }
+    log("info", "command-started", URL(fileURLWithPath: executable).lastPathComponent)
     try process.run()
     let data = output.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
+    log("info", "command-result", "command=\(URL(fileURLWithPath: executable).lastPathComponent) exit_code=\(process.terminationStatus)")
     guard process.terminationStatus == 0 else {
+      if let reader = try? FileHandle(forReadingFrom: diagnostic) {
+        defer { try? reader.close() }
+        if let bytes = try? reader.read(upToCount: 8192) {
+          log("error", "command-stderr", String(decoding: bytes, as: UTF8.self))
+        }
+      }
       throw NSError(domain: "NightcordUpdater", code: Int(process.terminationStatus))
     }
     return String(decoding: data, as: UTF8.self)
   }
 
   func prepare() throws {
+    log("info", "validate-package", "package=\(request.package)")
     let package = URL(fileURLWithPath: request.package).standardizedFileURL
     guard package.deletingLastPathComponent() == root,
       files.fileExists(atPath: target.appendingPathComponent("Contents/MacOS/Nightcord Speak").path),
@@ -66,6 +101,7 @@ final class UpdateTransaction {
     guard hash.finalize().map({ String(format: "%02x", $0) }).joined() == request.sha256 else {
       throw NSError(domain: "NightcordUpdater", code: 3)
     }
+    log("info", "checksum-verified")
     let entries = try run("/usr/bin/zipinfo", ["-1", package.path])
     for entry in entries.split(separator: "\n") {
       let components = entry.split(separator: "/")
@@ -75,6 +111,7 @@ final class UpdateTransaction {
     }
     // Same-volume staging also checks permission before the client exits.
     try files.createDirectory(at: stage, withIntermediateDirectories: false)
+    log("info", "extract", "stage=\(stage.path)")
     try run("/usr/bin/ditto", ["-x", "-k", package.path, stage.path])
     let replacement = stage.appendingPathComponent("Nightcord Speak.app")
     let info = try PropertyListSerialization.propertyList(
@@ -101,6 +138,7 @@ final class UpdateTransaction {
       try run("/usr/bin/lipo", [replacement.appendingPathComponent(relative).path, "-verify_arch", architecture])
     }
     try request.nonce.write(to: root.appendingPathComponent("ready"), atomically: true, encoding: .utf8)
+    log("info", "ready", "Waiting for client commit")
   }
 
   func replace() throws {
@@ -109,27 +147,34 @@ final class UpdateTransaction {
       guard Date() < commitDeadline else { throw NSError(domain: "NightcordUpdater", code: 9) }
       Thread.sleep(forTimeInterval: 0.1)
     }
+    log("info", "committed", "Waiting for client process to exit")
     let deadline = Date().addingTimeInterval(60)
     while kill(request.parent_pid, 0) == 0 {
       guard Date() < deadline else { throw NSError(domain: "NightcordUpdater", code: 7) }
       Thread.sleep(forTimeInterval: 0.1)
     }
     parentExited = true
+    log("info", "parent-exited", "backup=\(backup.path)")
     try files.moveItem(at: target, to: backup)
     oldMoved = true
     try files.moveItem(at: stage.appendingPathComponent("Nightcord Speak.app"), to: target)
     newMoved = true
+    log("info", "installed")
   }
 
   func rollback() throws {
+    log("warn", "rollback-started", "old_moved=\(oldMoved) new_moved=\(newMoved)")
     if newMoved { try files.removeItem(at: target); newMoved = false }
     if oldMoved { try files.moveItem(at: backup, to: target); oldMoved = false }
+    log("info", "rollback-complete")
   }
 
   func finish() throws {
+    log("info", "cleanup")
     if oldMoved { try files.removeItem(at: backup); oldMoved = false }
     try cleanStage()
     try "ok".write(to: root.appendingPathComponent("complete"), atomically: true, encoding: .utf8)
+    log("info", "complete")
     if root.lastPathComponent.hasPrefix("nightcord-update-") { try files.removeItem(at: root) }
   }
 

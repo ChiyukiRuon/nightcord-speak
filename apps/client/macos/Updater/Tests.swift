@@ -25,13 +25,13 @@ struct UpdaterTests {
     let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: source.appendingPathComponent("Contents/Info.plist")), format: nil) as! [String: Any]
     let version = info["CFBundleShortVersionString"] as! String
 
-    func fixture(_ name: String, hash: String? = nil, requestedVersion: String? = nil) throws -> UpdateTransaction {
+    func fixture(_ name: String, hash: String? = nil, requestedVersion: String? = nil, unavailableLog: Bool = false) throws -> UpdateTransaction {
       let folder = root.appendingPathComponent(name)
       try files.createDirectory(at: folder, withIntermediateDirectories: false)
       let target = folder.appendingPathComponent("Nightcord Speak.app")
       try files.copyItem(at: source, to: target)
       try "original".write(to: target.appendingPathComponent("original-marker"), atomically: true, encoding: .utf8)
-      let download = folder.appendingPathComponent("download")
+      let download = folder.appendingPathComponent("nightcord-update-" + name)
       try files.createDirectory(at: download, withIntermediateDirectories: false)
       let package = download.appendingPathComponent("update.zip")
       try files.copyItem(at: archive, to: package)
@@ -39,6 +39,7 @@ struct UpdaterTests {
         "parent_pid": 999999, "target": target.path, "package": package.path,
         "sha256": hash ?? digest, "version": requestedVersion ?? version,
         "nonce": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(), "language": "en",
+        "log_file": folder.appendingPathComponent(unavailableLog ? "missing/update.log" : "update.log").path,
       ]
       let configuration = download.appendingPathComponent("update.json")
       try JSONSerialization.data(withJSONObject: request).write(to: configuration)
@@ -54,6 +55,8 @@ struct UpdaterTests {
     try rollback.rollback()
     try require(files.fileExists(atPath: rollback.target.appendingPathComponent("original-marker").path), "Launch failure rollback lost original")
     try rollback.cleanStage()
+    let rollbackLog = try String(contentsOf: URL(fileURLWithPath: rollback.request.log_file!), encoding: .utf8)
+    try require(rollbackLog.contains("stage=rollback-started") && rollbackLog.contains("stage=rollback-complete"), "Rollback diagnostics missing")
     print("Verified preparation, replacement and launch-failure rollback.")
 
     let partial = try fixture("partial")
@@ -92,6 +95,21 @@ struct UpdaterTests {
     try success.finish()
     try require(!files.fileExists(atPath: success.backup.path), "Successful update left backup")
     try require(try String(contentsOf: userFile, encoding: .utf8) == "keep", "User sounds changed")
+    try require(!files.fileExists(atPath: success.root.path), "Successful update left temporary transaction files")
+    let successLog = try String(contentsOf: URL(fileURLWithPath: success.request.log_file!), encoding: .utf8)
+    for stage in ["started", "checksum-verified", "ready", "committed", "parent-exited", "installed", "complete"] {
+      try require(successLog.contains("stage=" + stage), "Missing persistent update diagnostic: " + stage)
+    }
     print("Verified successful update cleanup and user-sound preservation.")
+
+    let diagnostics = try fixture("command-diagnostics")
+    failed = false
+    do { try diagnostics.run("/bin/sh", ["-c", "printf 'fixture diagnostic failure' >&2; exit 7"]) } catch { failed = true }
+    let commandLog = try String(contentsOf: URL(fileURLWithPath: diagnostics.request.log_file!), encoding: .utf8)
+    try require(failed && commandLog.contains("exit_code=7") && commandLog.contains("fixture diagnostic failure"), "Command error diagnostics missing")
+    let unavailable = try fixture("unavailable-log", unavailableLog: true)
+    try unavailable.prepare()
+    try unavailable.cleanStage()
+    print("Verified persistent phase logs, stderr diagnostics and unavailable log sink.")
   }
 }

@@ -53,6 +53,10 @@ The Xcode Rust build phase matches Flutter mode/architecture, copies the dylib i
 
 Windows screenshot/DPI probes must set PerMonitorV2 awareness before measuring. Logical Flutter units differ from physical pixels; a DPI-unaware capture can falsely suggest clipping.
 
+## Desktop Update Diagnostics
+
+Desktop updates use the core log (`desktop update:` prefix) and persistent `updates/update-<attempt>.log` files below `coreLogDirectory()`. Helpers keep writing after core shutdown; Windows also preserves the Inno installer log alongside the helper trace. If persistent logging is unavailable, helpers fall back to the transaction directory; failed transactions remain available for recovery. Log phases, elapsed time, HTTP status, byte counts, helper PIDs, exit codes, elevation and rollback outcomes. Never log signed CDN URLs, configuration payloads, or user secrets. Diagnostic failures must not interrupt installation or rollback. Verify persistence and unavailable sinks with the isolated Windows smoke tool and macOS updater tests.
+
 ## Release Maintenance
 
 Publishing requires explicit authorization. `release.yml` builds Windows, macOS, and Web on `v*` tags or manual dispatch with an existing version tag. Every job checks out the resolved tag revision; never package the dispatch branch under another tag's version. Ordinary Rust CI runs on PR/manual triggers. Gateway image publishing uses its own workflow/conditions.

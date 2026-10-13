@@ -44,7 +44,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateReady => '下载已校验，可以安装。';
 
   @override
-  String get updateInstall => '安装并重启';
+  String get updateInstall => '安装更新';
 
   @override
   String get updateInstalling => '正在准备更新…';
@@ -1151,7 +1151,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get updateReady => '下載已校驗，可以安裝。';
 
   @override
-  String get updateInstall => '安裝並重新啟動';
+  String get updateInstall => '安裝更新';
 
   @override
   String get updateInstalling => '正在準備更新…';

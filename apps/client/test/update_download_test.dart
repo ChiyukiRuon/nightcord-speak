@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/updates/update_download.dart';
 import 'package:nightcord_client/core/updates/update_model.dart';
+import 'package:nightcord_client/core/updates/update_log.dart';
 
 void main() {
   late Directory root;
@@ -109,6 +110,30 @@ void main() {
       }
     },
   );
+
+  test('transfer diagnostics record phases and throttle progress without logging URLs', () async {
+    final messages = <String>[];
+    final transfer = UpdateDownloader(
+      temporaryDirectory: root,
+      logger: UpdateLogger(sink: (_, message) => messages.add(message)),
+      fetch: (uri) async => UpdateResponse(
+        200,
+        uri == update.manifest
+            ? Stream.value(utf8.encode(jsonEncode(manifest())))
+            : Stream.fromIterable(content.map((byte) => [byte])),
+      ),
+    );
+    final prepared = await transfer.download(update, (_) {});
+    expect(await File(prepared.file).readAsBytes(), content);
+    expect(messages, contains(contains('manifest verified')));
+    expect(messages, contains(contains('SHA-256 verification starting')));
+    expect(messages.last, contains('download verified elapsed_ms='));
+    expect(
+      messages.where((line) => line.contains('download progress=')).length,
+      4,
+    );
+    expect(messages.any((line) => line.contains('https://')), isFalse);
+  });
 
   test('HTTP errors leave no package to install', () async {
     await expectLater(

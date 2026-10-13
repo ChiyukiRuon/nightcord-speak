@@ -9,7 +9,7 @@
   "updateProgress": "ダウンロード中：{percent}%",
   "updateCancel": "ダウンロードをキャンセル",
   "updateReady": "ダウンロードの検証が完了しました。",
-  "updateInstall": "インストールして再起動",
+  "updateInstall": "更新をインストール",
   "updateInstalling": "更新を準備中…",
   "@@locale": "ja",
 

@@ -1,4 +1,4 @@
-param([switch]$Installer)
+﻿param([switch]$Installer, [ValidateSet('None', 'Accept', 'Cancel', 'Fail')][string]$SimulateElevation = 'None')
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../../..')).Path
 $root = Join-Path $workspace ('run/windows-update-smoke-' + [Guid]::NewGuid().ToString('N'))
@@ -64,26 +64,70 @@ $marker = Join-Path $root 'exit-parent'
 $env:NIGHTCORD_UPDATE_SMOKE_WAIT = $marker
 $parent = Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WindowStyle Hidden -PassThru
 $configuration = Join-Path $root 'update.json'
+$diagnostics = Join-Path $root 'diagnostics'
+New-Item -ItemType Directory -Path $diagnostics | Out-Null
+$helperLog = Join-Path $diagnostics 'update.log'
 $settings = @{
     parent_pid = $parent.Id; target = $target; package = $package;
     sha256 = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant();
     version = '0.3.0'; nonce = [Guid]::NewGuid().ToString('N'); installer = $Installer.IsPresent; language = 'en';
+    log_file = $helperLog;
 }
 $settings | ConvertTo-Json | Set-Content -LiteralPath $configuration -Encoding utf8
 $script = Join-Path $workspace 'apps/client/assets/updates/windows.ps1'
+if ($SimulateElevation -ne 'None') {
+    # Inject a denied write and consent result into a private helper copy; no UAC UI or real ACL changes.
+    $fixtureScript = Join-Path $root 'elevation-fixture.ps1'
+    $helper = [IO.File]::ReadAllText($script)
+    $helper = $helper.Replace('New-Item -ItemType Directory -Path $backup | Out-Null',
+        "if (-not `$Elevated) { throw [UnauthorizedAccessException]::new('Simulated protected application directory') }`n    New-Item -ItemType Directory -Path `$backup | Out-Null")
+    if ($SimulateElevation -eq 'Fail') {
+        $helper = $helper.Replace("if (-not `$Elevated) { throw [UnauthorizedAccessException]::new('Simulated protected application directory') }",
+            "throw [UnauthorizedAccessException]::new('Simulated access denied even after elevation')")
+    }
+    if ($SimulateElevation -in @('Accept', 'Fail')) {
+        $helper = $helper.Replace('-Verb RunAs -WindowStyle Hidden -PassThru', '-WindowStyle Hidden -PassThru')
+    } else {
+        $helper = $helper.Replace("return Start-Process -FilePath (Join-Path `$PSHOME 'powershell.exe') -ArgumentList `$arguments -Verb RunAs -WindowStyle Hidden -PassThru",
+            "throw [ComponentModel.Win32Exception]::new(1223)")
+    }
+    [IO.File]::WriteAllText($fixtureScript, $helper, [Text.UTF8Encoding]::new($true))
+    $script = $fixtureScript
+}
 $worker = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ('"' + $script + '"'), '-Configuration', ('"' + $configuration + '"')) -WindowStyle Hidden -PassThru
 try {
+    if ($SimulateElevation -in @('Cancel', 'Fail')) {
+        if (-not $worker.WaitForExit(30000)) { throw 'Cancelled helper did not return' }
+        if ($SimulateElevation -eq 'Cancel') {
+            if ((Get-Content -LiteralPath (Join-Path $root ($settings.nonce + '-cancelled')) -Raw) -ne $settings.nonce) { throw 'Elevation cancellation was not acknowledged' }
+            if (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-error'))) { throw 'Cancellation was reported as a failure' }
+        } else {
+            if (-not (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-error'))) -or
+                (Get-Content -LiteralPath (Join-Path $root ($settings.nonce + '-updater.log')) -Raw) -notmatch 'Simulated access denied even after elevation') { throw 'Elevated preparation failure lost its diagnostics' }
+        }
+        if ($parent.HasExited -or -not (Test-Path -LiteralPath $package) -or
+            (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-ready')))) { throw 'Cancelled or failed elevation did not preserve the running client and download' }
+        if ((Get-Content -LiteralPath (Join-Path $target 'data/flutter_assets/AssetManifest.bin') -Raw) -ne 'old') { throw 'Cancellation changed installed files' }
+        Write-Output 'Cancelled or failed elevation retained the client and verified package.'
+        # Retry the same package with a fresh attempt, without another download.
+        $settings.nonce = [Guid]::NewGuid().ToString('N')
+        $settings | ConvertTo-Json | Set-Content -LiteralPath $configuration -Encoding utf8
+        $script = Join-Path $workspace 'apps/client/assets/updates/windows.ps1'
+        $worker = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ('"' + $script + '"'), '-Configuration', ('"' + $configuration + '"')) -WindowStyle Hidden -PassThru
+    }
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
-    while (-not (Test-Path -LiteralPath (Join-Path $root 'ready'))) {
-        if (Test-Path -LiteralPath (Join-Path $root 'error')) { throw (Get-Content -LiteralPath (Join-Path $root 'updater.log') -Raw) }
+    while (-not (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-ready')))) {
+        if (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-error'))) { throw (Get-Content -LiteralPath (Join-Path $root ($settings.nonce + '-updater.log')) -Raw) }
         if ([DateTime]::UtcNow -gt $deadline) { throw 'Updater did not prepare' }
         Start-Sleep -Milliseconds 100
     }
     if ((Get-Content -LiteralPath (Join-Path $target 'data/flutter_assets/AssetManifest.bin') -Raw) -ne 'old') { throw 'Update overwrote a running client' }
-    [IO.File]::WriteAllText((Join-Path $root 'commit'), $settings.nonce)
+    $requestedElevation = Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-elevating'))
+    if ($requestedElevation -ne ($SimulateElevation -eq 'Accept')) { throw 'Unexpected elevation request' }
+    [IO.File]::WriteAllText((Join-Path $root ($settings.nonce + '-commit')), $settings.nonce)
     [IO.File]::WriteAllText($marker, 'exit')
     if (-not $worker.WaitForExit(30000)) { throw 'Updater did not finish' }
-    if (-not (Test-Path -LiteralPath (Join-Path $root 'complete'))) { throw (Get-Content -LiteralPath (Join-Path $root 'updater.log') -Raw) }
+    if (-not (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-complete')))) { throw (Get-Content -LiteralPath (Join-Path $root ($settings.nonce + '-updater.log')) -Raw) }
     Start-Sleep -Milliseconds 500
     if ((Get-Content -LiteralPath (Join-Path $target 'launched') -Raw) -ne 'new') { throw 'Updated executable did not restart' }
     foreach ($name in @('nightcord_ffi.dll', 'flutter_windows.dll', 'data/flutter_assets/AssetManifest.bin')) {
@@ -92,6 +136,16 @@ try {
     if ((Get-Content -LiteralPath (Join-Path $target 'sounds/custom/config.json') -Raw) -ne 'user-sound-pack' -or
         (Get-Content -LiteralPath (Join-Path $target 'unrelated.txt') -Raw) -ne 'keep') { throw 'User files changed' }
     Write-Output 'Update, readiness handshake, restart and user-file retention passed.'
+    $trace = Get-Content -LiteralPath $helperLog -Raw -Encoding UTF8
+    foreach ($stageName in @('started', 'validated', 'ready', 'committed', 'parent-exited', 'installed', 'complete', 'cleanup')) {
+        if ($trace -notmatch ('stage=' + $stageName + ' ')) { throw ('Missing update diagnostic stage: ' + $stageName) }
+    }
+    if ($SimulateElevation -eq 'Accept' -and ($trace -notmatch 'stage=uac-accepted ' -or $trace -notmatch 'role=elevated' -or $trace -notmatch 'stage=relaunched ')) { throw 'Elevation diagnostic stages missing' }
+    if ($SimulateElevation -eq 'Cancel' -and $trace -notmatch 'stage=uac-cancelled ') { throw 'Cancellation diagnostic stage missing' }
+    if ($SimulateElevation -eq 'Fail' -and $trace -notmatch 'Simulated access denied even after elevation') { throw 'Elevation failure diagnostics missing' }
+    if ($Installer -and $trace -notmatch 'stage=installer-result exit_code=0') { throw 'Installer result diagnostic missing' }
+    if ($Installer -and -not (Test-Path -LiteralPath ($helperLog + '-installer.log'))) { throw 'Installer log was not preserved with the helper diagnostics' }
+    Write-Output 'Persistent helper diagnostics contain all transaction stages.'
 } finally {
     [IO.File]::WriteAllText($marker, 'exit')
     Remove-Item Env:NIGHTCORD_UPDATE_SMOKE_WAIT
@@ -124,3 +178,32 @@ foreach ($name in @('a.dll', 'z.dll')) {
     if ((Get-Content -LiteralPath (Join-Path $rollbackTarget $name) -Raw) -ne 'original') { throw 'Rollback did not restore original files' }
 }
 Write-Output 'Partial replacement failure rolled back successfully.'
+
+# Verify that only access-denied failures request elevation, and cancellation is distinct.
+if (-not (Test-UpdateAccessDenied ([UnauthorizedAccessException]::new())) -or
+    -not (Test-UpdateAccessDenied ([Exception]::new('wrapped', [ComponentModel.Win32Exception]::new(5)))) -or
+    (Test-UpdateAccessDenied ([IO.IOException]::new('locked file'))) -or
+    (Test-UpdateAccessDenied ([ComponentModel.Win32Exception]::new(1223)))) { throw 'Access-denied classification failed' }
+if (-not (Test-UpdateElevationCancelled ([Exception]::new('wrapped', [ComponentModel.Win32Exception]::new(1223)))) -or
+    (Test-UpdateElevationCancelled ([UnauthorizedAccessException]::new()))) { throw 'UAC cancellation classification failed' }
+[IO.File]::WriteAllText((Get-UpdateSignal $root $settings.nonce 'abort'), $settings.nonce)
+$aborted = $false
+try { Assert-UpdateNotAborted $root $settings.nonce } catch { $aborted = $true }
+if (-not $aborted) { throw 'Delayed helper ignored the client abort token' }
+Assert-UpdateNotAborted $root ([Guid]::NewGuid().ToString('N'))
+
+# Mock only ShellExecute: verify the real launch arguments without displaying UAC.
+. (Join-Path $workspace 'apps/client/assets/updates/windows.ps1') -Configuration $configuration
+function Start-Process($FilePath, $ArgumentList, $Verb, $WindowStyle, [switch]$PassThru) {
+    return [pscustomobject]@{ FilePath = $FilePath; Arguments = $ArgumentList; Verb = $Verb; WindowStyle = $WindowStyle; PassThru = $PassThru.IsPresent }
+}
+$launch = Start-ElevatedUpdateWorker 'C:\更新目录\update.ps1' 'C:\更新目录\update.json'
+if ($launch.Verb -ne 'RunAs' -or $launch.WindowStyle -ne 'Hidden' -or -not $launch.PassThru -or
+    $launch.FilePath -ne (Join-Path $PSHOME 'powershell.exe') -or
+    $launch.Arguments[-1] -ne '-Elevated' -or
+    $launch.Arguments[-4] -ne '"C:\更新目录\update.ps1"' -or
+    $launch.Arguments[-2] -ne '"C:\更新目录\update.json"') { throw 'Incorrect UAC worker launch arguments' }
+Write-Output 'Permission detection, UAC launch, cancellation and delayed-worker abort passed.'
+$script:updateTrace = Join-Path $root 'missing-log-directory/trace.log'
+Write-UpdateTrace 'info' 'sink-failure-test' 'Log failures must not interrupt an update'
+Write-Output 'An unavailable diagnostic sink did not interrupt the helper.'

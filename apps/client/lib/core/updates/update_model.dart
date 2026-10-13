@@ -60,6 +60,8 @@ class PreparedUpdate {
 
 class UpdateCancelled implements Exception {}
 
+class UpdateInstallCancelled implements Exception {}
+
 abstract class UpdateService {
   bool get available;
   Future<DesktopUpdate?> check();

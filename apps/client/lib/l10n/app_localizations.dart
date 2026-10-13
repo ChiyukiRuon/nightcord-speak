@@ -166,7 +166,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateInstall.
   ///
   /// In en, this message translates to:
-  /// **'Install and restart'**
+  /// **'Install update'**
   String get updateInstall;
 
   /// No description provided for @updateInstalling.

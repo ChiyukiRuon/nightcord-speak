@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'update_model.dart';
+import 'update_log.dart';
 
 class UpdateResponse {
   UpdateResponse(this.status, this.body);
@@ -17,7 +18,12 @@ typedef UpdateFetch = Future<UpdateResponse> Function(Uri);
 /// One downloader owns one transfer; cancellation closes the connection and
 /// removes partial files. Fetch injection keeps regression tests offline.
 class UpdateDownloader {
-  UpdateDownloader({this._fetch, this._temporaryDirectory});
+  UpdateDownloader({
+    this._fetch,
+    this._temporaryDirectory,
+    this.logger = updateLogger,
+  });
+  final UpdateLogger logger;
   final UpdateFetch? _fetch;
   final Directory? _temporaryDirectory;
   HttpClient? _client;
@@ -25,6 +31,7 @@ class UpdateDownloader {
   bool _active = false;
 
   void cancel() {
+    if (_active) logger('info', 'download cancellation requested');
     _cancelled = true;
     _client?.close(force: true);
   }
@@ -49,6 +56,10 @@ class UpdateDownloader {
       request.followRedirects = false;
       request.headers.set('User-Agent', 'Nightcord-Speak-Updater');
       final response = await request.close();
+      logger(
+        'debug',
+        'download response host=${uri.host} status=${response.statusCode} redirect=$redirects',
+      );
       if ([301, 302, 303, 307, 308].contains(response.statusCode)) {
         final location = response.headers.value(HttpHeaders.locationHeader);
         await response.drain<void>();
@@ -86,9 +97,15 @@ class UpdateDownloader {
     _cancelled = false;
     _client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     Directory? directory;
+    final timer = Stopwatch()..start();
+    logger(
+      'info',
+      'download started version=${update.version} platform=${update.platform} arch=${update.arch} installer=${update.installer} expected_bytes=${update.size}',
+    );
     try {
       return await (() async {
         final manifestResponse = await _get(update.manifest);
+        logger('info', 'manifest response status=${manifestResponse.status}');
         if (manifestResponse.status != 200) {
           throw const HttpException('Update manifest unavailable');
         }
@@ -113,11 +130,17 @@ class UpdateDownloader {
         directory = await (_temporaryDirectory ?? Directory.systemTemp)
             .createTemp('nightcord-update-');
         final file = File('${directory!.path}/${update.fileName}');
+        logger(
+          'info',
+          'manifest verified; package transfer starting directory=${directory!.path}',
+        );
         final response = await _get(update.asset);
+        logger('info', 'package response status=${response.status}');
         if (response.status != 200) {
           throw const HttpException('Update package unavailable');
         }
         var received = 0;
+        var milestone = 0;
         final sink = file.openWrite();
         try {
           await for (final chunk in response.body) {
@@ -128,6 +151,14 @@ class UpdateDownloader {
             }
             sink.add(chunk);
             await sink.flush();
+            final reached = (received * 4 ~/ update.size) * 25;
+            if (reached > milestone) {
+              milestone = reached;
+              logger(
+                'info',
+                'download progress=$milestone% bytes=$received/${update.size} elapsed_ms=${timer.elapsedMilliseconds}',
+              );
+            }
             progress(received / update.size);
           }
         } finally {
@@ -137,15 +168,31 @@ class UpdateDownloader {
         if (received != update.size) {
           throw const FormatException('Incomplete update package');
         }
+        logger(
+          'info',
+          'transfer completed bytes=$received; SHA-256 verification starting',
+        );
         final digest = (await sha256.bind(file.openRead()).first).toString();
         if (_cancelled) throw UpdateCancelled();
         if (digest != manifest['sha256']) {
+          logger(
+            'error',
+            'checksum mismatch expected=${manifest['sha256']} actual=$digest',
+          );
           throw const FormatException('Update checksum mismatch');
         }
+        logger(
+          'info',
+          'download verified elapsed_ms=${timer.elapsedMilliseconds}',
+        );
         return PreparedUpdate(update, directory!.path, file.path, digest);
       })().timeout(const Duration(minutes: 15));
-    } catch (_) {
+    } catch (error, stack) {
       final cancelled = _cancelled;
+      logger(
+        cancelled ? 'info' : 'error',
+        'download ${cancelled ? 'cancelled' : 'failed'} elapsed_ms=${timer.elapsedMilliseconds}: $error\n$stack',
+      );
       _cancelled = true;
       _client?.close(force: true);
       if (directory != null && await directory!.exists()) {

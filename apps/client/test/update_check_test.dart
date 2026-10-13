@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nightcord_client/core/updates/update_service.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
 import 'package:nightcord_client/design/tokens/app_palette.dart';
@@ -38,9 +39,13 @@ class FakeUpdates implements UpdateService {
   bool available = true;
   bool fail = false;
   bool failInstall = false;
+  bool cancelInstall = false;
   DesktopUpdate? result;
   PreparedUpdate? installed;
   Completer<PreparedUpdate>? pending;
+  Completer<void>? pendingInstall;
+  int downloads = 0;
+  int installations = 0;
   int cancellations = 0;
   @override
   Future<DesktopUpdate?> check() async {
@@ -53,6 +58,7 @@ class FakeUpdates implements UpdateService {
     DesktopUpdate update,
     void Function(double) progress,
   ) async {
+    downloads++;
     progress(0.5);
     if (pending != null) return pending!.future;
     return PreparedUpdate(update, 'temporary', 'package', 'hash');
@@ -68,7 +74,10 @@ class FakeUpdates implements UpdateService {
 
   @override
   Future<void> install(PreparedUpdate update, String language) async {
+    installations++;
+    if (cancelInstall) throw UpdateInstallCancelled();
     if (failInstall) throw Exception('helper not ready');
+    if (pendingInstall != null) await pendingInstall!.future;
     installed = update;
   }
 }
@@ -134,19 +143,25 @@ void main() {
     WidgetTester tester,
     FakeUpdates service, {
     Future<void> Function()? exit,
+    bool visible = true,
+    bool settle = true,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(AppPalette.nightcord, const Locale('en')),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('en'),
-        home: Scaffold(
-          body: UpdateCheck(service: service, exitApplication: exit),
+      ProviderScope(
+        child: MaterialApp(
+          theme: buildAppTheme(AppPalette.nightcord, const Locale('en')),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: visible
+                ? UpdateCheck(service: service, exitApplication: exit)
+                : const SizedBox.shrink(),
+          ),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (settle) await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -179,15 +194,144 @@ void main() {
       expect(find.text('Version 0.2.0 is available'), findsOneWidget);
       await tester.tap(find.text('Download update'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Download verified and ready to install.'),
-        findsOneWidget,
-      );
+      expect(find.text('Install update'), findsOneWidget);
       expect(exited, isFalse);
-      await tester.tap(find.text('Install and restart'));
+      await tester.tap(find.text('Install update'));
       await tester.pumpAndSettle();
       expect(service.installed!.update, same(service.result));
       expect(exited, isTrue);
+    },
+  );
+
+  testWidgets(
+    'verified download survives leaving settings without downloading again',
+    (tester) async {
+      final service = FakeUpdates()
+        ..result = selectDesktopUpdate(
+          [release('v0.2.0', 'windows')],
+          '0.1.0',
+          'windows',
+        );
+      await pump(tester, service);
+      await tester.tap(find.text('Check for updates'));
+      await tester.pumpAndSettle();
+      expect(find.byType(OutlinedButton), findsOneWidget);
+      expect(find.byType(TextButton), findsNothing);
+      await tester.tap(find.text('Download update'));
+      await tester.pumpAndSettle();
+      await pump(tester, service, visible: false);
+      expect(service.cancellations, 0);
+      await pump(tester, service);
+      expect(find.text('Install update'), findsOneWidget);
+      expect(find.text('Download update'), findsNothing);
+      expect(find.text('Check for updates'), findsNothing);
+      expect(
+        find.text('Download verified and ready to install.'),
+        findsNothing,
+      );
+      expect(service.downloads, 1);
+    },
+  );
+
+  testWidgets('download continues outside settings and restores progress', (
+    tester,
+  ) async {
+    final service = FakeUpdates()
+      ..result = selectDesktopUpdate(
+        [release('v0.2.0', 'windows')],
+        '0.1.0',
+        'windows',
+      )
+      ..pending = Completer<PreparedUpdate>();
+    await pump(tester, service);
+    await tester.tap(find.text('Check for updates'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Download update'));
+    await tester.pump();
+    await pump(tester, service, visible: false);
+    expect(service.cancellations, 0);
+    await pump(tester, service, settle: false);
+    expect(find.text('Downloading: 50%'), findsOneWidget);
+    expect(find.text('Checking for updates…'), findsNothing);
+    service.pending!.complete(
+      PreparedUpdate(service.result!, 'temporary', 'package', 'hash'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Install update'), findsOneWidget);
+    expect(service.downloads, 1);
+  });
+
+  testWidgets(
+    'installation displays preparation and exits after settings closes',
+    (tester) async {
+      final service = FakeUpdates()
+        ..result = selectDesktopUpdate(
+          [release('v0.2.0', 'windows')],
+          '0.1.0',
+          'windows',
+        )
+        ..pendingInstall = Completer<void>();
+      var exited = false;
+      Future<void> exit() async {
+        exited = true;
+      }
+
+      await pump(tester, service, exit: exit);
+      await tester.tap(find.text('Check for updates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download update'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Install update'));
+      await tester.pump();
+      expect(find.text('Preparing update…'), findsOneWidget);
+      expect(
+        tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        isNull,
+      );
+      expect(exited, isFalse);
+      await tester.tap(find.text('Preparing update…'));
+      expect(service.installations, 1);
+      await pump(tester, service, visible: false);
+      expect(service.cancellations, 0);
+      service.pendingInstall!.complete();
+      await tester.pumpAndSettle();
+      expect(exited, isTrue);
+    },
+  );
+
+  testWidgets(
+    'cancelled UAC keeps the install button and allows retry without downloading',
+    (tester) async {
+      final service = FakeUpdates()
+        ..result = selectDesktopUpdate(
+          [release('v0.2.0', 'windows')],
+          '0.1.0',
+          'windows',
+        )
+        ..cancelInstall = true;
+      var exited = false;
+      await pump(
+        tester,
+        service,
+        exit: () async {
+          exited = true;
+        },
+      );
+      await tester.tap(find.text('Check for updates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download update'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Install update'));
+      await tester.pumpAndSettle();
+      expect(exited, isFalse);
+      expect(find.textContaining('Update failed.'), findsNothing);
+      expect(find.text('Install update'), findsOneWidget);
+      service.cancelInstall = false;
+      await tester.tap(find.text('Install update'));
+      await tester.pumpAndSettle();
+      expect(exited, isTrue);
+      expect(service.downloads, 1);
+      expect(service.installations, 2);
     },
   );
 
@@ -220,13 +364,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Download update'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Install and restart'));
+    await tester.tap(find.text('Install update'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Update failed.'), findsOneWidget);
     expect(exited, isFalse);
     expect(service.installed, isNull);
     service.failInstall = false;
-    await tester.tap(find.text('Install and restart'));
+    await tester.tap(find.text('Install update'));
     await tester.pumpAndSettle();
     expect(exited, isTrue);
   });
@@ -277,7 +421,7 @@ void main() {
       await tester.tap(find.text('Cancel download'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Update failed.'), findsNothing);
-      expect(find.text('Install and restart'), findsNothing);
+      expect(find.text('Install update'), findsNothing);
       expect(service.cancellations, 1);
     },
   );

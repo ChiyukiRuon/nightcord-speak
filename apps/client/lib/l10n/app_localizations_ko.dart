@@ -46,7 +46,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get updateReady => '다운로드 검증이 완료되어 설치할 수 있습니다.';
 
   @override
-  String get updateInstall => '설치 및 재시작';
+  String get updateInstall => '업데이트 설치';
 
   @override
   String get updateInstalling => '업데이트 준비 중…';

@@ -9,7 +9,7 @@
   "updateProgress": "正在下载：{percent}%",
   "updateCancel": "取消下载",
   "updateReady": "下载已校验，可以安装。",
-  "updateInstall": "安装并重启",
+  "updateInstall": "安装更新",
   "updateInstalling": "正在准备更新…",
   "@@locale": "zh",
 

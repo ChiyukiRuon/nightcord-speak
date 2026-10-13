@@ -8,8 +8,11 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/app_info.dart';
+import '../platform/services.dart';
 import 'update_model.dart';
 import 'update_download.dart';
+import 'update_helper.dart';
+import 'update_log.dart';
 
 UpdateService createUpdateService() => NativeUpdateService();
 
@@ -25,7 +28,10 @@ class NativeUpdateService implements UpdateService {
   @override
   Future<DesktopUpdate?> check() async {
     if (!available) return null;
-    await _discard();
+    updateLogger(
+      'info',
+      'release check current=$appVersion platform=${Platform.operatingSystem} arch=$_arch',
+    );
     _installer = false;
     if (Platform.isWindows &&
         await File(
@@ -38,6 +44,10 @@ class NativeUpdateService implements UpdateService {
         'InstallLocation',
         '/reg:64',
       ]);
+      updateLogger(
+        'debug',
+        'installer registry query exit_code=${registry.exitCode}',
+      );
       final match = RegExp(r'InstallLocation\s+REG_SZ\s+(.+)')
           .firstMatch(registry.stdout.toString());
       if (match != null) {
@@ -54,6 +64,10 @@ class NativeUpdateService implements UpdateService {
     }
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
+    updateLogger(
+      'info',
+      'installation mode=${_installer ? 'installer' : 'portable'}',
+    );
     try {
       return await (() async {
         final releases = <dynamic>[];
@@ -70,6 +84,10 @@ class NativeUpdateService implements UpdateService {
           request.headers.set('User-Agent', 'Nightcord-Speak/$appVersion');
           request.headers.set('X-GitHub-Api-Version', '2022-11-28');
           final response = await request.close();
+          updateLogger(
+            'info',
+            'release response page=$page status=${response.statusCode}',
+          );
           if (response.statusCode != 200) {
             throw HttpException('Release HTTP ${response.statusCode}');
           }
@@ -83,13 +101,18 @@ class NativeUpdateService implements UpdateService {
           final items = jsonDecode(body.toString()) as List<dynamic>;
           releases.addAll(items);
           if (items.length < 100) {
-            return selectDesktopUpdate(
+            final selected = selectDesktopUpdate(
               releases,
               appVersion,
               Platform.isWindows ? 'windows' : 'macos',
               arch: _arch,
               installer: _installer,
             );
+            updateLogger(
+              'info',
+              'release check completed releases=${releases.length} selected=${selected?.version ?? 'none'}',
+            );
+            return selected;
           }
         }
         throw const HttpException('Release history exceeds pagination limit');
@@ -113,19 +136,35 @@ class NativeUpdateService implements UpdateService {
     _prepared = null;
     if (prepared != null && !_handedOff) {
       final directory = Directory(prepared.directory);
-      if (await directory.exists()) await directory.delete(recursive: true);
+      if (await directory.exists()) {
+        updateLogger(
+          'info',
+          'discarding uncommitted package directory=${directory.path}',
+        );
+        await directory.delete(recursive: true);
+      }
     }
   }
 
   @override
   void cancelDownload() {
     _downloader.cancel();
-    if (!_handedOff) unawaited(_discard().catchError((Object _) {}));
+    if (!_handedOff) {
+      unawaited(
+        _discard().catchError((Object error) {
+          updateLogger('warn', 'package cleanup failed: $error');
+        }),
+      );
+    }
   }
 
   @override
   Future<void> install(PreparedUpdate prepared, String language) async {
     if (_handedOff) throw StateError('Update already handed to helper');
+    updateLogger(
+      'info',
+      'install package revalidation version=${prepared.update.version} installer=${prepared.update.installer} file=${prepared.file}',
+    );
     final directory = Directory(prepared.directory);
     final file = File(prepared.file);
     if (!await file.exists() ||
@@ -144,9 +183,38 @@ class NativeUpdateService implements UpdateService {
       16,
       (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
     ).join();
-    final configuration = File('${directory.path}/update.json');
-    for (final name in ['ready', 'error', 'commit']) {
-      final stale = File('${directory.path}/$name');
+    final markerPrefix = Platform.isWindows ? '$nonce-' : '';
+    var helperLog = '${directory.path}/${markerPrefix}updater-trace.log';
+    try {
+      final logRoot = coreLogDirectory();
+      if (logRoot != null) {
+        final updates = await Directory('$logRoot/updates')
+            .create(recursive: true);
+        final logFile = File('${updates.path}/update-$nonce.log');
+        await logFile.writeAsString('', flush: true);
+        helperLog = logFile.path;
+      }
+    } catch (error) {
+      updateLogger(
+        'warn',
+        'persistent helper log unavailable; using temporary log: $error',
+      );
+    }
+    updateLogger(
+      'info',
+      'install attempt=$nonce version=${prepared.update.version} target=$target helper_log=$helperLog',
+    );
+    final configuration = File('${directory.path}/${markerPrefix}update.json');
+    for (final name in [
+      'ready',
+      'error',
+      'commit',
+      'cancelled',
+      'elevating',
+      'abort',
+      'complete',
+    ]) {
+      final stale = File('${directory.path}/$markerPrefix$name');
       if (await stale.exists()) await stale.delete();
     }
     await configuration.writeAsString(
@@ -159,6 +227,7 @@ class NativeUpdateService implements UpdateService {
         'installer': prepared.update.installer,
         'nonce': nonce,
         'language': language,
+        'log_file': helperLog,
       }),
       flush: true,
     );
@@ -169,7 +238,7 @@ class NativeUpdateService implements UpdateService {
         '\uFEFF${await rootBundle.loadString('assets/updates/windows.ps1')}',
         flush: true,
       );
-      await Process.start('powershell.exe', [
+      final helper = await Process.start('powershell.exe', [
         '-NoProfile',
         '-NonInteractive',
         '-ExecutionPolicy',
@@ -181,6 +250,10 @@ class NativeUpdateService implements UpdateService {
         '-Configuration',
         configuration.path,
       ], mode: ProcessStartMode.detached);
+      updateLogger(
+        'info',
+        'Windows helper launched attempt=$nonce helper_pid=${helper.pid}',
+      );
     } else {
       final helper = '$target/Contents/Helpers/NightcordUpdater.app';
       if (!await Directory(helper).exists()) {
@@ -193,28 +266,21 @@ class NativeUpdateService implements UpdateService {
         '--args',
         configuration.path,
       ]);
+      updateLogger(
+        'info',
+        'macOS helper launch attempt=$nonce exit_code=${opened.exitCode}',
+      );
       if (opened.exitCode != 0) {
         throw const ProcessException('open', [], 'Cannot start update helper');
       }
     }
-    final ready = File('${directory.path}/ready');
-    for (var attempt = 0; attempt < 600; attempt++) {
-      final error = File('${directory.path}/error');
-      if (await error.exists()) {
-        throw const FileSystemException('Update helper preparation failed');
-      }
-      if (await ready.exists() && await ready.readAsString() == nonce) {
-        await File('${directory.path}/commit')
-            .writeAsString(nonce, flush: true);
-        _handedOff = true;
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
-    // No ready acknowledgement means the client stays open and the helper
-    // never gets permission to overwrite a running application.
-    throw const FileSystemException(
-      'Update helper did not acknowledge readiness',
+    await waitForUpdateHelper(directory, nonce, markerPrefix: markerPrefix);
+    await File('${directory.path}/${markerPrefix}commit')
+        .writeAsString(nonce, flush: true);
+    _handedOff = true;
+    updateLogger(
+      'info',
+      'helper commit written attempt=$nonce; helper owns installation',
     );
   }
 }

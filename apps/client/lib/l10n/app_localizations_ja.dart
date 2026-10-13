@@ -45,7 +45,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get updateReady => 'ダウンロードの検証が完了しました。';
 
   @override
-  String get updateInstall => 'インストールして再起動';
+  String get updateInstall => '更新をインストール';
 
   @override
   String get updateInstalling => '更新を準備中…';

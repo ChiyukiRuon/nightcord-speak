@@ -46,7 +46,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateReady => 'Download verified and ready to install.';
 
   @override
-  String get updateInstall => 'Install and restart';
+  String get updateInstall => 'Install update';
 
   @override
   String get updateInstalling => 'Preparing update…';

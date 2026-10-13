@@ -25,19 +25,28 @@ struct NightcordUpdater {
       }
       try update.prepare()
       try update.replace()
+      update.log("info", "relaunch-started")
       try await launch(target)
+      update.log("info", "relaunched")
       // Cleanup failure must not roll back a successfully relaunched update.
-      try? update.finish()
+      do { try update.finish() } catch { update.log("warn", "cleanup-failed", String(describing: error)) }
     } catch {
       var recovered = true
       if let update = transaction {
-        do { try update.rollback() } catch { recovered = false }
+        update.log("error", "failed", String(describing: error))
+        do { try update.rollback() } catch {
+          recovered = false
+          update.log("error", "rollback-failed", String(describing: error))
+        }
         try? update.cleanStage()
       }
       try? "Update failed".write(to: root.appendingPathComponent("error"), atomically: true, encoding: .utf8)
       try? String(describing: error).write(to: root.appendingPathComponent("updater.log"), atomically: true, encoding: .utf8)
       if let update = transaction, update.parentExited {
-        if recovered { try? await launch(update.target) }
+        if recovered {
+          update.log("info", "relaunch-recovery")
+          do { try await launch(update.target) } catch { update.log("error", "recovery-launch-failed", String(describing: error)) }
+        }
         let alert = NSAlert()
         alert.messageText = "Nightcord Speak"
         let language = update.request.language

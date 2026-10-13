@@ -11,7 +11,7 @@
   "@updateProgress": {"placeholders": {"percent": {"type": "int"}}},
   "updateCancel": "Cancel download",
   "updateReady": "Download verified and ready to install.",
-  "updateInstall": "Install and restart",
+  "updateInstall": "Install update",
   "updateInstalling": "Preparing update…",
   "@@locale": "en",
 
