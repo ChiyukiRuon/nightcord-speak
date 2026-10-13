@@ -347,7 +347,7 @@ cd apps/client && flutter analyze && flutter test                  # 293 个
 `.github/workflows/release.yml` **仅在推送 `v*` tag 时运行**，普通分支推送不会打包或发布。
 原有 `ci.yml` 保留 PR 与手动运行入口，不增加分支推送触发。
 
-**版本规则**：所有平台共用产品版本，当前开发基线为 `0.3.0`。
+**版本规则**：所有平台共用产品版本，当前开发基线为 `0.4.0`。
 发布时以 tag 为产品版本来源；`scripts/desktop-release.py prepare` 在 CI 工作目录中同步
 `pubspec.yaml` 与“关于”页面的 `appVersion`，不自动提交修改。
 Rust 内部 crate 的版本仍由 workspace 管理，不随每次应用发布改写。
@@ -450,6 +450,20 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 ---
 
 ## 5. 当前进度
+
+**0.4.0 发布准备（2026-10-13）**：用户授权提交并推送全部改动，以 `v0.4.0` 发布，
+并明确将随后新增的网页图标改动一并纳入。包含网页身份档自选及旧身份迁移、Docker
+Compose 部署、GHCR 多架构镜像 workflow、根目录部署指南与变量说明，以及网页
+标签页／主屏图标。此前已提交的语音检测关闭、网页媒体与设置交互修复也随 main
+一并推送。产品版本与关于页同步为 `0.4.0+1`，Rust 内部 crate 版本保持原约定；
+桌面发布范围为 Windows x64、macOS arm64／x64，构建编号由 workflow 覆盖。
+提交前 Rust 格式、全工作区 Clippy、473 项 Rust 测试、Flutter analyze、490 项
+Flutter 测试、16 项发布脚本测试通过；Debug FFI、JavaScript Release 网页及最新
+Linux amd64 网关镜像真实构建成功，Compose 集成与浏览器预览冒烟通过。
+两笔发布 workflow 的 actionlint、Compose 配置和辅助脚本语法通过，新增 PNG 与
+共享图标生成器及 Web 构建产物一致。远端预检未发现 `v0.4.0` 标签，main 为正常
+快进；WebRTC 子模块只有下载缓存，源码／引用不变，不纳入提交。arm64 镜像与
+桌面完整产物由远端 workflow 构建，本地不声明这些平台的发布构建已通过。
 
 **网页标签页图标（2026-10-13）**：用户反馈浏览器标签页没有图标。两处都缺：`web/index.html`
 是手写的（不是 Flutter 模板），从来没有 `<link rel="icon">`；`web/` 里也没有 favicon 文件，
