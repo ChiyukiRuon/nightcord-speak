@@ -1,0 +1,32 @@
+name: nightcord-gateway
+
+services:
+  gateway:
+    image: ${NIGHTCORD_GATEWAY_IMAGE:-ghcr.io/chiyukiruon/nightcord-speak-gateway:main}
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${NIGHTCORD_GATEWAY_HOST:-127.0.0.1}:${NIGHTCORD_GATEWAY_PORT:-8787}:8787"
+    environment:
+      NIGHTCORD_GATEWAY_TOKEN: ${NIGHTCORD_GATEWAY_TOKEN:-}
+      NIGHTCORD_GATEWAY_ORIGINS: ${NIGHTCORD_GATEWAY_ORIGINS:-}
+      NIGHTCORD_GATEWAY_PROFILE: ${NIGHTCORD_GATEWAY_PROFILE:-web}
+      RUST_LOG: ${NIGHTCORD_GATEWAY_LOG:-info}
+      TZ: ${NIGHTCORD_GATEWAY_TZ:-Asia/Hong_Kong}
+    volumes:
+      - gateway-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+volumes:
+  gateway-data:

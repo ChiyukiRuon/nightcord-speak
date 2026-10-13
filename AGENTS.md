@@ -476,6 +476,43 @@ TS 客户端，浏览器只说 ts-wire，这一半不随本次修订改变。
 `the stored identity moved to the profile the page named profile="default" previous="web"`。
 用户自己的设备目录会在下次连接时走同一条路。未提交或推送。
 
+**部署环境变量说明（2026-10-13）**：`DEPLOY.md` 补齐 `.env.example` 的八个变量，
+逐项说明默认值、用途与示例，补充来源空值与匹配规则、宿主机端口和容器端口、
+身份档切换、日志过滤、时区及配置修改后的生效步骤。说明 shell 环境变量优先于
+`.env`，并区分网关运行时配置与网页构建时的地址／Token 配置。未提交或推送。
+
+**根目录网页部署指南（2026-10-13）**：按用户要求新增 `DEPLOY.md`，以 Pages 静态
+网页、Docker Compose 网关及宿主机 Nginx WSS 为主流程，补齐自托管网页构建、
+字体准备、域名与证书、环境变量、镜像更新、数据保留及排查步骤。核对现有脚本和
+参数，并查阅 Cloudflare Pages／Nginx／Certbot 官方说明。README 增加入口，同步
+修订 Web 客户端文档中的旧 Token 指引：预设地址构建不会显示填写页，受保护网关
+必须在构建时配置相同 Token；需要手动输入时使用未预设地址的构建。文档本地链接、
+空白检查与两段 Nginx 示例的容器内 `nginx -t` 验证通过；未部署外部服务。
+未提交或推送。
+
+**网关 Docker Compose 与镜像工作流（2026-10-13）**：新增网关多阶段 Dockerfile、
+环境驱动启动脚本、根目录 `docker-compose.yaml` 与 `.env.example`，固定 Rust 工具链并包含递归
+协议子模块源码和开源声明。运行镜像使用 Debian bookworm、10001:10001 非 root
+用户、只读根目录及 `/data` 具名持久化卷，复用现有 SIGINT 退出流程；提供 HTTP
+健康检查、Token、多个网页 Origin、身份档、日志和时区配置。不挂载声卡，Flutter
+产品网页仍独立托管。构建上下文采用允许列表，排除 Git 数据、环境文件、身份、
+运行产物与 Flutter／WebRTC 缓存；协议库的 `build/` 是源码，必须保留。
+
+新增 `gateway-image.yml`，用户明确授权该镜像工作流在 main 相关改动、版本标签、
+PR 与手动运行时触发，原 CI／桌面发布规则保持不变。使用原生 amd64／arm64 runner
+分别编译并验证 Compose；只有两端成功才发布多架构 manifest 至
+`ghcr.io/<仓库小写名>-gateway`。main、完整版本、完整提交 SHA 分别有标签，无预览
+后缀的版本更新 latest；alpha／beta／rc 不更新 latest。PR 与手动选择的普通分支只
+验证，不登录或发布；发布使用默认 GITHUB_TOKEN 和 packages: write，无新增 PAT。
+
+验证：Dockerfile 构建检查、Compose 配置校验、actionlint、Python／Shell 语法通过。
+Linux amd64 Release 镜像本机真实构建成功，约 108 MB；Compose 集成冒烟验证健康、
+非 root、只读根目录、多个来源与 Token 鉴权、设置落盘、正常退出及重建容器后设备
+凭据／设置恢复通过，测试项目及卷已清理。arm64 已配置原生 CI，但本机未执行该
+架构构建，GitHub 工作流尚未在远端运行，镜像未发布。首次本机下载受 DNS／网络
+影响，用户提供并授权使用 7890 代理；代理仅用于本次构建，未写入部署配置或运行
+镜像。README 与网关部署说明同步更新。未提交或推送。
+
 **本轮源码提交（2026-10-13）**：用户授权提交全部当前源码，按语音检测功能与网页／
 设置交互两组提交，包含同日已有的浏览器音效、屏幕采集与右键菜单修复，以及本轮
 关于页、通知文字边距、设备信息优先设置入口与预设网关入口修复。提交前 Git Bash
@@ -1426,9 +1463,9 @@ analyze 与全部 367 条测试通过；Windows Release、macOS Debug 构建及�
 
 |      | 数量                           |
 |------|--------------------------------|
-| Rust | **27,837 行**，16 crates + CLI + gateway（不含 vendor） |
-| Dart | **27,612 行**，`apps/client/lib/` 下 119 文件（含 l10n 生成文件，不含测试） |
-| 测试 | **441 Rust + 398 Dart + 5 启动脚本测试**；上一轮 macOS 机器上仅运行相关 Flutter 测试与原生探针，未重跑 Rust 全量测试 |
+| Rust | **29,251 行**，16 crates + CLI + gateway（不含 vendor） |
+| Dart | **31,575 行**，`apps/client/lib/` 下 145 文件（含 l10n 生成文件，不含测试） |
+| 测试 | **473 Rust + 490 Dart + 16 发布脚本测试**；三个数字都是 2026-10-13 按本节命令实跑的（Rust 那次跳过了 `nightcord-gateway` 应用自身的 1 项——预览网关占着 exe，停掉后单独跑过，计入 473） |
 
 > macOS 少的那一个是 `a_simulated_exception_writes_a_note`——SEH 是 Windows 专有的
 > 异常机制，那条测试本来就带平台门控。**不是回归**，数的时候别把它当成丢了一个。

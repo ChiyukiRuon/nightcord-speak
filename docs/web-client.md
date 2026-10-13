@@ -59,7 +59,7 @@ WSS 网关和受手机信任的证书，随后点击启用语音并允许麦克�
 
 ```powershell
 $env:NIGHTCORD_GATEWAY_URL = 'wss://gateway.example.com/ws'
-# 可选；与服务端相同。不设置时，受保护网关会要求手动输入。
+# 可选；预设地址且网关开启鉴权时，必须与服务端相同。
 # $env:NIGHTCORD_GATEWAY_TOKEN = '<your-token>'
 python scripts/build-web.py
 ```
@@ -68,14 +68,22 @@ python scripts/build-web.py
 `build-web.py` 使用临时 JSON 传给 Flutter，避免 Token 进入构建命令行，并自动清理。
 直接 `flutter run/build` 不读取这些 shell 环境变量，需要显式 Dart define；推荐用脚本。
 
+标签页图标是 `web/favicon.png`，iOS 主屏图标是 `web/icons/Icon-192.png`，都由
+`scripts/make-app-icon.py` 与桌面图标一起生成（改动标志图案时一并重跑）。
+页面没有 `manifest.json`：Android 的「添加到主屏幕」因此只是一个普通快捷方式，
+不进入独立窗口；要改这一点需要新增该文件与对应的 192/512 图标。
+
 预置地址后页面自动连接。未预置地址时可手动填写，或使用 `?gw=wss://host/ws`。
-预置了 Token 时查询参数不能覆盖目标网关。**静态产物里的 Token 对访问者可见**，
-Cloudflare 的 Secret 标记不会使浏览器代码保密；公开站点可只配置服务端 Token，
-由用户手动输入。手动输入的 Token 不写浏览器存储或 URL。
+预置了地址时查询参数不能覆盖目标网关，连接失败也不会出现地址／Token 填写页。
+预置地址且网关开启鉴权时必须预置相同 Token。**静态产物里的 Token 对访问者可见**，
+Cloudflare 的 Secret 标记不会使浏览器代码保密；需要用户手动输入 Token 时，
+应使用未预置网关地址的构建。手动输入的 Token 不写浏览器存储或 URL。
 
 每个浏览器设备自动生成独立恢复凭据，不需要手动填写。
 同设备刷新、重开页面复用身份；同设备标签页共享状态。
 清除网站数据、无痕模式或换浏览器/站点/网关地址会产生新身份。
+用哪一份身份由「设置 → 连接 → 身份配置」决定（默认 `default`），与桌面端同一处设置；
+换档名等于换一个客户端，服务器上的权限需要重新分配。
 身份私钥保存在网关，详见 [网关设备边界](gateway.md)。
 
 ## 服务器书签

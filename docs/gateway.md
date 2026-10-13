@@ -135,7 +135,7 @@ cargo run -p nightcord-gateway -- --allow-origin https://example.pages.dev
 | `--bind <ADDR>` | 两个 loopback 地址，端口 8787 | 可重复 |
 | `--token <TOKEN>` | 无 | 推荐通过 `NIGHTCORD_GATEWAY_TOKEN` 设置，避免命令行暴露 |
 | `--allow-origin <ORIGIN>` | 本机页面 | 可重复，替换默认列表 |
-| `--profile <NAME>` | `web` | 各设备独立存储内的身份档名 |
+| `--profile <NAME>` | `web` | 连接请求未指定档名时的默认身份档名；网页在设置里自选，网关不再强制 |
 | `--data-dir <DIR>` | 应用数据目录 | 设备数据保存在其 devices 子目录 |
 | `--web-root <DIR>` | 内嵌诊断页 | 只覆盖诊断页，不提供 Flutter 静态托管 |
 
@@ -144,4 +144,125 @@ cargo run -p nightcord-gateway -- --allow-origin https://example.pages.dev
 Cloudflare Pages 上传 Flutter 的 `apps/client/build/web/`，两者不是同一份页面。
 
 产品使用、Pages 配置与临时 HTTPS 见 [Web 客户端使用与部署](web-client.md)。
+
+## Docker Compose 部署
+
+部署文件为仓库根目录的 `docker-compose.yaml`，`docker compose` 会自动读取。
+
+镜像运行 Rust 网关，提供 `/ws` 与内嵌诊断页；Flutter 产品网页继续独立构建和托管。
+镜像支持 Linux `amd64`、`arm64`。Docker 容器不需要访问宿主机声卡，浏览器负责
+采集和播放音频；无需挂载 `/dev/snd` 或开启特权模式。
+
+### 从源码构建
+
+先确认已递归初始化 `vendor/tsclientlib` 及其 declarations 子模块，再在仓库根目录执行：
+
+```bash
+git submodule update --init --recursive vendor/tsclientlib
+cp .env.example .env
+docker compose up -d --build --pull never
+docker compose ps
+```
+
+第一次编译会下载 Rust 基础镜像和依赖；编译器版本与 `rust-toolchain.toml` 当前的
+`1.98.0` 一致。镜像不需要 Flutter SDK 或 UI 字体。Dockerfile 的 `RUST_VERSION`
+默认值随工具链升级一起更新；CI 自动从工具链文件读取版本并传入构建。
+
+启动后，诊断页为 `http://localhost:8787/`，WebSocket 为 `ws://localhost:8787/ws`。
+`docker compose ps` 显示 `healthy` 代表网关 HTTP 入口可用，不表示已连接 TS 服务器。
+
+### 使用自动构建镜像
+
+GitHub workflow 首次发布镜像后执行：
+
+```bash
+docker compose pull
+docker compose up -d --no-build
+```
+
+默认镜像为 `ghcr.io/chiyukiruon/nightcord-speak-gateway:main`。GHCR 包首次发布后，
+如果需要免登录拉取，在 GitHub 的包设置中将可见性设为 Public；私有包需先
+`docker login ghcr.io`。本地源码构建不依赖 GHCR 包已发布。
+
+| 标签 | 来源 |
+| --- | --- |
+| `main` | 主分支最新通过容器验证的版本 |
+| `0.3.0` 等完整版本 | 对应的 `v0.3.0` Git 标签 |
+| `0.3.1-beta.1` 等预览版本 | 对应的 alpha／beta／rc 标签，不更新 `latest` |
+| `latest` | 最近一次发布的无 alpha／beta／rc 后缀版本 |
+| `sha-<完整提交哈希>` | 对应源码提交，适合固定部署版本 |
+
+生产部署可将 `.env` 的 `NIGHTCORD_GATEWAY_IMAGE` 改成完整版本标签或镜像 digest。
+主分支推送仅在网关、Rust 依赖、容器配置或 workflow 变动时触发；版本标签与手动运行
+也会构建。PR 只构建和验证，不登录 GHCR、不发布。手动运行仅在 `main` 或版本标签上
+发布，其他分支用于构建验证。
+
+两种架构在各自原生 runner 上编译并执行 Compose 冒烟验证；成功后上传架构 digest，
+两端全部通过才生成带上述标签的多架构 manifest。使用仓库默认 `GITHUB_TOKEN`，
+无需新增 PAT；工作流发布 job 需要 `packages: write`。已有桌面发布和普通 CI 的
+触发规则保持不变。
+
+### 环境配置
+
+Compose 自动读取根目录 `.env`；该文件被 Git 和 Docker 构建上下文排除。不要把
+实际 Token 写到 `.env.example` 或构建参数中。Token 只在容器运行时注入。
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `NIGHTCORD_GATEWAY_IMAGE` | 上述 `:main` 镜像 | 选择镜像版本 |
+| `NIGHTCORD_GATEWAY_HOST` | `127.0.0.1` | 宿主机端口绑定地址；局域网访问可设为 `0.0.0.0` |
+| `NIGHTCORD_GATEWAY_PORT` | `8787` | 宿主机端口；容器内固定使用 8787 |
+| `NIGHTCORD_GATEWAY_ORIGINS` | 空 | 逗号分隔的网页 Origin，不加空格；空值沿用本机来源策略 |
+| `NIGHTCORD_GATEWAY_TOKEN` | 空 | 非空时启用 Token 鉴权 |
+| `NIGHTCORD_GATEWAY_PROFILE` | `web` | 未指定档名的连接使用的默认身份档名 |
+| `NIGHTCORD_GATEWAY_LOG` | `info` | Rust 日志过滤条件 |
+| `NIGHTCORD_GATEWAY_TZ` | `Asia/Hong_Kong` | 日志日期与轮转时区 |
+
+例如，网页部署在 `https://speak.example.com` 时，将允许来源设为该 Origin；
+多站点可设为 `https://speak.example.com,https://preview.example.com`。
+网页构建环境的 `NIGHTCORD_GATEWAY_URL` 使用浏览器实际可访问的 WSS 地址，
+不能使用 Compose 内的服务名 `gateway`；若启用了 Token，网页构建也需传入相同 Token。
+配置了地址的网页在连接失败时只显示状态与重试按钮，不显示地址填写页。
+
+HTTPS 页面需要 WSS。可在宿主机反向代理或隧道中终止 TLS，并将 WebSocket 流量
+转发至 `127.0.0.1:8787/ws`；代理需要保留 `Origin` 并支持 WebSocket Upgrade。
+反向代理若运行于其他容器，需连接同一个 Compose 网络并转发到 `gateway:8787`。
+调整 `.env` 后重新执行 `docker compose up -d --no-build`，让 Compose 重建服务应用配置。
+
+### 数据、更新与停止
+
+具名卷 `gateway-data` 挂载在 `/data`，默认完整名称为
+`nightcord-gateway_gateway-data`。设备数据位于 `/data/devices/`，日志位于
+`/data/config/nightcord-speak/logs/`。该卷在容器重建后保留设备恢复密钥、TS 身份和设置。
+更新和普通停止不会删除它：
+
+```bash
+docker compose pull
+docker compose up -d --no-build
+docker compose logs --tail 100 -f gateway
+docker compose down
+```
+
+`docker compose down --volumes` 会删除身份和设置，只有确定不再需要数据时才使用。
+备份前先停止服务，再备份具名卷；恢复到其他主机时保留文件所有者 UID/GID 10001。
+推荐具名卷；改成宿主机目录挂载时，该目录也必须允许 10001:10001 写入。
+
+容器以非 root 用户运行，根文件系统只读，临时文件写入 `/tmp`。
+Docker 通过 SIGINT 请求网关关闭，最长等待 30 秒，复用既有设备 worker 的退出流程。
+镜像也可直接运行 `docker run --rm <镜像> --version`；显式 CLI 参数会替换环境默认
+启动参数，此时需自行提供 `--bind` 和 `--data-dir`。
+
+### 容器验证
+
+本地构建后可运行与 CI 相同的测试，无需真实 TS 服务器：
+
+```bash
+docker build -f apps/gateway/Dockerfile -t nightcord-gateway:local .
+python scripts/gateway-docker-smoke.py --image nightcord-gateway:local
+```
+
+测试创建独立的随机 Compose 项目和卷，验证健康检查、非 root／只读根目录、网页来源
+与 Token 鉴权、设备恢复凭据、设置落盘和正常停止后重启恢复，结束时删除该测试项目。
+不会启动真实服务器连接，也不会修改正常部署的数据卷。
+
 开发进度、实测结果与待办统一记录于 [AGENTS.md](../AGENTS.md)。

@@ -24,6 +24,9 @@ macOS 应用应放在当前用户可写的本地目录中。普通版本只提�
 
 ## Web 使用
 
+正式网页部署步骤见 [DEPLOY.md](DEPLOY.md)，包含 Docker Compose 网关、HTTPS／WSS
+与 Cloudflare Pages／自托管网页。
+
 在仓库根目录启动网关（默认免 Token，仅监听本机）：
 
 ```bash
@@ -42,6 +45,20 @@ flutter run -d web-server --release --web-hostname 0.0.0.0 --web-port 5173
 
 手机语音需要 **HTTPS 页面 + WSS 网关**；局域网 HTTP 仅适合验证页面与连接。
 Cloudflare Pages、临时 HTTPS 隧道及可选 Token 的配置见上述文档。
+
+### Docker Compose 网关
+
+网关可通过根目录的 `docker-compose.yaml` 独立部署到 Docker，设备身份和设置保存在持久化卷中：
+
+```bash
+cp .env.example .env
+docker compose up -d --build --pull never
+```
+
+默认仅暴露 `127.0.0.1:8787`。按需编辑 `.env` 中的 Token、允许的网页来源和端口。
+镜像首次发布后也可执行 `docker compose pull && docker compose up -d --no-build`，
+使用 `ghcr.io/chiyukiruon/nightcord-speak-gateway:main`，支持 Linux amd64 与 arm64。
+完整配置、更新与数据备份见 [网关部署](docs/gateway.md#docker-compose-部署)。
 
 ---
 
