@@ -224,7 +224,19 @@ docker compose up -d --no-build
 
 生产与预览环境分别配置构建变量。使用预览站点时，网关也需允许该预览域名。
 
-### 方式 B：自行托管静态网页
+### 方式 B：腾讯云 EdgeOne Pages
+
+构建配置使用：框架预设 `Other`，根目录 `./`，输出目录
+`apps/client/build/web`，编译命令 `bash scripts/build-pages.sh`，安装命令留空。
+网关地址与 Token 使用方式 A 中的同名构建环境变量。
+
+EO 可能将仓库和 `TMPDIR` 都放在 `/dev/shm`。脚本将临时 SDK 安装在 `/tmp`，
+并在下载前检查 `find` 是否能执行 `chmod`、SDK 目录是否允许执行原生程序。
+需要指定其他可执行的临时目录时，设置 `NIGHTCORD_FLUTTER_TMPDIR`（目录须已存在）。
+如果权限检查失败，说明当前构建环境仍不满足 Flutter 的运行条件；可以在本地按
+方式 C 构建，然后上传 `apps/client/build/web/` 的完整产物部署。
+
+### 方式 C：自行托管静态网页
 
 构建机器需要 Flutter `3.47.5` 或兼容版本、Python 3 和 Bash。安装 Flutter 后，在
 仓库根目录准备字体，并通过环境变量预填网关地址：
