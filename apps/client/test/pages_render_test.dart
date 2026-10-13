@@ -884,10 +884,26 @@ void main() {
     expect(find.byType(Drawer), findsNothing);
     expect(find.byType(AudioSection), findsNothing);
     await tester.tap(find.text('通知'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    final enteringPosition = tester.getTopLeft(
+      find.byType(NotificationsSection),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsSection), findsOneWidget);
+    expect(
+      enteringPosition.dx,
+      greaterThan(tester.getTopLeft(find.byType(NotificationsSection)).dx),
+    );
     expect(find.text('音频'), findsNothing);
     await tester.tap(find.byType(BackButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.byType(NotificationsSection), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byType(NotificationsSection)).dx,
+      greaterThan(0),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsSection), findsNothing);
     await tester.tap(find.text('音频'));

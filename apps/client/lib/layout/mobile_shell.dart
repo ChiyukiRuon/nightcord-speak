@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../design/tokens/app_motion.dart';
 import '../providers/providers.dart';
 import '../models/domain.dart';
 import '../l10n/app_localizations.dart';
@@ -51,7 +52,36 @@ class MobileShell extends StatelessWidget {
       body: Column(
         children: [
           ?banner,
-          Expanded(child: showingDetail ? content : navigation),
+          Expanded(
+            child: ClipRect(
+              child: AnimatedSwitcher(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : AppMotion.panel,
+                switchInCurve: AppMotion.enter,
+                switchOutCurve: AppMotion.enter,
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: [...previousChildren, ?currentChild],
+                ),
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(
+                      child.key == const ValueKey(true) ? 0.08 : -0.08,
+                      0,
+                    ),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  textDirection: Directionality.of(context),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(showingDetail),
+                  child: showingDetail ? content : navigation,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     ),
@@ -65,7 +95,8 @@ class _TouchPushToTalk extends ConsumerStatefulWidget {
   ConsumerState<_TouchPushToTalk> createState() => _TouchPushToTalkState();
 }
 
-class _TouchPushToTalkState extends ConsumerState<_TouchPushToTalk> with WidgetsBindingObserver {
+class _TouchPushToTalkState extends ConsumerState<_TouchPushToTalk>
+    with WidgetsBindingObserver {
   bool _held = false;
   int? _pointer;
   @override
@@ -118,7 +149,8 @@ class _TouchPushToTalkState extends ConsumerState<_TouchPushToTalk> with Widgets
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final view = ref.watch(activeViewProvider);
-    if (settings?.audio.mode != VoiceActivationMode.pushToTalk || !(view?.isConnected ?? false)) {
+    if (settings?.audio.mode != VoiceActivationMode.pushToTalk ||
+        !(view?.isConnected ?? false)) {
       return const SizedBox.shrink();
     }
     return Padding(
@@ -142,7 +174,9 @@ class _TouchPushToTalkState extends ConsumerState<_TouchPushToTalk> with Widgets
             ),
             child: Text(
               AppLocalizations.of(context).voiceHoldToTalk,
-              style: TextStyle(color: _held ? Theme.of(context).colorScheme.onPrimary : null),
+              style: TextStyle(
+                color: _held ? Theme.of(context).colorScheme.onPrimary : null,
+              ),
             ),
           ),
         ),
