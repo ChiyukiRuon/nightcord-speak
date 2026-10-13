@@ -29,7 +29,7 @@ def main():
             sys.exit("Cloudflare Pages requires NIGHTCORD_GATEWAY_URL to use wss://")
     flutter = shutil.which("flutter")
     if not flutter:
-        sys.exit("Flutter is missing; use scripts/build-pages.sh on Cloudflare Pages")
+        sys.exit("Flutter is missing; use scripts/build-pages.sh on your Pages build platform")
     # NamedTemporaryFile uses owner-only permissions on Unix. Keep the name,
     # not its contents, in Flutter's command line and always remove it.
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8", delete=False) as file:

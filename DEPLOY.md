@@ -22,7 +22,10 @@
 网页与网关都要提供受浏览器信任的 HTTPS／WSS，才能在手机或其他远程设备上使用
 麦克风与浏览器音频。本机 `localhost` 的开发例外不适用于局域网 IP。
 
-取得包含部署文件的源码：
+使用已发布网关镜像时，服务器只需准备 `docker-compose.yaml` 和 `.env`
+（从 `.env.example` 复制后修改），不需要 `apps/`、Rust 或完整源码。
+
+需要从源码构建网关时，取得完整源码：
 
 ```bash
 git clone --recurse-submodules https://github.com/ChiyukiRuon/nightcord-speak.git
@@ -109,10 +112,10 @@ docker compose pull
 docker compose up -d --no-build
 ```
 
-镜像尚未发布或需要从当前源码部署时运行：
+镜像尚未发布或需要从当前源码部署时，在完整源码目录中显式叠加构建配置：
 
 ```bash
-docker compose up -d --build --pull never
+docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build --pull never
 ```
 
 `docker compose` 自动读取根目录的 `docker-compose.yaml`。GHCR 包若为私有，
@@ -316,7 +319,7 @@ docker compose up -d --no-build
 ```
 
 从源码部署时，更新源码和子模块后重新执行
-`docker compose up -d --build --pull never`。网页更新后重新部署完整静态产物，
+`docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build --pull never`。网页更新后重新部署完整静态产物，
 Pages Git 集成则按其配置触发新部署。更换 Token 时，网关和网页需同步更新。
 
 ### 保留与备份数据

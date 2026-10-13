@@ -52,7 +52,7 @@ Cloudflare Pages、临时 HTTPS 隧道及可选 Token 的配置见上述文档�
 
 ```bash
 cp .env.example .env
-docker compose up -d --build --pull never
+docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build --pull never
 ```
 
 默认仅暴露 `127.0.0.1:8787`。按需编辑 `.env` 中的 Token、允许的网页来源和端口。

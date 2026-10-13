@@ -9,6 +9,7 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+/.nightcord-flutter.*/
 pubspec.lock
 
 # The UI fonts (~20 MB of Noto Sans CJK). `pubspec.yaml` declares them, so a

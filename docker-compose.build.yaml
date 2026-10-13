@@ -1,0 +1,6 @@
+# 仅在完整源码目录中显式叠加此文件，启用本地镜像构建。
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
