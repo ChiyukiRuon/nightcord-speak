@@ -56,6 +56,8 @@ class NativeSoundLibrary implements SoundLibrary {
   Directory? _root;
   @override
   bool get available => true;
+  @override
+  bool get supportsCustomPacks => true;
 
   @override
   Future<String> directory() async {

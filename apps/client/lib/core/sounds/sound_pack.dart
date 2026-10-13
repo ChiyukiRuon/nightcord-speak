@@ -28,6 +28,7 @@ bool safeSoundName(String name) =>
 
 abstract interface class SoundLibrary {
   bool get available;
+  bool get supportsCustomPacks;
   Future<String> directory();
   Future<List<SoundPack>> scan();
   Future<void> save(String pack, Map<SoundAction, String?> mapping);

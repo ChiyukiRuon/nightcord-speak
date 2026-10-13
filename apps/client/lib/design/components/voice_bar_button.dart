@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'app_context_menu_region.dart';
 
 /// One round control in the voice bar.
 ///
@@ -62,15 +63,18 @@ class VoiceBarButton extends StatelessWidget {
     // other way round, the inner detector is hit-tested first and wins.
     return Tooltip(
       message: tooltip,
-      child: GestureDetector(
-        // Wrapped rather than folded in: an `IconButton` has no secondary tap,
-        // so without this the away message would be reachable only on a machine
-        // with a right button.
-        onSecondaryTap: enabled ? onSecondaryTap : null,
-        onLongPress: enabled ? onLongPress : null,
-        child: IconButton(
-          onPressed: enabled ? onPressed : null,
-          icon: Icon(icon, color: tint),
+      child: AppContextMenuRegion(
+        enabled: enabled && onSecondaryTap != null,
+        child: GestureDetector(
+          // Wrapped rather than folded in: an `IconButton` has no secondary tap,
+          // so without this the away message would be reachable only on a machine
+          // with a right button.
+          onSecondaryTap: enabled ? onSecondaryTap : null,
+          onLongPress: enabled ? onLongPress : null,
+          child: IconButton(
+            onPressed: enabled ? onPressed : null,
+            icon: Icon(icon, color: tint),
+          ),
         ),
       ),
     );

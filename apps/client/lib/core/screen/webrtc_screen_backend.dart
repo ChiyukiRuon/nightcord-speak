@@ -20,16 +20,20 @@ import 'screen_sdp.dart';
 /// log at all, which is the same gap the audio pipeline had before it grew one.
 const Duration _statsEvery = Duration(seconds: 10);
 
-class WebRtcScreenBackend implements ScreenShareBackend {
+class WebRtcScreenBackend implements ScreenShareBackend, DirectScreenCapture {
   WebRtcScreenBackend({
     Future<RTCPeerConnection> Function(Map<String, dynamic>)? createConnection,
     Future<MediaStream> Function(String)? createStream,
     Future<MediaStream> Function(Map<String, dynamic>)? getDisplayMedia,
+    Future<List<MediaDeviceInfo>> Function()? enumerateDevices,
+    bool? browser,
     Future<int?> Function(MediaStream)? measureCaptureHeight,
     this.iceGatherTimeout = const Duration(seconds: 2),
   }) : _createConnection = createConnection ?? createPeerConnection,
        _createStream = createStream ?? createLocalMediaStream,
        _getDisplayMedia = getDisplayMedia ?? _platformDisplayMedia,
+       _enumerateDevices = enumerateDevices ?? _platformDevices,
+       _browser = browser ?? kIsWeb,
        _measureCaptureHeight = measureCaptureHeight ?? screenCaptureHeight;
 
   final Future<RTCPeerConnection> Function(Map<String, dynamic>)
@@ -38,10 +42,14 @@ class WebRtcScreenBackend implements ScreenShareBackend {
 
   /// The platform's own picker. A seam like the other two injections.
   final Future<MediaStream> Function(Map<String, dynamic>) _getDisplayMedia;
+  final Future<List<MediaDeviceInfo>> Function() _enumerateDevices;
+  final bool _browser;
+  @override
+  bool get directScreenCapture => _browser;
   final Duration iceGatherTimeout;
   final Future<int?> Function(MediaStream) _measureCaptureHeight;
   bool get _desktop =>
-      !kIsWeb &&
+      !_browser &&
       const {
         TargetPlatform.windows,
         TargetPlatform.macOS,
@@ -51,6 +59,9 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   @override
   Future<List<ScreenSource>> sources() async {
     final sources = <ScreenSource>[];
+    if (_browser) {
+      sources.add(const ScreenSource('browser-screen', '', systemPicker: true));
+    }
 
     if (_desktop) {
       final desktop = await desktopCapturer.getSources(
@@ -74,12 +85,12 @@ class WebRtcScreenBackend implements ScreenShareBackend {
     // for us, not a surface we point at. No camera — or no permission to see
     // their names yet — is an empty tab, not a failure.
     try {
-      final devices = await navigator.mediaDevices.enumerateDevices();
+      final devices = await _enumerateDevices();
       for (final device in devices) {
         if (device.kind != 'videoinput') continue;
         sources.add(
           ScreenSource(
-            device.deviceId,
+            device.deviceId.isEmpty ? 'browser-camera' : device.deviceId,
             device.label,
             kind: ScreenSourceKind.camera,
           ),
@@ -94,6 +105,9 @@ class WebRtcScreenBackend implements ScreenShareBackend {
 
   @override
   Future<ScreenMedia> preview(ScreenSource source) async {
+    if (source.systemPicker) {
+      throw UnsupportedError('A browser screen is selected at capture time');
+    }
     // Starting a desktop video capturer explicitly focuses the selected window.
     // The thumbnail API uses the media-list capturer without that Start path.
     if (_desktop && source.kind != ScreenSourceKind.camera) {
@@ -120,7 +134,8 @@ class WebRtcScreenBackend implements ScreenShareBackend {
         ? await navigator.mediaDevices.getUserMedia({
             'audio': false,
             'video': {
-              'deviceId': {'exact': source.id},
+              if (source.id != 'browser-camera')
+                'deviceId': {'exact': source.id},
               'frameRate': {'ideal': 10},
             },
           })
@@ -129,7 +144,7 @@ class WebRtcScreenBackend implements ScreenShareBackend {
             'video': {
               'deviceId': {'exact': source.id},
               'frameRate': {'ideal': 10},
-              'mandatory': {'frameRate': 10.0},
+              if (!_browser) 'mandatory': {'frameRate': 10.0},
             },
           });
     if (stream.getVideoTracks().isEmpty) {
@@ -158,11 +173,14 @@ class WebRtcScreenBackend implements ScreenShareBackend {
     final stream = source?.kind == ScreenSourceKind.camera
         ? await navigator.mediaDevices.getUserMedia({
             'audio': options.audio,
-            'video': _video(options, deviceId: source!.id),
+            'video': _video(
+              options,
+              deviceId: source!.id == 'browser-camera' ? null : source.id,
+            ),
           })
         : await _getDisplayMedia({
             'audio': options.audio,
-            'video': _video(options, deviceId: source?.id),
+            'video': _video(options, deviceId: _browser ? null : source?.id),
           });
 
     if (stream.getVideoTracks().isEmpty) {
@@ -253,7 +271,8 @@ class WebRtcScreenBackend implements ScreenShareBackend {
   Map<String, dynamic> _video(ScreenOptions options, {String? deviceId}) => {
     if (deviceId != null) 'deviceId': {'exact': deviceId},
     if (options.fps > 0) 'frameRate': {'ideal': options.fps},
-    if (options.fps > 0) 'mandatory': {'frameRate': options.fps.toDouble()},
+    if (!_browser && options.fps > 0)
+      'mandatory': {'frameRate': options.fps.toDouble()},
   };
 
   @override
@@ -344,6 +363,9 @@ class WebRtcScreenBackend implements ScreenShareBackend {
 /// need one.
 Future<MediaStream> _platformDisplayMedia(Map<String, dynamic> constraints) =>
     navigator.mediaDevices.getDisplayMedia(constraints);
+
+Future<List<MediaDeviceInfo>> _platformDevices() =>
+    navigator.mediaDevices.enumerateDevices();
 
 class _ThumbnailMedia implements ScreenMedia {
   _ThumbnailMedia(this.bytes);

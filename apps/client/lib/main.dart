@@ -27,6 +27,7 @@ import 'util/app_exit.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializePlatformInteractions();
 
   // A window opened by `desktop_multi_window` runs *this* function in an engine
   // of its own, and the only thing that tells the two apart is the arguments

@@ -345,7 +345,10 @@ class ScreenController extends ChangeNotifier {
 
   /// Serializes negotiation; ICE and answers must not race description setup.
   Future<void> receive(ScreenEvent event) {
-    _events = _events.then((_) => _receive(event.data).timeout(const Duration(seconds: 15))).catchError((Object _) { fail('connection'); });
+    _events = _events.then((_) => _receive(event.data).timeout(const Duration(seconds: 15))).catchError((Object error) {
+      logToCore('error', 'screen: negotiation failed: $error');
+      fail('connection');
+    });
     return _events;
   }
   Future<void> _receive(Map<String, dynamic> e) async {

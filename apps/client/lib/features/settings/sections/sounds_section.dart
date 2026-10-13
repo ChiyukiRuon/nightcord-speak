@@ -32,8 +32,9 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
     SoundAction.message => l10n.soundMessage,
   };
 
-  void update(NotificationSettings next) =>
-      ref.read(settingsProvider.notifier).update(widget.settings.copyWith(notifications: next));
+  void update(NotificationSettings next) => ref
+      .read(settingsProvider.notifier)
+      .update(widget.settings.copyWith(notifications: next));
 
   Future<void> save(SoundPack pack, SoundAction action, String? file) async {
     setState(() {
@@ -41,11 +42,16 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
       _error = null;
     });
     try {
-      await ref.read(soundLibraryProvider).save(pack.name, {...pack.mapping, action: file});
+      await ref.read(soundLibraryProvider).save(pack.name, {
+        ...pack.mapping,
+        action: file,
+      });
       ref.invalidate(soundPacksProvider);
       await ref.read(soundPacksProvider.future);
     } catch (_) {
-      if (mounted) setState(() => _error = AppLocalizations.of(context).soundsWriteError);
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).soundsWriteError);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -79,7 +85,9 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
         update(widget.settings.notifications.copyWith(soundDirectory: path));
       }
     } catch (_) {
-      if (mounted) setState(() => _error = AppLocalizations.of(context).soundsOpenError);
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).soundsOpenError);
+      }
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -112,24 +120,30 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
       );
     }
     final notifications = widget.settings.notifications;
-    final packs = notifications.sounds ? ref.watch(soundPacksProvider) : null;
+    final custom = library.supportsCustomPacks;
+    final packs = notifications.sounds && custom
+        ? ref.watch(soundPacksProvider)
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Divider(height: tokens.space4 * 2),
         SwitchListTile(
-          contentPadding: EdgeInsets.zero,
+          contentPadding: EdgeInsetsDirectional.only(start: tokens.space3),
           dense: true,
           title: Text(l10n.soundsEnabled),
           value: notifications.sounds,
           onChanged: (value) => update(notifications.copyWith(sounds: value)),
         ),
-        if (notifications.sounds) ...[
+        if (notifications.sounds && custom) ...[
           Text(l10n.soundsHint, style: Theme.of(context).textTheme.bodySmall),
           FutureBuilder<String>(
             future: library.directory(),
             builder: (context, snapshot) => snapshot.hasData
-                ? SelectableText(snapshot.data!, style: Theme.of(context).textTheme.bodySmall)
+                ? SelectableText(
+                    snapshot.data!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )
                 : const SizedBox.shrink(),
           ),
           SizedBox(height: tokens.space4),
@@ -145,13 +159,19 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
                   label: Text(l10n.soundsChooseFolder),
                 ),
                 TextButton(
-                  onPressed: _opening || _saving || notifications.soundDirectory.isEmpty
+                  onPressed:
+                      _opening ||
+                          _saving ||
+                          notifications.soundDirectory.isEmpty
                       ? null
-                      : () => update(notifications.copyWith(soundDirectory: '')),
+                      : () =>
+                            update(notifications.copyWith(soundDirectory: '')),
                   child: Text(l10n.soundsDefaultFolder),
                 ),
                 TextButton.icon(
-                  onPressed: _saving ? null : () => ref.invalidate(soundPacksProvider),
+                  onPressed: _saving
+                      ? null
+                      : () => ref.invalidate(soundPacksProvider),
                   icon: const Icon(Icons.refresh),
                   label: Text(l10n.soundsRefresh),
                 ),
@@ -165,7 +185,10 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
           ),
           SizedBox(height: tokens.space4),
           if (_error != null)
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           packs!.when(
             loading: () => const LinearProgressIndicator(),
             error: (error, stack) => Text(
@@ -173,7 +196,9 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             data: (packs) {
-              final pack = packs.where((pack) => pack.name == notifications.soundPack).firstOrNull;
+              final pack = packs
+                  .where((pack) => pack.name == notifications.soundPack)
+                  .firstOrNull;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -184,12 +209,17 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
                     decoration: InputDecoration(labelText: l10n.soundsPack),
                     items: [
                       for (final pack in packs)
-                        DropdownMenuItem(value: pack.name, child: Text(pack.name)),
+                        DropdownMenuItem(
+                          value: pack.name,
+                          child: Text(pack.name),
+                        ),
                     ],
                     onChanged: _saving
                         ? null
                         : (name) {
-                            if (name != null) update(notifications.copyWith(soundPack: name));
+                            if (name != null) {
+                              update(notifications.copyWith(soundPack: name));
+                            }
                           },
                   ),
                   if (pack == null)
@@ -211,19 +241,31 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
                           children: [
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                key: ValueKey('${pack.name}/${action.key}/${pack.mapping[action]}'),
+                                key: ValueKey(
+                                  '${pack.name}/${action.key}/${pack.mapping[action]}',
+                                ),
                                 initialValue: pack.mapping[action] ?? '',
                                 isExpanded: true,
-                                decoration: InputDecoration(labelText: label(l10n, action)),
+                                decoration: InputDecoration(
+                                  labelText: label(l10n, action),
+                                ),
                                 items: [
-                                  DropdownMenuItem(value: '', child: Text(l10n.soundsNone)),
+                                  DropdownMenuItem(
+                                    value: '',
+                                    child: Text(l10n.soundsNone),
+                                  ),
                                   for (final file in pack.files)
                                     DropdownMenuItem(
                                       value: file,
-                                      child: Text(file, overflow: TextOverflow.ellipsis),
+                                      child: Text(
+                                        file,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                   if (pack.mapping[action] != null &&
-                                      !pack.files.contains(pack.mapping[action]))
+                                      !pack.files.contains(
+                                        pack.mapping[action],
+                                      ))
                                     DropdownMenuItem(
                                       value: pack.mapping[action],
                                       child: Text(
@@ -236,7 +278,11 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
                                     ? null
                                     : (file) {
                                         if (file != null) {
-                                          save(pack, action, file.isEmpty ? null : file);
+                                          save(
+                                            pack,
+                                            action,
+                                            file.isEmpty ? null : file,
+                                          );
                                         }
                                       },
                               ),
@@ -244,7 +290,8 @@ class _SoundsSectionState extends ConsumerState<SoundsSection> {
                             IconButton(
                               tooltip: l10n.soundsPreview,
                               icon: const Icon(Icons.play_arrow),
-                              onPressed: pack.files.contains(pack.mapping[action])
+                              onPressed:
+                                  pack.files.contains(pack.mapping[action])
                                   ? () => preview(pack, pack.mapping[action]!)
                                   : null,
                             ),

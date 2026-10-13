@@ -7,10 +7,21 @@ import '../../ffi/native.dart';
 import '../../models/crash.dart';
 import '../transport/client_transport.dart';
 import 'picked_screen_source.dart';
+import 'device_info.dart';
 
 export '../../ffi/rust_client.dart' show coreLogDirectory, logToCore;
 
 String? environmentValue(String name) => Platform.environment[name];
+const bool supportsLogSettings = true;
+
+DeviceClass platformDeviceClass() {
+  if (Platform.isAndroid || Platform.isIOS) return DeviceClass.mobile;
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    return DeviceClass.desktop;
+  }
+  return DeviceClass.unknown;
+}
+
 CrashStatus readCrashStatus(ClientTransport client) =>
     client is RustClient ? client.crashStatus() : CrashStatus.none;
 ({String? path, String? error}) buildCrashReport(ClientTransport client) =>
@@ -20,6 +31,12 @@ CrashStatus readCrashStatus(ClientTransport client) =>
 
 bool isMissingNativeLibrary(Object error) => error is NativeLibraryNotFound;
 Future<void> requestNotificationPermission() async {}
+Future<void> initializePlatformInteractions() async {}
+void registerApplicationContextMenuRegion(
+  Object key,
+  bool Function(double, double) contains,
+) {}
+void unregisterApplicationContextMenuRegion(Object key) {}
 
 /// Whether screen sharing picks its source in the system's own picker here.
 ///

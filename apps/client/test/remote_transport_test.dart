@@ -28,12 +28,14 @@ class FakeSocket implements RemoteSocket {
   bool rejectAuth = false;
   bool noAuth = false;
   bool requireDevice = false;
+  Completer<void>? opening;
   static const credential =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   @override
   int bufferedAmount = 0;
   @override
   Future<void> get opened async {
+    if (opening != null) await opening!.future;
     incoming.add(
       jsonEncode({
         'kind': 'hello',
@@ -133,6 +135,91 @@ void main() {
     Uri.parse('ws://localhost:8787/ws'),
     'test-only-token',
   );
+
+  Future<void> pumpConfiguredGate(WidgetTester tester, GatewayConfig config) =>
+      tester.pumpWidget(
+        ProviderScope(
+          overrides: [clientTransportProvider.overrideWithValue(transport)],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: GatewayGate(config: config, child: const Text('Ready')),
+          ),
+        ),
+      );
+
+  for (final failure in [
+    'invalid address',
+    'missing token',
+    'network',
+    'timeout',
+  ]) {
+    testWidgets('configured gateway never shows setup after $failure', (
+      tester,
+    ) async {
+      var url = 'wss://configured/ws';
+      if (failure == 'invalid address') url = 'invalid';
+      if (failure == 'network') {
+        transport = RemoteTransport(
+          socketFactory: (_) => throw StateError('offline'),
+          voice: voice,
+        );
+      }
+      if (failure == 'timeout') socket.opening = Completer<void>();
+      await pumpConfiguredGate(tester, GatewayConfig(url: url));
+      // Regression: even the first frame briefly rendered the editable address.
+      expect(find.byType(TextField), findsNothing);
+      await tester.pump();
+      if (failure == 'timeout') {
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        await tester.pump(const Duration(seconds: 11));
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Ready'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('disconnect retry reuses deployment endpoint and token', (
+    tester,
+  ) async {
+    final retrySocket = FakeSocket();
+    final addresses = <Uri>[];
+    transport = RemoteTransport(
+      socketFactory: (uri) {
+        addresses.add(uri);
+        return addresses.length == 1 ? socket : retrySocket;
+      },
+      voice: voice,
+    );
+    addTearDown(() => retrySocket.incoming.close());
+    await pumpConfiguredGate(
+      tester,
+      const GatewayConfig(url: 'wss://configured/ws', token: 'bundled-token'),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Ready'), findsOneWidget);
+    socket.incoming.addError(StateError('connection lost'));
+    await tester.pump();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(FilledButton), findsOneWidget);
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Ready'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(addresses, [
+      Uri.parse('wss://configured/ws'),
+      Uri.parse('wss://configured/ws'),
+    ]);
+    expect(retrySocket.sent.first, {'kind': 'auth', 'token': 'bundled-token'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'gateway validation errors change language without recreating the form',
@@ -239,6 +326,11 @@ void main() {
         'wss://trusted/ws',
       );
       expect(const GatewayConfig(url: 'wss://trusted/ws').autoConnect, isTrue);
+      expect(
+        const GatewayConfig(url: 'wss://trusted/ws')
+            .address(Uri.parse('https://app/?gw=wss://other/ws')),
+        'wss://trusted/ws',
+      );
       expect(const GatewayConfig(token: 'token').autoConnect, isFalse);
       expect(
         const GatewayConfig().address(
@@ -278,7 +370,7 @@ void main() {
   );
 
   testWidgets(
-    'rejected deployment credentials offer a form instead of retrying forever',
+    'rejected deployment credentials offer retry without exposing a form',
     (tester) async {
       socket.rejectAuth = true;
       await tester.pumpWidget(
@@ -299,7 +391,8 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.byType(TextField), findsNWidgets(2));
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(FilledButton), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(
         socket.sent.where((frame) => frame is Map && frame['kind'] == 'auth'),

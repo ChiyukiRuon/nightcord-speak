@@ -64,6 +64,7 @@ dependencies:
   file_selector: ^1.1.0
   # Already transitive; used directly for streaming update-package SHA-256 checks.
   crypto: ^3.0.7
+  url_launcher: ^6.3.3
 
 # The screen-share media stack builds from our fork — a submodule on the
 # `nightcord` branch, whose history is the published 1.6.2+hotfix.4 package

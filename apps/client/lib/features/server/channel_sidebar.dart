@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../avatar/client_avatar.dart';
 import '../../design/components/app_badge.dart';
+import '../../design/components/app_context_menu_region.dart';
 import '../../design/components/app_logo.dart';
 import '../../design/components/app_section_title.dart';
 import '../../design/components/app_text_prompt.dart';
@@ -950,7 +951,7 @@ class _MemberRow extends StatelessWidget {
     return Semantics(
       label: l10n.memberMenu(member.name),
       onTap: onOpen,
-      child: row,
+      child: AppContextMenuRegion(child: row),
     );
   }
 }

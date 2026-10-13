@@ -198,7 +198,7 @@ impl Worker {
                     let before = self.voice.as_ref().map(|voice| voice.levels().2);
                     self.pump_voice().await;
                     if before != self.voice.as_ref().map(|voice| voice.levels().2) {
-                        self.publish_voice_state().await;
+                        self.report_voice_state();
                     }
                 }
             }
@@ -754,6 +754,20 @@ impl Worker {
     /// The same shape the FFI publishes: without it the mute buttons in every
     /// connection would only know what they themselves clicked.
     async fn publish_voice_state(&mut self) {
+        if let Some(voice) = self.voice.as_ref() {
+            let state = VoiceState {
+                transmitting: voice.levels().2,
+                ..self.voice_intent
+            };
+            let session = voice.session;
+            let _ = with_session!(self.core, session, s => s.set_voice_state(state));
+        }
+        self.report_voice_state();
+    }
+
+    /// Speech transitions belong to local UI state, not server mute updates.
+    /// Sending client updates here floods the server and blocks screen signaling.
+    fn report_voice_state(&mut self) {
         let Some(voice) = self.voice.as_ref() else {
             return;
         };
@@ -764,7 +778,6 @@ impl Worker {
             transmitting: voice.levels().2,
         };
         let session = voice.session;
-        let _ = with_session!(self.core, session, s => s.set_voice_state(state));
         let event = ClientEvent::VoiceStateChanged(state);
         self.snapshots.apply(session, &event);
         self.send(FfiEvent::client(session, event));
@@ -815,6 +828,92 @@ impl Worker {
                 None,
                 ClientError::Protocol(ts_model::ProtocolError::new(error.to_string())),
             )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ts_identity::IdentityStore;
+    use ts_model::{ProtocolKind, VoiceActivationMode, VoiceActivationSettings};
+    use ts_protocol::testing::{fake_backend, fake_server};
+    use ts_settings::{BookmarkStore, SettingsStore};
+
+    async fn wait_for_speech(output: &mut broadcast::Receiver<Outbound>, transmitting: bool) {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Outbound::Text(text) = output.recv().await.expect("voice event") {
+                    let event: serde_json::Value = serde_json::from_str(&text).expect("wire JSON");
+                    if event["event"]["event"] == "voice_state_changed"
+                        && event["event"]["payload"]["transmitting"] == transmitting
+                    {
+                        break;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("speech transition reaches browser");
+    }
+
+    #[tokio::test]
+    async fn speech_transitions_do_not_send_server_mute_commands() {
+        // Sparse browser frames used to emit clientupdate on every active/idle
+        // tick, causing ClientIsFlooding (524) when the user requested a stream.
+        let root =
+            std::env::temp_dir().join(format!("nightcord-voice-state-{}", crate::generate_token()));
+        let mut core = CoreClient::new(
+            IdentityStore::new(&root),
+            SettingsStore::new(&root),
+            BookmarkStore::new(&root),
+        );
+        let (backend, handle) = fake_backend(ProtocolKind::Ts6, true);
+        let session = core
+            .sessions_mut()
+            .create(fake_server(1, ProtocolKind::Ts6), backend);
+        let (outbound, mut output) = broadcast::channel(64);
+        let (commands, input) = mpsc::unbounded_channel();
+        let mut worker = Worker::new(core, "test".into(), outbound, input);
+        worker.voice_intent.mode = VoiceActivationMode::Continuous;
+        worker.voice = Some(
+            RemoteVoice::new(
+                session,
+                VoiceActivationMode::Continuous,
+                VoiceActivationSettings::default(),
+            )
+            .expect("encoder"),
+        );
+        let running = tokio::spawn(worker.run());
+        for _ in 0..3 {
+            commands
+                .send(GatewayCommand::Audio {
+                    from: 1,
+                    frame: vec![0.25; ts_audio::FRAME_SAMPLES],
+                })
+                .expect("audio frame");
+            wait_for_speech(&mut output, true).await;
+            wait_for_speech(&mut output, false).await;
+        }
+        assert!(handle.called("Voice.send_voice"));
+        assert!(
+            !handle.called("Voice.set_voice_state"),
+            "speech must not update server mute flags"
+        );
+        commands
+            .send(GatewayCommand::Command(Box::new(
+                Command::VoiceSetInputMuted { muted: true },
+            )))
+            .expect("mute");
+        wait_for_speech(&mut output, false).await;
+        assert!(
+            handle.called("Voice.set_voice_state"),
+            "explicit mute still reaches the server"
+        );
+        commands.send(GatewayCommand::Shutdown).expect("shutdown");
+        running.await.expect("worker stopped");
+        if root.exists() {
+            std::fs::remove_dir_all(root).expect("test store cleanup");
         }
     }
 }

@@ -23,6 +23,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/core/screen/screen_providers.dart';
+import 'package:nightcord_client/core/platform/settings_capabilities.dart';
+import 'package:nightcord_client/core/platform/device_info.dart';
 import 'package:nightcord_client/core/screen/screen_share_backend.dart';
 import 'package:nightcord_client/features/screen/screen_pip.dart';
 import 'package:nightcord_client/core/transport/client_transport.dart';
@@ -58,6 +60,8 @@ import 'package:nightcord_client/util/gain.dart';
 class _RenderSoundLibrary implements SoundLibrary {
   @override
   bool get available => true;
+  @override
+  bool get supportsCustomPacks => true;
   @override
   Future<String> directory() async => '/app/sounds';
   @override
@@ -505,8 +509,13 @@ ProviderContainer _container({
   Settings settings = const Settings(),
   _SilentTransport? transport,
   ScreenShareBackend? screen,
+  bool? logsAvailable,
+  DeviceClass? device,
 }) => ProviderContainer.test(
   overrides: [
+    if (device != null) deviceClassProvider.overrideWithValue(device),
+    if (logsAvailable != null)
+      logSettingsAvailableProvider.overrideWithValue(logsAvailable),
     // Page rendering must not wait for filesystem I/O under the fake clock.
     soundLibraryProvider.overrideWithValue(_RenderSoundLibrary()),
     clientTransportProvider.overrideWithValue(transport ?? _SilentTransport()),
@@ -603,6 +612,84 @@ Future<void> startThroughSetup(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('device information overrides layout for shortcut settings', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final device in [DeviceClass.mobile, DeviceClass.desktop]) {
+      for (final size in [const Size(390, 844), const Size(1200, 800)]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          _app(_container(device: device), const SettingsPage()),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('快捷键'),
+          device == DeviceClass.mobile ? findsNothing : findsOneWidget,
+        );
+        expect(find.text('关于'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
+  testWidgets('settings navigation follows log capability and layout', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final logsAvailable in [false, true]) {
+      for (final mobile in [false, true]) {
+        tester.view.physicalSize = mobile
+            ? const Size(390, 844)
+            : const Size(1200, 800);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          _app(
+            _container(
+              logsAvailable: logsAvailable,
+              device: DeviceClass.unknown,
+            ),
+            const SettingsPage(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('日志'), logsAvailable ? findsOneWidget : findsNothing);
+        expect(find.text('快捷键'), mobile ? findsNothing : findsOneWidget);
+        expect(find.text('关于'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
+  testWidgets('resizing settings hides the active shortcuts detail', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      _app(_container(device: DeviceClass.unknown), const SettingsPage()),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('快捷键'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('恢复默认'), findsNWidgets(ShortcutAction.values.length));
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(find.text('快捷键'), findsNothing);
+    await tester.tap(find.text('音频'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('恢复默认'), findsNothing);
+    expect(find.text('语音活动检测 (VAD)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'the bottom avatar opens viewing and editing actions on desktop and mobile',
     (tester) async {
@@ -830,8 +917,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nightcord Speak'), findsOneWidget);
     expect(find.text('MIT OR Apache-2.0'), findsOneWidget);
+    expect(find.byTooltip('GitHub'), findsOneWidget);
+    expect(
+      find.text('https://github.com/ChiyukiRuon/nightcord-speak'),
+      findsNothing,
+    );
     expect(find.text('查看组件许可证'), findsOneWidget);
     expect(find.text('正在加载设置…'), findsNothing);
+    const launcher = MethodChannel('plugins.flutter.io/url_launcher');
+    String? openedUrl;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcher, (call) async {
+          openedUrl = (call.arguments as Map)['url'] as String?;
+          return true;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(launcher, null);
+    });
+    await tester.tap(find.byTooltip('GitHub'));
+    await tester.pumpAndSettle();
+    expect(openedUrl, 'https://github.com/ChiyukiRuon/nightcord-speak');
     // Asset IO must complete outside the widget test's simulated clock.
     await tester.runAsync(loadBundledLicenses);
     await tester.ensureVisible(find.text('查看组件许可证'));
@@ -1340,6 +1446,21 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('智能语音检测（默认）').last);
       await tester.pumpAndSettle();
+      expect(find.byType(Slider), findsNWidgets(2));
+      expect(
+        container.read(settingsProvider)!.audio.activation.sensitivity,
+        0.21,
+      );
+      // Disabling detection must remain selectable and retain manual tuning.
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关闭（持续发送）').last);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(settingsProvider)!.audio.activation.algorithm,
+        VadAlgorithm.disabled,
+      );
       expect(find.byType(Slider), findsNWidgets(2));
       expect(
         container.read(settingsProvider)!.audio.activation.sensitivity,

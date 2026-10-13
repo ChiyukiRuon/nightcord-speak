@@ -5,9 +5,18 @@ import 'package:flutter/widgets.dart';
 import '../../models/screen_options.dart';
 
 class ScreenSource {
-  const ScreenSource(this.id, this.name, {this.kind = ScreenSourceKind.screen, this.thumbnail});
+  const ScreenSource(
+    this.id,
+    this.name, {
+    this.kind = ScreenSourceKind.screen,
+    this.thumbnail,
+    this.systemPicker = false,
+  });
   final String id;
   final String name;
+
+  /// The browser selects the actual surface only when capture is requested.
+  final bool systemPicker;
 
   /// A still of this source, encoded PNG or JPEG, when the platform offers one.
   ///
@@ -69,7 +78,8 @@ class ScreenStats {
   final String? limitedBy;
 
   @override
-  String toString() => '${width}x$height ${fps.toStringAsFixed(1)}fps'
+  String toString() =>
+      '${width}x$height ${fps.toStringAsFixed(1)}fps'
       '${limitedBy == null ? '' : ' ($limitedBy)'}';
 
   // Compared by value so the poll can tell "the reading changed" from "the
@@ -85,6 +95,11 @@ class ScreenStats {
 
   @override
   int get hashCode => Object.hash(width, height, fps, limitedBy);
+}
+
+/// Capture can begin directly from a user gesture when the platform owns selection.
+abstract interface class DirectScreenCapture {
+  bool get directScreenCapture;
 }
 
 /// Owns platform media; UI and session state never inspect operating systems.
@@ -108,6 +123,7 @@ abstract interface class ScreenShareBackend {
     required void Function(Map<String, dynamic>) onCandidate,
     required void Function(ScreenMedia) onMedia,
     required void Function() onFailed,
+
     /// Null when watching: the encoder settings belong to whoever publishes,
     /// and a viewer never offers anything for them to apply to.
     required ScreenOptions? options,

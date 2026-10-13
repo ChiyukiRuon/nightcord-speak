@@ -32,6 +32,7 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
   _GatewayError? _error;
   bool _connecting = false;
   bool _requiresToken = false;
+  bool _attempted = false;
 
   @override
   void initState() {
@@ -65,7 +66,11 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
   }
 
   Future<void> _connect(RemoteTransport client) async {
-    final uri = Uri.tryParse(_url.text.trim());
+    if (_connecting) return;
+    _attempted = true;
+    final uri = Uri.tryParse(
+      widget.config.autoConnect ? widget.config.url.trim() : _url.text.trim(),
+    );
     if (uri == null ||
         !{'ws', 'wss'}.contains(uri.scheme) ||
         uri.host.isEmpty ||
@@ -81,7 +86,10 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
       _error = null;
     });
     try {
-      await client.openGateway(uri, _token.text);
+      await client.openGateway(
+        uri,
+        widget.config.autoConnect ? widget.config.token : _token.text,
+      );
       _token.clear();
     } catch (_) {
       if (mounted) {
@@ -119,7 +127,10 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
       _GatewayError.connectionFailed => l10n.gatewayConnectionFailed,
       null => null,
     };
-    if (_connecting) {
+    if (_connecting ||
+        (widget.config.autoConnect &&
+            !_attempted &&
+            client.state != GatewayState.ready)) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (client.state == GatewayState.ready) {
@@ -153,6 +164,32 @@ class _GatewayGateState extends ConsumerState<GatewayGate> {
             ),
           Expanded(child: widget.child),
         ],
+      );
+    }
+    // Deployment configuration owns the endpoint in every connection state.
+    // Failed handshakes and dropped sockets must never expose the setup form.
+    if (widget.config.autoConnect) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppLogo(size: 56),
+                  const SizedBox(height: 24),
+                  Text(errorText ?? l10n.gatewayConnectionFailed),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: () => _connect(client),
+                    child: Text(l10n.gatewayConnect),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       );
     }
     return Scaffold(

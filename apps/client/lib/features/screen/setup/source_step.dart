@@ -271,7 +271,11 @@ class _SourceTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Text(
-                  source.name,
+                  source.name.isNotEmpty
+                      ? source.name
+                      : source.kind == ScreenSourceKind.camera
+                      ? AppLocalizations.of(context).screenSetupCameras
+                      : AppLocalizations.of(context).screenSetupScreens,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

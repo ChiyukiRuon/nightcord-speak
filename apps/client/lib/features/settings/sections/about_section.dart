@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../design/components/app_logo.dart';
+import '../../../design/components/github_icon.dart';
 import '../../../design/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_info.dart';
@@ -63,10 +65,43 @@ class AboutSection extends StatelessWidget {
         ),
         const UpdateCheck(),
         SizedBox(height: tokens.space5),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            tooltip: 'GitHub',
+            icon: const GitHubIcon(),
+            onPressed: () async {
+              try {
+                if (await launchUrl(
+                  Uri.parse(appProjectUrl),
+                  mode: LaunchMode.externalApplication,
+                )) {
+                  return;
+                }
+              } catch (_) {
+                // Keep the repository reachable when the system has no opener.
+              }
+              if (!context.mounted) return;
+              showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(l10n.aboutProject),
+                  content: const SelectableText(appProjectUrl),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        MaterialLocalizations.of(context).closeButtonLabel,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: tokens.space2),
         Text(l10n.aboutDescription, style: text.bodyMedium),
-        SizedBox(height: tokens.space4),
-        Text(l10n.aboutProject, style: text.titleMedium),
-        const SelectableText(appProjectUrl),
         SizedBox(height: tokens.space4),
         Text(l10n.aboutLicense, style: text.titleMedium),
         const SelectableText('MIT OR Apache-2.0'),

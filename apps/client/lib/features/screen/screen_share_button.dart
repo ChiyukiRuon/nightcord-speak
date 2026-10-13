@@ -77,7 +77,8 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
         'timeout' => l10n.screenTimeout,
         _ => l10n.screenConnectionFailed,
       };
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(message)));
     });
   }
 
@@ -107,13 +108,16 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
           // The glyph the member row and the floating window both wear for this
           // fact, so all three read as one thing.
           icon: sharing ? Icons.stop_screen_share : Icons.screen_share_outlined,
-          tooltip: sharing ? '${l10n.screenStop} · ${viewerCount(l10n, controller)}' : l10n.screenStart,
+          tooltip: sharing
+              ? '${l10n.screenStop} · ${viewerCount(l10n, controller)}'
+              : l10n.screenStart,
           active: sharing,
           enabled: online,
           // One button, two verbs, for the same reason the microphone has one:
           // there is nothing to decide between them, and the state is on
           // screen.
-          onPressed: () => sharing ? controller.stop() : _start(controller, l10n),
+          onPressed: () =>
+              sharing ? controller.stop() : _start(controller, l10n),
         );
       },
     );
@@ -121,16 +125,28 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
 
   /// Asks what to share and how, then starts publishing it.
   ///
-  /// The dialog only runs where there is something to ask: a browser hands its
-  /// own picker out of `getDisplayMedia`, and mobile has no capture at all, so
-  /// an empty source list means "just ask the platform" and the first step
-  /// shows nothing but a Next button.
+  /// A backend with direct capture owns selection and starts inside the click,
+  /// preserving the browser activation required by getDisplayMedia.
   ///
   /// macOS answers the source question in the system's own picker — the same
   /// one the official client shows — so the wizard opens straight on the
   /// settings. Everything else lists sources in the wizard's first step.
-  Future<void> _start(ScreenController controller, AppLocalizations l10n) async {
+  Future<void> _start(
+    ScreenController controller,
+    AppLocalizations l10n,
+  ) async {
     try {
+      final backend = controller.backend;
+      if (backend case DirectScreenCapture(directScreenCapture: true)) {
+        final settings =
+            ref.read(settingsProvider)?.screen ?? const ScreenSettings();
+        await controller.start(
+          null,
+          l10n.screenTitle,
+          _options(settings, null),
+        );
+        return;
+      }
       ScreenSource? picked;
       List<ScreenSource>? sources;
       var skipSourceStep = false;
@@ -158,7 +174,7 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
         logToCore(
           'info',
           'screen: picker chose id=${picked.id} name=${picked.name} '
-          'kind=${picked.kind.name}',
+              'kind=${picked.kind.name}',
         );
         sources = [picked];
         skipSourceStep = true;
@@ -167,7 +183,8 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
       }
       if (!mounted) return;
 
-      final settings = ref.read(settingsProvider)?.screen ?? const ScreenSettings();
+      final settings =
+          ref.read(settingsProvider)?.screen ?? const ScreenSettings();
       final setup = await showScreenSetup(
         context,
         backend: controller.backend,
@@ -175,6 +192,11 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
         settings: settings,
         initialSource: picked,
         skipSourceStep: skipSourceStep,
+        onStart: (setup) => controller.start(
+          setup.source,
+          l10n.screenTitle,
+          _options(setup.settings, setup.source),
+        ),
       );
       if (setup == null || !mounted) return;
 
@@ -185,11 +207,19 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
       if (chosen != settings) {
         final current = ref.read(settingsProvider);
         if (current != null) {
-          ref.read(settingsProvider.notifier).update(current.copyWith(screen: chosen));
+          ref
+              .read(settingsProvider.notifier)
+              .update(current.copyWith(screen: chosen));
         }
       }
 
-      await controller.start(setup.source, l10n.screenTitle, _options(chosen, setup.source));
+      if (setup.source?.systemPicker != true) {
+        await controller.start(
+          setup.source,
+          l10n.screenTitle,
+          _options(chosen, setup.source),
+        );
+      }
     } catch (_) {
       // Anything thrown before `start` — a denied capture permission, a picker
       // that never opened — is the same failure to the user as one thrown
@@ -206,7 +236,11 @@ class _ScreenShareButtonState extends ConsumerState<ScreenShareButton> {
   /// movement default. Storing the choice as well would let the name and the
   /// numbers disagree.
   ScreenOptions _options(ScreenSettings screen, ScreenSource? source) {
-    final preset = ScreenPreset.matching(screen.height, screen.fps, screen.videoBitrateKbps);
+    final preset = ScreenPreset.matching(
+      screen.height,
+      screen.fps,
+      screen.videoBitrateKbps,
+    );
     return ScreenOptions(
       source: source?.kind ?? ScreenSourceKind.screen,
       height: screen.height,

@@ -47,7 +47,10 @@ const _sources = [
   ScreenSource('3', 'camera-one', kind: ScreenSourceKind.camera),
 ];
 
-Future<void> _open(WidgetTester tester, _Backend backend) async {
+Future<void> _open(WidgetTester tester, _Backend backend, {
+  List<ScreenSource> sources = _sources,
+  Future<void> Function(ScreenSetup)? onStart,
+}) async {
   await tester.binding.setSurfaceSize(const Size(1000, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
@@ -61,7 +64,8 @@ Future<void> _open(WidgetTester tester, _Backend backend) async {
           onPressed: () => showScreenSetup(
             context,
             backend: backend,
-            sources: _sources,
+            sources: sources,
+            onStart: onStart,
             settings: const ScreenSettings(),
           ),
           child: const Text('open'),
@@ -75,6 +79,29 @@ Future<void> _open(WidgetTester tester, _Backend backend) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('browser screen remains selectable and starts inside Go Live before dismissal', (tester) async {
+    // Camera enumeration used to hide screens; deferred capture lost activation.
+    final backend = _Backend();
+    var starts = 0;
+    await _open(tester, backend, sources: [
+      const ScreenSource('browser-screen', 'Browser picker', systemPicker: true),
+      const ScreenSource('browser-camera', 'Camera', kind: ScreenSourceKind.camera),
+    ], onStart: (setup) async {
+      starts++;
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(setup.source!.systemPicker, isTrue);
+    });
+    await tester.tap(find.text('Browser picker'));
+    await tester.pumpAndSettle();
+    expect(backend.requests, isEmpty);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start streaming'));
+    expect(starts, 1);
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  });
 
   testWidgets('unavailable thumbnail does not fall back to video capture', (
     tester,

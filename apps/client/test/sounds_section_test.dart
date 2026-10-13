@@ -18,6 +18,8 @@ class _Settings extends SettingsNotifier {
 }
 
 class _Library implements SoundLibrary {
+  @override
+  bool supportsCustomPacks = true;
   bool failSave = false;
   int scans = 0;
   final Map<SoundAction, String?> mapping = {SoundAction.voiceJoined: 'join.wav'};
@@ -85,6 +87,30 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'bundled sounds expose only the switch and never scan custom packs',
+    (tester) async {
+      // Web previously disabled sounds entirely; it now uses the shipped pack.
+      final library = _Library()..supportsCustomPacks = false;
+      await mount(tester, library);
+      expect(find.text('Play notification sounds'), findsOneWidget);
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      expect(find.text('Choose sound folder'), findsNothing);
+      expect(find.text('Open sound folder'), findsNothing);
+      expect(library.scans, 0);
+      await tester.tap(find.text('Play notification sounds'));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(NotificationsSection)),
+      );
+      expect(container.read(settingsProvider)!.notifications.sounds, isFalse);
+      await tester.tap(find.text('Play notification sounds'));
+      await tester.pumpAndSettle();
+      expect(container.read(settingsProvider)!.notifications.sounds, isTrue);
+      expect(library.scans, 0);
+    },
+  );
 
   testWidgets('directory selection persists, cancellation retains it, and reset restores default', (
     tester,

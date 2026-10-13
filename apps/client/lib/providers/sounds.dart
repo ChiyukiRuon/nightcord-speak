@@ -32,7 +32,8 @@ Future<void> playSoundActions(Ref ref, List<SoundAction> actions, Settings? sett
   if (!library.available) return;
   try {
     final packs = await ref.read(soundPacksProvider.future);
-    final pack = packs.where((pack) => pack.name == settings.notifications.soundPack).firstOrNull;
+    final name = library.supportsCustomPacks ? settings.notifications.soundPack : 'nightcord';
+    final pack = packs.where((pack) => pack.name == name).firstOrNull;
     if (pack == null) return;
     for (final action in actions) {
       final file = pack.mapping[action];

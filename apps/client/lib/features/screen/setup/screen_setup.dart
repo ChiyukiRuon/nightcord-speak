@@ -45,6 +45,7 @@ Future<ScreenSetup?> showScreenSetup(
   required ScreenSettings settings,
   ScreenSource? initialSource,
   bool skipSourceStep = false,
+  Future<void> Function(ScreenSetup)? onStart,
 }) => showDialog<ScreenSetup>(
   context: context,
   builder: (context) => _SetupDialog(
@@ -53,6 +54,7 @@ Future<ScreenSetup?> showScreenSetup(
     settings: settings,
     initialSource: initialSource,
     skipSourceStep: skipSourceStep,
+    onStart: onStart,
   ),
 );
 
@@ -63,6 +65,7 @@ class _SetupDialog extends StatefulWidget {
     required this.settings,
     this.initialSource,
     this.skipSourceStep = false,
+    this.onStart,
   });
 
   final ScreenShareBackend backend;
@@ -70,6 +73,7 @@ class _SetupDialog extends StatefulWidget {
   final ScreenSettings settings;
   final ScreenSource? initialSource;
   final bool skipSourceStep;
+  final Future<void> Function(ScreenSetup)? onStart;
 
   @override
   State<_SetupDialog> createState() => _SetupDialogState();
@@ -133,6 +137,7 @@ class _SetupDialogState extends State<_SetupDialog> {
     _previewWork = _previewWork.then((_) async {
       await _closePreviews();
       if (!mounted || pass != _pass || source == null) return;
+      if (source.systemPicker) return;
       setState(() {});
       if (source.thumbnail?.isNotEmpty == true) return;
       try {
@@ -238,10 +243,15 @@ class _SetupDialogState extends State<_SetupDialog> {
   Future<void> _goLive(BuildContext context) async {
     if (_finishing) return;
     setState(() => _finishing = true);
+    final setup = ScreenSetup(source: _source, settings: _settings);
+    // getDisplayMedia must run within the Go Live click, before dialog cleanup.
+    final starting = _source?.systemPicker == true
+        ? widget.onStart?.call(setup)
+        : null;
     _queuePreview(null);
     await _previewWork;
     if (!context.mounted) return;
-    Navigator.of(context)
-        .pop(ScreenSetup(source: _source, settings: _settings));
+    Navigator.of(context).pop(setup);
+    await starting;
   }
 }

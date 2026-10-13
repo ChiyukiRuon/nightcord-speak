@@ -127,6 +127,66 @@ class _Stream implements MediaStream {
 Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test(
+    'browser always offers a screen picker even when a camera is present',
+    () async {
+      // A non-empty camera list previously disabled the empty screen tab entirely.
+      final backend = WebRtcScreenBackend(
+        browser: true,
+        enumerateDevices: () async => [
+          MediaDeviceInfo(
+            deviceId: '',
+            label: '',
+            kind: 'videoinput',
+            groupId: '',
+          ),
+        ],
+      );
+      final sources = await backend.sources();
+      expect(sources.first.kind, ScreenSourceKind.screen);
+      expect(sources.first.systemPicker, isTrue);
+      expect(sources.last.kind, ScreenSourceKind.camera);
+      expect(sources.last.id, 'browser-camera');
+      await expectLater(backend.preview(sources.first), throwsUnsupportedError);
+    },
+  );
+
+  test('browser capture sends standard constraints without mandatory or surface ids', () async {
+    // Chrome rejected capture with a mixture of standard and legacy constraints.
+    Map<String, dynamic>? constraints;
+    final stream = _Stream()..tracks.add(_Track('video', 'video'));
+    final backend = WebRtcScreenBackend(
+      browser: true,
+      getDisplayMedia: (value) async {
+        constraints = value;
+        return stream;
+      },
+    );
+    const options = ScreenOptions(
+      source: ScreenSourceKind.screen,
+      height: 0,
+      fps: 30,
+      videoBitrateKbps: 4000,
+      audio: false,
+      audioBitrateKbps: 128,
+      access: ScreenAccess.public,
+      viewerLimit: 0,
+      mode: ScreenMode.p2p,
+      detail: true,
+    );
+    final media = await backend.capture(
+      const ScreenSource('browser-screen', '', systemPicker: true),
+      options,
+    );
+    expect(constraints, {
+      'audio': false,
+      'video': {
+        'frameRate': {'ideal': 30},
+      },
+    });
+    await media.close();
+  });
+
   for (final closeBeforeReply in [false, true]) {
     testWidgets('WGC failure ends capture once; late=$closeBeforeReply', (
       tester,

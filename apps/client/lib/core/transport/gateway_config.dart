@@ -15,7 +15,7 @@ class GatewayConfig {
 
   String address(Uri page) {
     // Never send a configured credential to an endpoint chosen by a URL link.
-    if (token.trim().isNotEmpty) return url.trim();
+    if (autoConnect || token.trim().isNotEmpty) return url.trim();
     return page.queryParameters['gw'] ??
         (url.trim().isEmpty
             ? Uri(

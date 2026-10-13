@@ -23,8 +23,9 @@ class NotificationsSection extends ConsumerWidget {
     final tokens = DesignTokens.of(context);
     final notifications = settings.notifications;
 
-    void update(NotificationSettings next) =>
-        ref.read(settingsProvider.notifier).update(settings.copyWith(notifications: next));
+    void update(NotificationSettings next) => ref
+        .read(settingsProvider.notifier)
+        .update(settings.copyWith(notifications: next));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -73,12 +74,18 @@ class NotificationsSection extends ConsumerWidget {
 
   // The switch's colours come from the theme's `switchTheme` (§5: primary
   // when it is on); only the label style is this widget's.
-  Widget _switch(BuildContext context, String label, bool value, ValueChanged<bool> onChanged) =>
-      SwitchListTile(
-        value: value,
-        onChanged: onChanged,
-        title: Text(label, style: Theme.of(context).textTheme.labelLarge),
-        dense: true,
-        contentPadding: EdgeInsets.zero,
-      );
+  Widget _switch(
+    BuildContext context,
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) => SwitchListTile(
+    value: value,
+    onChanged: onChanged,
+    title: Text(label, style: Theme.of(context).textTheme.labelLarge),
+    dense: true,
+    contentPadding: EdgeInsetsDirectional.only(
+      start: DesignTokens.of(context).space3,
+    ),
+  );
 }

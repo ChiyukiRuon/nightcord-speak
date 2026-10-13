@@ -27,6 +27,7 @@ tokio-tungstenite.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+ts-protocol = { workspace = true, features = ["testing"] }
 # The tests act as a browser: a real client needs the `connect` handshake.
 tokio = { workspace = true, features = ["net", "time", "rt-multi-thread", "macros"] }
 tokio-tungstenite = { workspace = true, features = ["connect"] }

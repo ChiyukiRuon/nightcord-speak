@@ -15,6 +15,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/platform/settings_capabilities.dart';
+import '../../core/platform/device_info.dart';
 import '../../design/theme/app_theme.dart';
 import '../../layout/adaptive_shell.dart';
 import '../../l10n/app_localizations.dart';
@@ -42,7 +44,15 @@ const double _navWidth = 240;
 const double _contentWidth = 640;
 
 /// The page's sections, in the order the navigation column lists them.
-enum _Section { audio, connection, notifications, shortcuts, interface, log, about }
+enum _Section {
+  audio,
+  connection,
+  notifications,
+  shortcuts,
+  interface,
+  log,
+  about,
+}
 
 extension on _Section {
   /// What the section is called, in the navigation column and as the heading
@@ -94,8 +104,9 @@ class SettingsPage extends ConsumerStatefulWidget {
   /// this is also the app's first pushed route, and the second call site is
   /// where a route with different arguments would otherwise appear.
   static Future<void> open(BuildContext context, {int? session}) =>
-      Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => SettingsPage(session: session)));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => SettingsPage(session: session)),
+      );
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -119,6 +130,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final logsAvailable = ref.watch(logSettingsAvailableProvider);
+    final device = ref.watch(deviceClassProvider);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mobile = switch (device) {
+          DeviceClass.mobile => true,
+          DeviceClass.desktop => false,
+          DeviceClass.unknown =>
+            layoutClassFor(constraints.maxWidth) == LayoutClass.mobile,
+        };
+        final sections = [
+          for (final section in _Section.values)
+            if ((section != _Section.log || logsAvailable) &&
+                (section != _Section.shortcuts || !mobile))
+              section,
+        ];
+        // A resize can hide the selected section; never retain its detail page.
+        if (!sections.contains(_section)) _section = _Section.audio;
+        return _buildSettings(context, sections);
+      },
+    );
+  }
+
+  Widget _buildSettings(BuildContext context, List<_Section> sections) {
     final l10n = AppLocalizations.of(context);
     final settings = ref.watch(settingsProvider);
 
@@ -132,7 +167,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       mobileDetailTitle: _section.label(l10n),
       mobileNavigationBuilder: (open) => ListView(
         children: [
-          for (final section in _Section.values)
+          for (final section in sections)
             ListTile(
               leading: Icon(section.icon),
               title: Text(section.label(l10n)),
@@ -152,6 +187,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ],
       navigation: _SettingsNav(
+        sections: sections,
         selected: _section,
         onSelect: (section) => setState(() => _section = section),
       ),
@@ -221,8 +257,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
 /// The navigation column: the way back, the page's name, and the sections.
 class _SettingsNav extends StatelessWidget {
-  const _SettingsNav({required this.selected, required this.onSelect});
+  const _SettingsNav({
+    required this.sections,
+    required this.selected,
+    required this.onSelect,
+  });
 
+  final List<_Section> sections;
   final _Section selected;
   final ValueChanged<_Section> onSelect;
 
@@ -246,7 +287,7 @@ class _SettingsNav extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.symmetric(vertical: tokens.space2),
               children: [
-                for (final section in _Section.values)
+                for (final section in sections)
                   _NavItem(
                     section: section,
                     label: section.label(l10n),
@@ -293,7 +334,12 @@ class _NavHeader extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(tokens.space3, tokens.space3, tokens.space4, tokens.space3),
+        padding: EdgeInsets.fromLTRB(
+          tokens.space3,
+          tokens.space3,
+          tokens.space4,
+          tokens.space3,
+        ),
         child: Row(
           children: [
             SizedBox(
@@ -353,13 +399,18 @@ class _NavItemState extends State<_NavItem> {
   Widget build(BuildContext context) {
     final tokens = DesignTokens.of(context);
     final text = Theme.of(context).textTheme;
-    final contentColour = widget.selected || _hovered ? tokens.textPrimary : tokens.textSecondary;
+    final contentColour = widget.selected || _hovered
+        ? tokens.textPrimary
+        : tokens.textSecondary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: tokens.space3, vertical: tokens.space1),
+        padding: EdgeInsets.symmetric(
+          horizontal: tokens.space3,
+          vertical: tokens.space1,
+        ),
         child: Material(
           color: widget.selected ? tokens.surface1 : Colors.transparent,
           borderRadius: AppRadius.smAll,
@@ -368,7 +419,10 @@ class _NavItemState extends State<_NavItem> {
             borderRadius: AppRadius.smAll,
             hoverColor: tokens.channelHoverBg,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: tokens.space3, vertical: tokens.space2),
+              padding: EdgeInsets.symmetric(
+                horizontal: tokens.space3,
+                vertical: tokens.space2,
+              ),
               child: Row(
                 children: [
                   Icon(widget.section.icon, size: 20, color: contentColour),
