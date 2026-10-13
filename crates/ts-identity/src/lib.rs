@@ -230,6 +230,43 @@ impl IdentityStore {
         self.save(name, &identity)?;
         Ok(identity)
     }
+
+    /// Moves a stored profile to another name, keeping the identity itself.
+    ///
+    /// Returns `false` when there is nothing to move: no identity under `from`,
+    /// or `to` already holds one — an identity that is in use is never
+    /// replaced. The caller's chosen name is the one that wins.
+    ///
+    /// This exists because renaming is not the same thing as re-identifying. A
+    /// host that used to impose a profile name and now lets its front-ends
+    /// choose one must move the file: leaving it behind while the new name is
+    /// read would mint a second key pair, and the server would see a different
+    /// client — the permissions granted to the old one would be gone.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdentityError::InvalidName`] for a name that would escape the
+    /// store (**both** names are validated, since both reach the filesystem),
+    /// and [`IdentityError::Io`] if the move itself fails.
+    pub fn rename(&self, from: &str, to: &str) -> Result<bool, IdentityError> {
+        let from = validate_name(from)?;
+        let to = validate_name(to)?;
+        let (from, to) = (self.path_for(from), self.path_for(to));
+
+        // Checked here rather than by the caller so no future caller can
+        // replace an identity that is already in use.
+        if to.exists() || !from.exists() {
+            return Ok(false);
+        }
+
+        fs::rename(&from, &to).map_err(io_error)?;
+        tracing::info!(
+            from = %from.display(),
+            to = %to.display(),
+            "moved a stored client identity to another profile"
+        );
+        Ok(true)
+    }
 }
 
 /// Rejects names that would escape the store or collide with the file suffix.
@@ -407,6 +444,64 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(created, reopened);
+    }
+
+    #[test]
+    fn renaming_moves_the_identity_rather_than_minting_one() {
+        // The whole point of the move: the key pair has to survive it, or the
+        // server would greet the user as a stranger (§36).
+        let dir = TempDir::new("rename");
+        let store = dir.store();
+        store.save("web", &sample()).unwrap();
+
+        assert!(store.rename("web", "personal").unwrap());
+
+        assert_eq!(store.load("personal").unwrap().expect("moved"), sample());
+        assert!(store.load("web").unwrap().is_none(), "the old file is gone");
+    }
+
+    #[test]
+    fn renaming_never_replaces_an_identity_that_is_already_there() {
+        // The name the caller asked for wins: it holds a real client of its
+        // own, and overwriting it would hand that name somebody else's keys.
+        let dir = TempDir::new("rename-clash");
+        let store = dir.store();
+        store.save("web", &sample()).unwrap();
+        let other = Identity::new("1111111122222222=", vec![9, 9, 9]);
+        store.save("personal", &other).unwrap();
+
+        assert!(!store.rename("web", "personal").unwrap());
+
+        assert_eq!(store.load("personal").unwrap().expect("kept"), other);
+        assert_eq!(store.load("web").unwrap().expect("untouched"), sample());
+    }
+
+    #[test]
+    fn renaming_nothing_is_not_a_failure() {
+        // Callers attempt this on every connect: a device that never had an
+        // identity under the old name is the ordinary case, not an error.
+        let dir = TempDir::new("rename-missing");
+        assert!(!dir.store().rename("web", "default").unwrap());
+    }
+
+    #[test]
+    fn rename_rejects_names_that_escape_the_store() {
+        // Both ends reach the filesystem, so both are validated — a name is
+        // not trusted just because it is the source.
+        let dir = TempDir::new("rename-traversal");
+        let store = dir.store();
+        store.save("web", &sample()).unwrap();
+
+        for (from, to) in [("web", "../escape"), ("../escape", "default")] {
+            assert!(
+                matches!(
+                    store.rename(from, to),
+                    Err(IdentityError::InvalidName { .. })
+                ),
+                "`{from}` -> `{to}` should be rejected"
+            );
+        }
+        assert_eq!(store.load("web").unwrap().expect("untouched"), sample());
     }
 
     #[test]

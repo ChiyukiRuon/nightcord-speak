@@ -17,6 +17,7 @@ use tokio::sync::mpsc;
 use ts_audio::FRAME_MS;
 use ts_core::Client as CoreClient;
 use ts_events::{ClientEvent, SessionEvent};
+use ts_identity::IdentityStore;
 use ts_model::{ClientError, ConnectionState, NetworkError, SessionId, VoiceState};
 use ts_protocol::VoicePacket;
 use ts_wire::{Command, FfiEvent};
@@ -55,6 +56,47 @@ fn no_such_session() -> ClientError {
     ClientError::Network(NetworkError::new("no such session"))
 }
 
+/// The profile a connection runs under.
+///
+/// A page names its own, the way the desktop app does; `fallback` is the
+/// gateway's `--profile`, for a request that names none. The name is passed on
+/// as the page wrote it — the identity store trims and validates it, and the
+/// name a user typed is what `settings.json` keeps.
+fn resolved_profile<'a>(requested: &'a str, fallback: &'a str) -> &'a str {
+    if requested.trim().is_empty() {
+        fallback
+    } else {
+        requested
+    }
+}
+
+/// Moves this device's identity onto the profile the page asked for.
+///
+/// Before pages could choose, every connection ran under the gateway's
+/// profile, so that is where such a device's identity sits. Reading the page's
+/// name while that file is left behind would generate a second identity: the
+/// server would see a brand-new client, and the permissions granted to the old
+/// one would be gone. Safe to attempt on every connect — the move happens at
+/// most once, and never over an identity the chosen name already has.
+fn adopt_stored_identity(store: &IdentityStore, previous: &str, requested: &str) {
+    match store.rename(previous, requested) {
+        Ok(true) => tracing::info!(
+            profile = requested,
+            previous = previous,
+            "the stored identity moved to the profile the page named"
+        ),
+        Ok(false) => {}
+        // A name the store refuses is `connect`'s error to report, and a
+        // failed move must not stop the connection: the page's name is used
+        // as it is.
+        Err(error) => tracing::warn!(
+            profile = requested,
+            error = %error,
+            "could not move the stored identity"
+        ),
+    }
+}
+
 /// Runs an action against one session, or fails if it is gone.
 ///
 /// A macro rather than a helper taking an async closure — the same reasoning
@@ -71,11 +113,12 @@ macro_rules! with_session {
 pub(crate) struct Worker {
     core: CoreClient,
     snapshots: crate::snapshot::Snapshots,
-    /// The identity profile every connection's `connect` is forced onto.
+    /// The identity profile a connection that names none runs under.
     ///
-    /// A browser does not get to pick: TS3 refuses a second connection from
-    /// the same identity, so a page free to choose could collide with the
-    /// desktop app — and each device has its own isolated identity store.
+    /// A page names its own, the way the desktop app does — a browser is a
+    /// client, not a session somebody else configures. This is only the
+    /// fallback, and the name under which a device that predates that stored
+    /// its identity; see [`adopt_stored_identity`].
     profile: String,
     outbound: broadcast::Sender<Outbound>,
     commands: mpsc::UnboundedReceiver<GatewayCommand>,
@@ -291,7 +334,9 @@ impl Worker {
         match command {
             Command::Connect(request) => {
                 let mut request = (**request).clone();
-                request.profile = self.profile.clone();
+                let profile = resolved_profile(&request.profile, &self.profile).to_owned();
+                adopt_stored_identity(self.core.identities(), &self.profile, &profile);
+                request.profile = profile;
                 match self.core.connect(&request).await {
                     Ok(session) => self.send(FfiEvent::ok(name, Some(session))),
                     Err(error) => self.send(FfiEvent::failed(name, None, error)),
@@ -915,5 +960,42 @@ mod tests {
         if root.exists() {
             std::fs::remove_dir_all(root).expect("test store cleanup");
         }
+    }
+
+    #[test]
+    fn a_page_names_its_own_identity_profile() {
+        // The gateway used to overwrite whatever the page asked for with its
+        // own profile, which made the setting a dead field: the identity a
+        // device presented was decided for it. A device that lived through
+        // that has its identity filed under the gateway's name, so the page's
+        // choice has to move it — generating a second identity would show the
+        // server a brand-new client and leave the old one's permissions
+        // behind.
+        let root =
+            std::env::temp_dir().join(format!("nightcord-profile-{}", crate::generate_token()));
+        let store = IdentityStore::new(&root);
+        let identity = ts_identity::Identity::new("first-unique-id=", vec![1, 2, 3]);
+        store
+            .save("web", &identity)
+            .expect("seed the forced profile");
+
+        let profile = resolved_profile("personal", "web");
+        assert_eq!(profile, "personal", "the page's name is the one in use");
+        adopt_stored_identity(&store, "web", profile);
+
+        assert_eq!(store.load("personal").unwrap().expect("moved"), identity);
+        assert!(store.load("web").unwrap().is_none(), "nothing left behind");
+        if root.exists() {
+            std::fs::remove_dir_all(root).expect("test store cleanup");
+        }
+    }
+
+    #[test]
+    fn a_request_that_names_no_profile_falls_back_to_the_gateways() {
+        // `--profile` is a default now rather than an override; a front-end
+        // that names none still has to land somewhere.
+        assert_eq!(resolved_profile("", "web"), "web");
+        assert_eq!(resolved_profile("   ", "web"), "web");
+        assert_eq!(resolved_profile("default", "web"), "default");
     }
 }

@@ -29,7 +29,8 @@ pub struct GatewayConfig {
     /// always allowed; it is not a browser being borrowed by a page.
     pub allowed_origins: Vec<String>,
 
-    /// Profile name within each device's isolated identity store.
+    /// The profile a connection that names none runs under, within that
+    /// device's isolated identity store.
     pub profile: String,
 
     /// Where the client's stores live. `None` uses the platform default — the

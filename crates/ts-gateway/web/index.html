@@ -496,7 +496,10 @@ $('connect').onclick = () => {
     payload: {
       address: $('address').value.trim(),
       nickname: $('nickname').value.trim() || 'Web User',
-      profile: 'ignored-the-gateway-picks',
+      // Empty rather than absent: an absent field means the core's own
+      // default (`default`), while an empty name is what makes the gateway
+      // decide — `--profile`, which is what this page wants.
+      profile: '',
       server_password: null,
       channel_password: null,
       privilege_key: null,

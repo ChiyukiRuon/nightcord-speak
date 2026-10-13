@@ -472,3 +472,82 @@ async fn knowing_a_device_id_without_its_secret_does_not_grant_access() {
     );
     let _ = shutdown.send(());
 }
+
+#[tokio::test]
+async fn the_name_a_page_gives_its_identity_is_the_one_used() {
+    // The gateway used to overwrite the profile every connection asked for
+    // with its own `--profile`, which made the page's setting a dead field.
+    // The name is now passed through, and this is it arriving: a name the
+    // store refuses comes back as that refusal, where the forced profile
+    // would have carried the connection on to the address instead.
+    let (addr, shutdown, _dir) = start("profile-name").await;
+    let mut client = connect_authed(addr, TOKEN).await;
+
+    client
+        .send(Message::text(
+            serde_json::json!({
+                "command": "connect",
+                "payload": {
+                    "address": "127.0.0.1:9",
+                    "nickname": "Tester",
+                    "profile": "../escape",
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    let result = next_result(&mut client, "connect").await;
+
+    assert_eq!(result["outcome"]["status"], "failed", "{result}");
+    assert!(
+        result.to_string().contains("escape"),
+        "the name the page sent is the one the store was asked for: {result}"
+    );
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn an_identity_stored_under_the_gateways_profile_moves_to_the_pages() {
+    // A device that connected before the page could choose has its identity
+    // filed under the gateway's profile name. Naming another one has to move
+    // that file: generating a second identity would show the server a
+    // brand-new client and leave the old one's permissions behind.
+    let (addr, shutdown, dir) = start("profile-move").await;
+    let (mut client, credential) = connect_device(addr, Some(TOKEN), None).await;
+    let (id, _) = credential.split_once('.').unwrap();
+    let device = dir.0.join("devices").join(id);
+    std::fs::write(device.join("web.identity"), b"the stored identity").expect("seed");
+
+    client
+        .send(Message::text(
+            serde_json::json!({
+                "command": "connect",
+                "payload": {
+                    // Refused before any socket is opened: what is under test
+                    // is where the identity file ends up.
+                    "address": "https://example.com/server",
+                    "nickname": "Tester",
+                    "profile": "personal",
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    let result = next_result(&mut client, "connect").await;
+    assert_eq!(
+        result["outcome"]["status"], "failed",
+        "the address is refused"
+    );
+
+    assert_eq!(
+        std::fs::read(device.join("personal.identity")).expect("the identity moved"),
+        b"the stored identity"
+    );
+    assert!(
+        !device.join("web.identity").exists(),
+        "nothing is left under the gateway's name"
+    );
+    let _ = shutdown.send(());
+}

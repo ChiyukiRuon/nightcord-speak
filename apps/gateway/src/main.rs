@@ -41,10 +41,12 @@ struct Args {
     #[arg(long = "allow-origin", value_name = "ORIGIN")]
     allow_origin: Vec<String>,
 
-    /// The identity profile the gateway's client presents.
+    /// The identity profile a connection that names none runs under.
     ///
-    /// Deliberately not `default`: TS3 refuses a second connection from the
-    /// same identity while the desktop app holds one.
+    /// A page names its own profile in its settings, the way the desktop app
+    /// does; this value is only the fallback. It is also the name under which
+    /// devices that predate that stored their identity, so it is read once to
+    /// move such an identity rather than generate a second one.
     #[arg(long, default_value = "web")]
     profile: String,
 
