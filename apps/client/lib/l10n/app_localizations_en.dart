@@ -1154,6 +1154,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsVad => 'Voice activity detection (VAD)';
 
   @override
+  String get settingsVadDisabled => 'Off (continuous transmission)';
+
+  @override
   String get settingsVadSmart => 'Smart speech detection (default)';
 
   @override

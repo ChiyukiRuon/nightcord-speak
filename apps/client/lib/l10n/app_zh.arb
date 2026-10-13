@@ -355,6 +355,7 @@
   "soundsOpenFolder": "打开音效文件夹",
   "soundsOpenError": "无法打开音效文件夹，请检查目录是否可访问。",
   "settingsVad": "语音活动检测 (VAD)",
+  "settingsVadDisabled": "关闭（持续发送）",
   "settingsVadSmart": "智能语音检测（默认）",
   "settingsVadSmartHint": "自动识别人声，无需手动调整音量阈值。",
   "settingsVadWaiting": "等待检测到人声",

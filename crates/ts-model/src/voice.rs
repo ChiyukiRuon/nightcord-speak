@@ -56,6 +56,8 @@ impl VoiceState {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VadAlgorithm {
+    /// Bypass detection and transmit continuously, while respecting mute controls.
+    Disabled,
     /// Classify speech using a small local neural network.
     #[default]
     Smart,

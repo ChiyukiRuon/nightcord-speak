@@ -159,6 +159,7 @@ impl TransmitPolicy {
     /// Production entry point: classify unamplified 48 kHz mono PCM, then gate it.
     pub fn should_transmit_frame(&mut self, frame: &[f32], frame_ms: u32) -> bool {
         if self.mode != VoiceActivationMode::VoiceActivation
+            || self.gate.settings().algorithm == ts_model::VadAlgorithm::Disabled
             || self.input_muted
             || self.output_muted
             || self.away
@@ -182,7 +183,12 @@ impl TransmitPolicy {
                 // Defer to the gate, which is what applies the threshold and
                 // the attack/release timing.
                 VoiceActivationMode::VoiceActivation => {
-                    self.gate.update_activity(speech, frame_ms, attack_ms)
+                    if self.gate.settings().algorithm == ts_model::VadAlgorithm::Disabled {
+                        self.gate.reset();
+                        true
+                    } else {
+                        self.gate.update_activity(speech, frame_ms, attack_ms)
+                    }
                 }
                 // Both of these bypass the gate entirely, so the gate is reset
                 // to avoid it reopening stale when the mode changes back.
@@ -1043,6 +1049,40 @@ mod tests {
 
     fn policy(mode: VoiceActivationMode) -> TransmitPolicy {
         TransmitPolicy::new(mode, settings())
+    }
+
+    #[test]
+    fn disabled_detection_transmits_silence_and_respects_controls() {
+        let disabled = VoiceActivationSettings {
+            algorithm: ts_model::VadAlgorithm::Disabled,
+            ..settings()
+        };
+        let mut policy = TransmitPolicy::new(VoiceActivationMode::VoiceActivation, disabled);
+        let silence = [0.0; 960];
+        for _ in 0..30 {
+            assert!(policy.should_transmit_frame(&silence, FRAME_MS));
+        }
+        policy.set_input_muted(true);
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_input_muted(false);
+        assert!(policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_output_muted(true);
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_output_muted(false);
+        policy.set_away(true);
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_away(false);
+        policy.set_mode(VoiceActivationMode::PushToTalk);
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_push_to_talk(true);
+        assert!(policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_mode(VoiceActivationMode::Muted);
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_mode(VoiceActivationMode::VoiceActivation);
+        policy.set_settings(settings());
+        assert!(!policy.should_transmit_frame(&silence, FRAME_MS));
+        policy.set_settings(disabled);
+        assert!(policy.should_transmit_frame(&silence, FRAME_MS));
     }
 
     /// An engine on the default profile and at baseline gain, which is what every

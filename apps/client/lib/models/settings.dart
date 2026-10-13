@@ -275,7 +275,7 @@ const double gainSilenceDb = -200.0;
 const double gainMaxDb = 10.0;
 
 /// The voice-activation gate's tuning (§29).
-enum VadAlgorithm { smart, level }
+enum VadAlgorithm { smart, level, disabled }
 
 class VoiceActivationSettings {
   const VoiceActivationSettings({
@@ -313,9 +313,11 @@ class VoiceActivationSettings {
 
   factory VoiceActivationSettings.fromJson(Map<String, dynamic> json) =>
       VoiceActivationSettings(
-        algorithm: json['algorithm'] == 'level'
-            ? VadAlgorithm.level
-            : VadAlgorithm.smart,
+        algorithm: switch (json['algorithm']) {
+          'level' => VadAlgorithm.level,
+          'disabled' => VadAlgorithm.disabled,
+          _ => VadAlgorithm.smart,
+        },
         sensitivity: (json['sensitivity'] as num?)?.toDouble() ?? 0.05,
         attackMs: json['attack_ms'] as int? ?? 60,
         releaseMs: json['release_ms'] as int? ?? 400,

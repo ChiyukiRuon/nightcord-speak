@@ -2101,6 +2101,12 @@ abstract class AppLocalizations {
   /// **'Voice activity detection (VAD)'**
   String get settingsVad;
 
+  /// No description provided for @settingsVadDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Off (continuous transmission)'**
+  String get settingsVadDisabled;
+
   /// No description provided for @settingsVadSmart.
   ///
   /// In en, this message translates to:

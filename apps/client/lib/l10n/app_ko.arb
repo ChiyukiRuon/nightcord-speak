@@ -354,6 +354,7 @@
   "soundsOpenFolder": "소리 폴더 열기",
   "soundsOpenError": "소리 폴더를 열 수 없습니다. 폴더에 접근할 수 있는지 확인하세요.",
   "settingsVad": "음성 활동 감지 (VAD)",
+  "settingsVadDisabled": "끄기 (계속 전송)",
   "settingsVadSmart": "스마트 음성 감지 (기본값)",
   "settingsVadSmartHint": "음량 기준을 직접 조절하지 않아도 사람의 목소리를 자동으로 감지합니다.",
   "settingsVadWaiting": "음성 감지 대기 중",

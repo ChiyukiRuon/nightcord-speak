@@ -1079,6 +1079,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsVad => '语音活动检测 (VAD)';
 
   @override
+  String get settingsVadDisabled => '关闭（持续发送）';
+
+  @override
   String get settingsVadSmart => '智能语音检测（默认）';
 
   @override
@@ -2181,6 +2184,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settingsVad => '語音活動偵測 (VAD)';
+
+  @override
+  String get settingsVadDisabled => '關閉（持續傳送）';
 
   @override
   String get settingsVadSmart => '智慧語音偵測（預設）';

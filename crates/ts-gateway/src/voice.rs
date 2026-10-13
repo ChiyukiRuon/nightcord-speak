@@ -338,6 +338,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn disabled_detection_encodes_silent_browser_frames() {
+        let mut voice = RemoteVoice::new(
+            SessionId::new(1),
+            VoiceActivationMode::VoiceActivation,
+            VoiceActivationSettings {
+                algorithm: ts_model::VadAlgorithm::Disabled,
+                ..VoiceActivationSettings::default()
+            },
+        )
+        .expect("encoder");
+        for _ in 0..30 {
+            assert!(
+                voice
+                    .encode_frame(&mut vec![0.0; FRAME_SAMPLES])
+                    .expect("frame")
+                    .is_some()
+            );
+        }
+        assert!(voice.levels().2);
+    }
+
+    #[test]
     fn missing_browser_frames_clear_local_speech() {
         // Regression: stopping browser capture retained the last speaking frame.
         let mut voice = RemoteVoice::new(

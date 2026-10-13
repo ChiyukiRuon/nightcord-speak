@@ -15,6 +15,15 @@ Map<String, dynamic> roundTrip(Settings settings) =>
 
 void main() {
   group('settings', () {
+    test('disabled detection survives the settings round trip', () {
+      const activation = VoiceActivationSettings(
+        algorithm: VadAlgorithm.disabled,
+        sensitivity: 0.21,
+      );
+      final restored = VoiceActivationSettings.fromJson(activation.toJson());
+      expect(restored.algorithm, VadAlgorithm.disabled);
+      expect(restored.sensitivity, 0.21);
+    });
     test('legacy activation adopts smart VAD and preserves manual tuning', () {
       final activation = VoiceActivationSettings.fromJson(const {
         'sensitivity': 0.21,

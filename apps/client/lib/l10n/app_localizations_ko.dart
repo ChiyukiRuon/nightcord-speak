@@ -1102,6 +1102,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsVad => '음성 활동 감지 (VAD)';
 
   @override
+  String get settingsVadDisabled => '끄기 (계속 전송)';
+
+  @override
   String get settingsVadSmart => '스마트 음성 감지 (기본값)';
 
   @override

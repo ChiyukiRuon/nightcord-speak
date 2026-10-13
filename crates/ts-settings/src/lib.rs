@@ -735,6 +735,13 @@ mod tests {
         let loaded: VoiceActivationSettings =
             serde_json::from_str(&serde_json::to_string(&manual).unwrap()).unwrap();
         assert_eq!(loaded, manual);
+        let disabled = VoiceActivationSettings {
+            algorithm: ts_model::VadAlgorithm::Disabled,
+            ..settings
+        };
+        let loaded: VoiceActivationSettings =
+            serde_json::from_str(&serde_json::to_string(&disabled).unwrap()).unwrap();
+        assert_eq!(loaded, disabled);
     }
 
     #[test]

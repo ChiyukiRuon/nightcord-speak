@@ -218,6 +218,10 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
           decoration: InputDecoration(labelText: l10n.settingsVad),
           items: [
             DropdownMenuItem(
+              value: VadAlgorithm.disabled,
+              child: Text(l10n.settingsVadDisabled),
+            ),
+            DropdownMenuItem(
               value: VadAlgorithm.smart,
               child: Text(l10n.settingsVadSmart),
             ),

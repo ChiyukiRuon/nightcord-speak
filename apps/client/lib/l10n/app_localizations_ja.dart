@@ -1089,6 +1089,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVad => '音声活動検出 (VAD)';
 
   @override
+  String get settingsVadDisabled => 'オフ（常時送信）';
+
+  @override
   String get settingsVadSmart => 'スマート音声検出（デフォルト）';
 
   @override

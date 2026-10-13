@@ -355,6 +355,7 @@
   "soundsOpenFolder": "開啟音效資料夾",
   "soundsOpenError": "無法開啟音效資料夾，請檢查目錄是否可存取。",
   "settingsVad": "語音活動偵測 (VAD)",
+  "settingsVadDisabled": "關閉（持續傳送）",
   "settingsVadSmart": "智慧語音偵測（預設）",
   "settingsVadSmartHint": "自動辨識人聲，無需手動調整音量閾值。",
   "settingsVadWaiting": "等待偵測到人聲",
