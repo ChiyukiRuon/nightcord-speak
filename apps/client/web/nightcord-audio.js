@@ -1,5 +1,7 @@
 // Browser audio is a capability implementation, never a second TS client.
 class NightcordAudio {
+  // 扬声器固定补偿 +10 dB，音量与静音仍由用户控制。
+  static speakerBaseGain = 10 ** (10 / 20);
   constructor(onFrame) {
     this.onFrame = onFrame;
     this.generation = 0;
@@ -71,7 +73,7 @@ class NightcordAudio {
       this.capture = new AudioWorkletNode(context, 'pcm-capture');
       this.playback = new AudioWorkletNode(context, 'pcm-playback', { outputChannelCount: [2] });
       this.gain = context.createGain();
-      this.gain.gain.value = this.muted ? 0 : this.outputVolume;
+      this.volume(this.outputVolume);
       this.playback.connect(this.gain).connect(context.destination);
       this.capture.port.onmessage = event => {
         if (generation !== this.generation) return;
@@ -135,7 +137,7 @@ class NightcordAudio {
   }
   volume(value) {
     this.outputVolume = Math.max(0, Math.min(2, value));
-    if (this.gain) this.gain.gain.value = this.muted ? 0 : this.outputVolume;
+    if (this.gain) this.gain.gain.value = this.muted ? 0 : this.outputVolume * NightcordAudio.speakerBaseGain;
   }
   test() {
     const context = this.context;

@@ -25,6 +25,10 @@ Mute/mode before startup is intent, not a missing-device error; apply it when st
 
 Per-person volume acts before vendor mixing and survives speaker-queue recreation. Total volume acts after mixing. Stored `output_volume` defaults to 1.0, not f32's 0.0; gain is dB with unity at 0.0.
 
+Microphone transmit gain includes a fixed +15 dB baseline in `ts_audio::microphone_gain`, shared by native and gateway paths. Stored/displayed `input_gain_db` is the user's relative adjustment and defaults to 0 dB; never place the fixed boost in the settings default. Preserve explicit saved adjustments and digital silence.
+
+Speaker output includes a fixed +10 dB baseline at native device playback and browser output gain. Apply it once after mixing, multiplied by the user's existing output-volume fraction; keep zero volume and deafen silent. Gateway PCM remains unboosted to avoid applying compensation twice.
+
 ## Screen Media Boundary
 
 TS6 signaling uses Rust commands/events; picture/audio use independent P2P WebRTC. The gateway does not relay screen media. TS3 lacks this capability; UI checks capabilities rather than protocol names.

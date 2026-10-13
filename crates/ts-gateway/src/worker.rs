@@ -6,7 +6,6 @@
 //! front-end should see — domain events and command results — is serialised
 //! once and broadcast only to connections belonging to this device.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -23,7 +22,7 @@ use ts_protocol::VoicePacket;
 use ts_wire::{Command, FfiEvent};
 
 use crate::Outbound;
-use crate::voice::{RemoteVoice, WsAudioSink, mix};
+use crate::voice::{InputFrames, RemoteVoice, WsAudioSink};
 
 /// One message from a connection to the worker.
 pub(crate) enum GatewayCommand {
@@ -131,8 +130,8 @@ pub(crate) struct Worker {
     output_muted: Arc<AtomicBool>,
     /// The current sink, kept so `voice_status` can report what it received.
     voice_sink: Option<Arc<WsAudioSink>>,
-    /// Frames browsers sent since the last tick, one per connection.
-    pending_audio: HashMap<u64, Vec<f32>>,
+    /// 每个连接独立缓冲音频，保留抖动期间成批到达的连续帧。
+    pending_audio: InputFrames,
     /// Scratch for the mix, sized once.
     mixed: Vec<f32>,
     /// Whether a voice failure has been reported, so a broken stream says so
@@ -164,7 +163,7 @@ impl Worker {
             voice_intent,
             output_muted: Arc::new(AtomicBool::new(false)),
             voice_sink: None,
-            pending_audio: HashMap::new(),
+            pending_audio: InputFrames::default(),
             mixed: vec![0.0; ts_audio::FRAME_SAMPLES],
             voice_failed: false,
             voice_sent_logged: false,
@@ -193,10 +192,9 @@ impl Worker {
                         self.handle(name, &command).await;
                     }
                     Some(GatewayCommand::Audio { from, frame }) => {
-                        // Replaces any unconsumed frame from the same
-                        // connection: a tick consumes what is freshest, and a
-                        // late frame is worth less than the next one.
-                        self.pending_audio.insert(from, frame);
+                        if self.voice.is_some() {
+                            self.pending_audio.push(from, frame);
+                        }
                     }
                     Some(GatewayCommand::Attach(reply)) => {
                         let _ = reply.send((self.snapshots.events(), self.outbound.subscribe()));
@@ -274,11 +272,11 @@ impl Worker {
         };
         let session = voice.session;
 
-        let frames: Vec<Vec<f32>> = self.pending_audio.drain().map(|(_, frame)| frame).collect();
-        if !mix(&frames, &mut self.mixed) {
-            voice.mark_idle();
-            // Nobody sent anything this tick: sending silence would burn
-            // uplink for a room nobody is talking in.
+        if !self.pending_audio.mix_next(&mut self.mixed) {
+            // 短暂缺帧不改变发言状态；持续停止采集仍会关闭指示器。
+            if self.pending_audio.is_idle() {
+                voice.mark_idle();
+            }
             return;
         }
 
@@ -352,6 +350,7 @@ impl Worker {
                     .is_some_and(|voice| voice.session == *session)
                 {
                     self.voice = None;
+                    self.pending_audio.clear();
                     tracing::info!(session = %session, "voice: the session left; the remote path is closed");
                 }
                 let outcome = self.core.disconnect(*session).await;
@@ -552,6 +551,7 @@ impl Worker {
 
             Command::VoiceStop => {
                 let was_bound = self.voice.take().map(|voice| voice.session);
+                self.pending_audio.clear();
                 self.voice_sink = None;
                 if let Some(session) = was_bound {
                     let state = VoiceState {
@@ -746,6 +746,7 @@ impl Worker {
         // The microphone gain is a preference rather than a moment, so it comes
         // from the settings and survives the fresh start.
         voice.set_input_gain_db(audio.input_gain_db);
+        self.pending_audio.clear();
         self.voice = Some(voice);
 
         // The sink is wired straight to the session, exactly like the

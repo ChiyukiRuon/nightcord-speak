@@ -1292,7 +1292,7 @@ void main() {
       // The panel holds a reading and a slider and no words of its own — the
       // button above it is what says what it adjusts — so the reading is what
       // this looks for.
-      expect(find.text('+10 dB'), findsNothing);
+      expect(find.text('0 dB'), findsNothing);
 
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
@@ -1302,9 +1302,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('+10 dB'),
+        find.text('0 dB'),
         findsOneWidget,
-        reason: 'the default boost until it is moved',
+        reason: 'the default relative adjustment until it is moved',
       );
 
       // Leaving closes it — after the grace period that lets the pointer cross
@@ -1313,7 +1313,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
-      expect(find.text('+10 dB'), findsNothing);
+      expect(find.text('0 dB'), findsNothing);
     },
   );
 

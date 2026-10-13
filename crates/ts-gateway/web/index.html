@@ -625,7 +625,10 @@ async function startVoiceOnce() {
   const silent = context.createGain();
   silent.gain.value = 0;
   capture.connect(silent).connect(context.destination);
-  playback.connect(context.destination);
+  // 与产品网页和原生播放一致，扬声器固定补偿 +10 dB。
+  const speakerGain = context.createGain();
+  speakerGain.gain.value = 10 ** (10 / 20);
+  playback.connect(speakerGain).connect(context.destination);
 
   state.audio = { context, capture, playback, stream, micLive: true };
 

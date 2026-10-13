@@ -15,6 +15,7 @@
 //!
 //! Nothing here decodes: `tsclientlib` already did.
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
@@ -30,6 +31,68 @@ pub const FRAME_INPUT: u8 = 1;
 
 /// The first byte of a binary frame carrying playback audio to the browser.
 pub const FRAME_OUTPUT: u8 = 2;
+
+/// 浏览器与网关使用独立时钟，先缓冲 60 ms，再按顺序消费音频。
+#[derive(Default)]
+pub(crate) struct InputFrames {
+    sources: HashMap<u64, InputQueue>,
+    empty_ticks: usize,
+}
+
+#[derive(Default)]
+struct InputQueue {
+    frames: VecDeque<Vec<f32>>,
+    started: bool,
+    waiting_ticks: usize,
+}
+
+impl InputFrames {
+    const PREFILL: usize = 3;
+    const CAPACITY: usize = 10;
+
+    pub(crate) fn push(&mut self, from: u64, frame: Vec<f32>) {
+        let source = self.sources.entry(from).or_default();
+        // 长时间阻塞后限制积压到 200 ms，避免把旧语音持续播放下去。
+        if source.frames.len() == Self::CAPACITY {
+            source.frames.pop_front();
+        }
+        source.frames.push_back(frame);
+    }
+
+    pub(crate) fn mix_next(&mut self, out: &mut [f32]) -> bool {
+        let mut frames = Vec::with_capacity(self.sources.len());
+        self.sources.retain(|_, source| {
+            source.waiting_ticks = source.waiting_ticks.saturating_add(1);
+            if source.frames.len() >= Self::PREFILL || source.waiting_ticks >= Self::PREFILL {
+                source.started = true;
+            }
+            if source.started {
+                if let Some(frame) = source.frames.pop_front() {
+                    frames.push(frame);
+                } else {
+                    return false;
+                }
+            }
+            true
+        });
+        let ready = mix(&frames, out);
+        self.empty_ticks = if ready {
+            0
+        } else {
+            self.empty_ticks.saturating_add(1)
+        };
+        ready
+    }
+
+    pub(crate) fn is_idle(&self) -> bool {
+        self.empty_ticks >= Self::PREFILL
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.sources.clear();
+        self.empty_ticks = 0;
+    }
+}
 
 /// Decodes one browser audio frame.
 ///
@@ -336,6 +399,66 @@ impl ts_protocol::AudioSink for WsAudioSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browser_bursts_keep_every_frame_in_order() {
+        let mut input = InputFrames::default();
+        let mut out = vec![0.0; FRAME_SAMPLES];
+        // 模拟每 40 ms 成批到达两帧，消费端仍每 20 ms 得到一帧。
+        input.push(1, vec![0.01; FRAME_SAMPLES]);
+        assert!(!input.mix_next(&mut out));
+        for tick in 0..40 {
+            if tick % 2 == 0 {
+                for index in tick + 2..=tick + 3 {
+                    input.push(1, vec![index as f32 / 100.0; FRAME_SAMPLES]);
+                }
+            }
+            assert!(input.mix_next(&mut out), "missing frame at {tick}");
+            assert!((out[0] - (tick + 1) as f32 / 100.0).abs() < 0.00001);
+            assert!(!input.is_idle());
+        }
+    }
+
+    #[test]
+    fn short_capture_drains_and_stopping_becomes_idle() {
+        let mut input = InputFrames::default();
+        let mut out = vec![0.0; FRAME_SAMPLES];
+        input.push(1, vec![0.25; FRAME_SAMPLES]);
+        assert!(!input.mix_next(&mut out));
+        assert!(!input.mix_next(&mut out));
+        assert!(input.mix_next(&mut out));
+        assert_eq!(out[0], 0.25);
+        for _ in 0..2 {
+            assert!(!input.mix_next(&mut out));
+            assert!(!input.is_idle());
+        }
+        assert!(!input.mix_next(&mut out));
+        assert!(input.is_idle());
+    }
+
+    #[test]
+    fn browser_backlog_is_bounded_and_sources_mix_independently() {
+        let mut input = InputFrames::default();
+        let mut out = vec![0.0; FRAME_SAMPLES];
+        for index in 0..20 {
+            input.push(1, vec![index as f32 / 100.0; FRAME_SAMPLES]);
+        }
+        for _ in 0..3 {
+            input.push(2, vec![0.5; FRAME_SAMPLES]);
+        }
+        assert!(input.mix_next(&mut out));
+        assert!((out[0] - 0.3).abs() < 0.00001);
+        for _ in 0..9 {
+            assert!(input.mix_next(&mut out));
+        }
+        assert!(!input.mix_next(&mut out));
+        input.push(1, vec![0.75; FRAME_SAMPLES]);
+        input.clear();
+        for _ in 0..3 {
+            assert!(!input.mix_next(&mut out));
+        }
+        assert!(input.is_idle());
+    }
 
     #[test]
     fn disabled_detection_encodes_silent_browser_frames() {

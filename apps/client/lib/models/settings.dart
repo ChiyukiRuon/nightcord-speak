@@ -174,7 +174,7 @@ class AudioSettings {
     this.mode = VoiceActivationMode.voiceActivation,
     this.activation = const VoiceActivationSettings(),
     this.outputVolume = 1.0,
-    this.inputGainDb = 10.0,
+    this.inputGainDb = 0.0,
   });
 
   /// Capture device id, or null for the system default.
@@ -194,7 +194,8 @@ class AudioSettings {
 
   /// Microphone gain in decibels: how loud everyone else hears us.
   ///
-  /// `0.0` is unity, and [`gainSilenceDb`] is silence. Not the same control as
+  /// `0.0` 保留音频层内置的 +15 dB 补偿，不额外调整。
+  /// [`gainSilenceDb`] is silence. Not the same control as
   /// [outputVolume], which is what *we* hear — the two are deliberately
   /// separate fields with separate units.
   final double inputGainDb;
@@ -250,15 +251,14 @@ double _volume(Object? value) =>
 
 /// A microphone gain read back from a file, pulled into range.
 ///
-/// Missing values use the same +10 dB preference as a fresh settings file.
-/// Explicitly saved gains, including zero, keep their existing value.
+/// 缺失值使用默认的 0 dB 相对调整，已保存的增益保持原值。
 ///
 /// A value that is not a number at all is silence rather than unity: it cannot
 /// come from the file (JSON has no such literal), so it means something is
 /// broken rather than something is old, and a slider holding one would assert
 /// on the first frame. The core reads it the same way.
 double _gainDb(Object? value) {
-  final db = (value as num?)?.toDouble() ?? 10.0;
+  final db = (value as num?)?.toDouble() ?? 0.0;
   if (db.isNaN) return gainSilenceDb;
   return db.clamp(gainSilenceDb, gainMaxDb);
 }

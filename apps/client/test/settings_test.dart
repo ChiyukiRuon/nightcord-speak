@@ -302,15 +302,15 @@ void main() {
       expect(back.outputVolume, closeTo(0.4, 1e-9));
     });
 
-    test('a file without microphone gain uses the default boost', () {
+    test('a file without microphone gain defaults to zero adjustment', () {
       // Missing fields must match fresh settings instead of falling to zero.
       final audio = AudioSettings.fromJson(const <String, dynamic>{
         'output_volume': 0.5,
       });
 
-      expect(audio.inputGainDb, 10.0);
-      expect(const AudioSettings().inputGainDb, 10.0);
-      expect(const Settings().audio.inputGainDb, 10.0);
+      expect(audio.inputGainDb, 0.0);
+      expect(const AudioSettings().inputGainDb, 0.0);
+      expect(const Settings().audio.inputGainDb, 0.0);
       expect(
         audio.outputVolume,
         closeTo(0.5, 1e-9),

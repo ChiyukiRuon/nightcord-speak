@@ -348,8 +348,8 @@ pub struct AudioSettings {
 
     /// Microphone gain in decibels: how loud everyone else hears us.
     ///
-    /// Missing values use the same +10 dB preference as a fresh settings file.
-    /// Explicitly saved gains, including zero, keep their existing value.
+    /// 用户相对增益默认为 0 dB；内置发声补偿由音频层应用。
+    /// 已保存的用户调整量保持原值。
     /// The bottom of the range is `ts_audio::SILENCE_DB`, a real value rather
     /// than a small one: a user who drags the slider down means silence.
     ///
@@ -378,9 +378,9 @@ impl Default for AudioSettings {
     }
 }
 
-/// Boost quiet microphones by default without replacing saved preferences.
+/// 默认不额外调整内置发声补偿。
 const fn default_input_gain_db() -> f32 {
-    10.0
+    0.0
 }
 
 /// Every build before volume existed played at unity.
@@ -912,8 +912,8 @@ mod tests {
     }
 
     #[test]
-    fn a_file_without_microphone_gain_uses_the_default_boost() {
-        // Missing fields must match fresh settings instead of falling to zero.
+    fn a_file_without_microphone_gain_defaults_to_zero_adjustment() {
+        // 缺失字段与全新设置一致，固定补偿不写入用户设置。
         let dir = TempDir::new("nogain");
         let store = dir.store();
         fs::write(
@@ -923,8 +923,8 @@ mod tests {
         .unwrap();
 
         let audio = store.load().unwrap().audio;
-        assert_eq!(audio.input_gain_db, 10.0);
-        assert_eq!(AudioSettings::default().input_gain_db, 10.0);
+        assert_eq!(audio.input_gain_db, 0.0);
+        assert_eq!(AudioSettings::default().input_gain_db, 0.0);
         // And the neighbouring field is untouched by the new one: the old key
         // still means what it always did.
         assert!((audio.output_volume - 0.35).abs() < f32::EPSILON);

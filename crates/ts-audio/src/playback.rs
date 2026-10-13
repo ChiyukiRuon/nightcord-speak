@@ -26,6 +26,13 @@ const START_TIMEOUT: Duration = Duration::from_secs(5);
 /// device but latency stays reasonable.
 const RING_SAMPLES: usize = SAMPLE_RATE as usize * PLAYBACK_CHANNELS as usize;
 
+/// 扬声器固定补偿 +10 dB，用户音量仍表示相对比例。
+const SPEAKER_BASE_GAIN_DB: f32 = 10.0;
+
+fn speaker_gain(volume: f32) -> f32 {
+    clamp_gain(volume) * crate::engine::gain_from_db(SPEAKER_BASE_GAIN_DB)
+}
+
 /// The format a playback stream ended up using.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlaybackFormat {
@@ -287,7 +294,7 @@ where
         .build_output_stream(
             *config,
             move |data: &mut [T], _info| {
-                let gain = f32::from_bits(volume.load(Ordering::Relaxed));
+                let gain = speaker_gain(f32::from_bits(volume.load(Ordering::Relaxed)));
                 // Reused across callbacks, so after the first this does not
                 // allocate. `clear` keeps the capacity.
                 scratch.clear();
@@ -406,6 +413,18 @@ impl FromF32 for u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn speaker_compensation_preserves_volume_and_silence() {
+        let boost = 10_f32.sqrt();
+        assert!((speaker_gain(1.0) - boost).abs() < 0.00001);
+        assert!((speaker_gain(0.5) - boost * 0.5).abs() < 0.00001);
+        assert_eq!(speaker_gain(0.0), 0.0);
+        let mut out = [0.0_f32; 4];
+        write_output(&mut out, &[0.1, -0.1, 1.0, -1.0], 2, speaker_gain(1.0));
+        assert!((out[0] - boost * 0.1).abs() < 0.00001);
+        assert_eq!(&out[2..], &[1.0, -1.0]);
+    }
 
     #[test]
     fn f32_conversion_is_identity() {

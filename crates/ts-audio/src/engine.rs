@@ -42,8 +42,8 @@ pub const SILENCE_DB: f32 = -200.0;
 /// consequence of turning a microphone up, not a bug.
 pub const MAX_GAIN_DB: f32 = 10.0;
 
-/// Built-in transmit boost; the user's slider remains relative to this baseline.
-pub const MICROPHONE_BASE_GAIN_DB: f32 = 6.0;
+/// 内置 +15 dB 发声补偿，设置滑块以此为基准，默认显示 0 dB。
+pub const MICROPHONE_BASE_GAIN_DB: f32 = 15.0;
 
 /// Share the same baseline and silence handling between embedded and remote paths.
 #[must_use]
@@ -1010,10 +1010,10 @@ mod tests {
 
     #[test]
     fn baseline_boost_is_relative_to_user_gain_and_preserves_silence() {
-        // Regression: the default transmit path left quiet microphones at unity.
-        assert!((microphone_gain(0.0) - 2.0).abs() < 0.01);
-        assert!((microphone_gain(-6.0) - 1.0).abs() < 0.01);
-        assert!((microphone_gain(4.0) - gain_from_db(10.0)).abs() < 0.01);
+        // 设置 0 dB 仍有内置 +15 dB 补偿，用户调整量只叠加一次。
+        assert!((microphone_gain(0.0) - gain_from_db(15.0)).abs() < 0.01);
+        assert!((microphone_gain(-15.0) - 1.0).abs() < 0.01);
+        assert!((microphone_gain(4.0) - gain_from_db(19.0)).abs() < 0.01);
         assert_eq!(microphone_gain(SILENCE_DB), 0.0);
         assert_eq!(microphone_gain(f32::NAN), 0.0);
     }
