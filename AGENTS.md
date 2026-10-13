@@ -451,6 +451,18 @@ Rust 遵循 `rust-toolchain.toml`；Windows 使用 `windows-2022`，macOS 分别
 
 ## 5. 当前进度
 
+**网页标签页图标（2026-10-13）**：用户反馈浏览器标签页没有图标。两处都缺：`web/index.html`
+是手写的（不是 Flutter 模板），从来没有 `<link rel="icon">`；`web/` 里也没有 favicon 文件，
+因为 `scripts/make-app-icon.py` 的消费者只有 Windows 与 macOS。浏览器于是按惯例去要
+`/favicon.ico`，拿到 404。
+
+图标脚本接上第三个消费者：`web/favicon.png`（32×32；模板给的 16 在 HiDPI 下是糊的）与
+`web/icons/Icon-192.png`（iOS 主屏，页面本来就声明了 `apple-mobile-web-app-capable`），
+`index.html` 加两条 link。重跑后 Windows `.ico` 与 macOS appiconset 逐字节不变。
+**没加 `manifest.json`**：那会让 Android「添加到主屏幕」变成独立窗口，是产品决定不是修图标
+的一部分，取舍记在 `docs/web-client.md`。重新构建 Web 产物后，预览 5173 上两个文件均
+HTTP 200，PNG 为 32×32 与 192×192。未提交或推送。
+
 **网页版身份档由客户端自选（2026-10-13）**：用户指出网关不该替网页决定身份档，据此修订
 此前的强制方案。连接请求里的 `profile` 不再被覆写，网页的「设置 → 连接 → 身份配置」
 自此真正生效；`--profile` / `NIGHTCORD_GATEWAY_PROFILE` 退为「请求未指定档名时的默认值」。

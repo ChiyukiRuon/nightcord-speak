@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Builds the application icons from the Nightcord mark.
 
-Two consumers, one drawing:
+Three consumers, one drawing:
 
     Windows   `apps/client/windows/runner/resources/app_icon.ico`
     macOS     `apps/client/macos/Runner/Assets.xcassets/AppIcon.appiconset/*.png`
+    Web       `apps/client/web/favicon.png`, `apps/client/web/icons/*.png`
 
 The mark is three circles, so it is drawn here rather than rasterised from the
 SVG: there is no SVG renderer in this toolchain, and adding one to draw three
@@ -59,6 +60,16 @@ WINDOWS_SIZES = [16, 24, 32, 48, 64, 128, 256]
 # are the files to write, and the manifest says which slot reads which.
 MACOS_SIZES = [16, 32, 64, 128, 256, 512, 1024]
 
+# The browser tab, and the home screen the page can be added to. `favicon.png`
+# is what `index.html`'s `<link rel="icon">` points at; the larger one is what
+# iOS reads as `apple-touch-icon` (Android would want a manifest to go with it,
+# which the page does not declare — see the web client docs).
+#
+# 32 rather than the 16 the Flutter template ships: a tab icon is drawn at the
+# device pixel ratio, so the template's size is soft on any HiDPI screen.
+WEB_FAVICON = 32
+WEB_TOUCH_ICON = 192
+
 # Drawn at this multiple and reduced with LANCZOS. Pillow's `ellipse` has no
 # anti-aliasing of its own, and at 16px the two eyes are barely a pixel each —
 # they need all the help they can get.
@@ -88,6 +99,9 @@ APPICONSET_OUT = os.path.join(
     "Assets.xcassets",
     "AppIcon.appiconset",
 )
+
+WEB_OUT = os.path.join(_ROOT, "apps", "client", "web")
+WEB_ICONS_OUT = os.path.join(WEB_OUT, "icons")
 
 
 def factors(size: int) -> int:
@@ -120,12 +134,12 @@ def draw(size: int) -> Image.Image:
 
 
 def render_all() -> dict[int, Image.Image]:
-    """Draws every size either platform asks for, once each.
+    """Draws every size any consumer asks for, once each.
 
-    16 and 32 are wanted by both, and they are the two slowest to get right, so
-    they are drawn once and shared rather than twice and compared.
+    16 and 32 are wanted by more than one, and they are the two slowest to get
+    right, so they are drawn once and shared rather than twice and compared.
     """
-    wanted = sorted(set(WINDOWS_SIZES) | set(MACOS_SIZES))
+    wanted = sorted(set(WINDOWS_SIZES) | set(MACOS_SIZES) | {WEB_FAVICON, WEB_TOUCH_ICON})
     return {size: draw(size) for size in wanted}
 
 
@@ -162,10 +176,30 @@ def write_appiconset(rendered: dict[int, Image.Image]) -> None:
         print(f"  app_icon_{size}.png")
 
 
+def write_web(rendered: dict[int, Image.Image]) -> None:
+    """Writes what `index.html` links to.
+
+    Transparent, like the other two: iOS composites a transparent home-screen
+    icon onto black, which is a shade off the app's own #242034 background and
+    the same shape the mark already keeps on a dark taskbar.
+    """
+    os.makedirs(WEB_ICONS_OUT, exist_ok=True)
+
+    favicon = os.path.join(WEB_OUT, "favicon.png")
+    rendered[WEB_FAVICON].save(favicon, format="PNG")
+    print(f"wrote {favicon}")
+    print(f"  favicon.png ({WEB_FAVICON}x{WEB_FAVICON})")
+
+    touch = os.path.join(WEB_ICONS_OUT, f"Icon-{WEB_TOUCH_ICON}.png")
+    rendered[WEB_TOUCH_ICON].save(touch, format="PNG")
+    print(f"  Icon-{WEB_TOUCH_ICON}.png")
+
+
 def main() -> None:
     rendered = render_all()
     write_ico(rendered)
     write_appiconset(rendered)
+    write_web(rendered)
 
 
 if __name__ == "__main__":
