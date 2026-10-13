@@ -122,8 +122,9 @@ jobs:
             command -v rsync >/dev/null
             command -v sha256sum >/dev/null
             command -v realpath >/dev/null
-            mkdir -p /var/www/nightcord.chiyukiruon.top
-            mkdir -p /var/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
+            test -d /var/www/nightcord.chiyukiruon.top
+            test -w /var/www/nightcord.chiyukiruon.top
+            mkdir -p /home/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload website
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -133,7 +134,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT || '22' }}
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE }}
           source: web
-          target: /var/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
+          target: /home/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
           strip_components: 1
       - name: Verify and publish website
         uses: appleboy/ssh-action@v1.0.3
@@ -145,7 +146,7 @@ jobs:
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE }}
           script: |
             set -eu
-            staging=/var/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
+            staging=/home/www/.nightcord.chiyukiruon.top-upload-${{ github.run_id }}-${{ github.run_attempt }}
             target=/var/www/nightcord.chiyukiruon.top
             test "$(realpath "$staging")" = "$staging"
             test "$(realpath "$target")" = "$target"

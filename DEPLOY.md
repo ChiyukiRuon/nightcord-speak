@@ -238,7 +238,7 @@ docker compose up -d --no-build
 | Secret | 是否必填 | 内容 |
 | --- | --- | --- |
 | `SERVER_IP` | 是 | 服务器公网 IP 或 SSH 域名，不带协议和路径 |
-| `SERVER_USER` | 是 | SSH 登录用户，须能写入 `/var/www/` 和正式网页目录 |
+| `SERVER_USER` | 是 | SSH 登录用户，须能写入 `/home/www/` 和正式网页目录 |
 | `SERVER_SSH_KEY` | 是 | SSH 私钥全文，包括 BEGIN／END 行；对应公钥须已加入服务器用户的 `authorized_keys` |
 | `SERVER_PORT` | 否 | SSH 端口，默认 `22` |
 | `SERVER_SSH_PASSPHRASE` | 否 | 私钥的加密口令；私钥未加密时留空 |
@@ -257,9 +257,11 @@ sudo apt-get update
 sudo apt-get install -y rsync
 ```
 
-部署用户需要有 `/var/www/` 和正式网页目录的写权限，Nginx 须能读取该网页目录。
+正式目录 `/var/www/nightcord.chiyukiruon.top/` 须提前创建，部署用户需要有
+`/home/www/` 和正式网页目录的写权限，无需向 `/var/www/` 创建目录的权限。
+Nginx 须能读取正式网页目录。
 Nginx 的 `root` 配置为 `/var/www/nightcord.chiyukiruon.top`，HTTPS 配置参考方式 C；
-网页文件更新不需要重启网关或 Nginx。工作流先上传到本次运行的临时目录，
+网页文件更新不需要重启网关或 Nginx。工作流先上传到 `/home/www/` 下本次运行的临时目录，
 校验主要入口文件后用 `rsync` 同步正式目录，并清理该目录中不再使用的旧文件。
 正式目录应只存放网页产物，不存放网关数据或其他手工文件。
 
