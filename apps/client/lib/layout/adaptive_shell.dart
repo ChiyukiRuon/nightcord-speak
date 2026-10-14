@@ -6,7 +6,8 @@ import 'mobile_shell.dart';
 enum LayoutClass { desktop, mobile }
 
 /// Layout follows available width, including narrow desktop browser windows.
-LayoutClass layoutClassFor(double width) => width >= 760 ? LayoutClass.desktop : LayoutClass.mobile;
+LayoutClass layoutClassFor(double width) =>
+    width >= 760 ? LayoutClass.desktop : LayoutClass.mobile;
 
 class AdaptiveShell extends StatefulWidget {
   const AdaptiveShell({
@@ -51,14 +52,19 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
               navigationWidth: widget.navigationWidth,
             )
           : MobileShell(
-              navigation: widget.mobileNavigationBuilder?.call(_open) ?? widget.navigation,
+              navigation:
+                  widget.mobileNavigationBuilder?.call(_open) ??
+                  widget.navigation,
               content: widget.content,
               showingDetail: _detail,
               onBack: _back,
               footer: widget.footer,
               banner: widget.banner,
-              title: _detail ? widget.mobileDetailTitle ?? widget.mobileTitle : widget.mobileTitle,
+              title: _detail
+                  ? widget.mobileDetailTitle ?? widget.mobileTitle
+                  : widget.mobileTitle,
               actions: widget.mobileActions,
+              navigationTitle: widget.mobileTitle,
             );
     },
   );

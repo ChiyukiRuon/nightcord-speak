@@ -25,3 +25,23 @@ xcrun swiftc -parse-as-library -O -target "$UPDATER_ARCH-apple-macosx10.15.4" \
   "$UPDATER_SOURCE/UpdateTransaction.swift" "$UPDATER_SOURCE/Main.swift" \
   -o "$UPDATER_CONTENTS/MacOS/NightcordUpdater"
 codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$UPDATER_BUNDLE"
+
+# A private XPC service starts the existing installer without inheriting the
+# client's sandbox. Keep the main app sandboxed and the launcher stateless.
+LAUNCHER_BUNDLE="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/XPCServices/NightcordUpdateLauncher.xpc"
+mkdir -p "$LAUNCHER_BUNDLE/Contents/MacOS"
+cat > "$LAUNCHER_BUNDLE/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.chiyukiruon.nightcordClient.updateLauncher</string>
+<key>CFBundleExecutable</key><string>NightcordUpdateLauncher</string>
+<key>CFBundlePackageType</key><string>XPC!</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>XPCService</key><dict><key>ServiceType</key><string>Application</string></dict>
+</dict></plist>
+PLIST
+xcrun swiftc -parse-as-library -O -target "$UPDATER_ARCH-apple-macosx10.15.4" \
+  "$PROJECT_DIR/Runner/NightcordUpdateLaunchProtocol.swift" "$UPDATER_SOURCE/LaunchService.swift" \
+  -o "$LAUNCHER_BUNDLE/Contents/MacOS/NightcordUpdateLauncher"
+codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$LAUNCHER_BUNDLE"

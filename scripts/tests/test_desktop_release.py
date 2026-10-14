@@ -99,6 +99,12 @@ class ReleaseTests(unittest.TestCase):
             (helper / "MacOS").mkdir(parents=True)
             (helper / "MacOS/NightcordUpdater").write_bytes(b"fixture")
             (helper / "Info.plist").write_bytes(b"fixture")
+            launcher = helper.parents[2] / "XPCServices/NightcordUpdateLauncher.xpc/Contents"
+            with self.assertRaisesRegex(ValueError, "Missing macOS update launch service"):
+                release.package(root, "0.2.1", "1", "macos", "arm64", "commit")
+            (launcher / "MacOS").mkdir(parents=True)
+            (launcher / "MacOS/NightcordUpdateLauncher").write_bytes(b"fixture")
+            (launcher / "Info.plist").write_bytes(b"fixture")
             source = root / "apps/client/macos/Runner/Release.entitlements"
             source.parent.mkdir(parents=True)
             source.write_bytes(plistlib.dumps({"com.apple.security.app-sandbox": True}).replace(b"\n", b"\r\n"))

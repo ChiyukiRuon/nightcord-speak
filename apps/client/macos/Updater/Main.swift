@@ -3,18 +3,49 @@ import Cocoa
 @main
 struct NightcordUpdater {
   @MainActor
-  static func launch(_ application: URL) async throws {
+  static func launch(_ application: URL, transaction: UpdateTransaction) async throws {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.createsNewApplicationInstance = true
-    _ = try await NSWorkspace.shared.openApplication(at: application, configuration: configuration)
+    do {
+      _ = try await NSWorkspace.shared.openApplication(at: application, configuration: configuration)
+      return
+    } catch {
+      transaction.log("warn", "workspace-launch-failed", String(describing: error))
+    }
+    // 参考 CC Switch，先通过 open 请求桌面会话启动并激活新窗口。
+    do {
+      try transaction.run("/usr/bin/open", ["-n", application.path])
+      return
+    } catch {
+      transaction.log("warn", "open-launch-failed", String(describing: error))
+    }
+    // Launch Services 不可用时直接启动已验证的应用，并检查进程是否持续运行。
+    let process = Process()
+    process.executableURL = application.appendingPathComponent("Contents/MacOS/Nightcord Speak")
+    process.standardInput = FileHandle.nullDevice
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try process.run()
+    transaction.log("info", "direct-launch-started", "application_pid=\(process.processIdentifier)")
+    try await Task.sleep(nanoseconds: 1_000_000_000)
+    guard process.isRunning else {
+      throw NSError(domain: "NightcordUpdater", code: 11,
+        userInfo: [NSLocalizedDescriptionKey: "Application exited during restart (\(process.terminationStatus))"])
+    }
   }
 
   @MainActor
   static func main() async {
-    NSApplication.shared.setActivationPolicy(.accessory)
-    guard CommandLine.arguments.count == 2 else { return }
+    NSLog("NightcordUpdater entry pid=%d argument_count=%d", getpid(), CommandLine.arguments.count)
+    guard CommandLine.arguments.count == 2 else {
+      NSLog("NightcordUpdater rejected launch: expected one configuration argument")
+      return
+    }
     let configuration = URL(fileURLWithPath: CommandLine.arguments[1])
     let root = configuration.deletingLastPathComponent()
+    let entry = "\(ISO8601DateFormatter().string(from: Date())) [info] pid=\(getpid()) stage=entry\n"
+    try? entry.write(to: root.appendingPathComponent("updater-entry.log"), atomically: true, encoding: .utf8)
+    NSApplication.shared.setActivationPolicy(.accessory)
     var transaction: UpdateTransaction?
     do {
       let target = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -26,7 +57,7 @@ struct NightcordUpdater {
       try update.prepare()
       try update.replace()
       update.log("info", "relaunch-started")
-      try await launch(target)
+      try await launch(target, transaction: update)
       update.log("info", "relaunched")
       // Cleanup failure must not roll back a successfully relaunched update.
       do { try update.finish() } catch { update.log("warn", "cleanup-failed", String(describing: error)) }
@@ -45,7 +76,7 @@ struct NightcordUpdater {
       if let update = transaction, update.parentExited {
         if recovered {
           update.log("info", "relaunch-recovery")
-          do { try await launch(update.target) } catch { update.log("error", "recovery-launch-failed", String(describing: error)) }
+          do { try await launch(update.target, transaction: update) } catch { update.log("error", "recovery-launch-failed", String(describing: error)) }
         }
         let alert = NSAlert()
         alert.messageText = "Nightcord Speak"

@@ -13,6 +13,8 @@ import 'update_model.dart';
 import 'update_download.dart';
 import 'update_helper.dart';
 import 'update_log.dart';
+import 'update_windows.dart';
+import 'update_macos.dart';
 
 UpdateService createUpdateService() => NativeUpdateService();
 
@@ -238,41 +240,24 @@ class NativeUpdateService implements UpdateService {
         '\uFEFF${await rootBundle.loadString('assets/updates/windows.ps1')}',
         flush: true,
       );
-      final helper = await Process.start('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-WindowStyle',
-        'Hidden',
-        '-File',
+      final helperPid = await launchWindowsUpdateHelper(
         script.path,
-        '-Configuration',
         configuration.path,
-      ], mode: ProcessStartMode.detached);
+      );
       updateLogger(
         'info',
-        'Windows helper launched attempt=$nonce helper_pid=${helper.pid}',
+        'Windows helper launched attempt=$nonce helper_pid=$helperPid',
       );
     } else {
       final helper = '$target/Contents/Helpers/NightcordUpdater.app';
       if (!await Directory(helper).exists()) {
         throw const FileSystemException('Update helper unavailable');
       }
-      final opened = await Process.run('/usr/bin/open', [
-        '-n',
-        '-a',
-        helper,
-        '--args',
-        configuration.path,
-      ]);
+      final helperPid = await launchMacOSUpdateHelper(configuration.path);
       updateLogger(
         'info',
-        'macOS helper launch attempt=$nonce exit_code=${opened.exitCode}',
+        'macOS helper launched attempt=$nonce helper_pid=$helperPid',
       );
-      if (opened.exitCode != 0) {
-        throw const ProcessException('open', [], 'Cannot start update helper');
-      }
     }
     await waitForUpdateHelper(directory, nonce, markerPrefix: markerPrefix);
     await File('${directory.path}/${markerPrefix}commit')

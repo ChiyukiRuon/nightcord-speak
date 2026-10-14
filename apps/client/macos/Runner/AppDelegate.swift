@@ -35,6 +35,7 @@ class NightcordTerminationCoordinator {
 @main
 class AppDelegate: FlutterAppDelegate {
   private var lifecycleChannel: FlutterMethodChannel?
+  private var cleanupComplete = false
   private lazy var termination = NightcordTerminationCoordinator(
     shutdown: { [weak self] done in
       self?.lifecycleChannel?.invokeMethod("shutdown", arguments: nil) { response in
@@ -45,28 +46,48 @@ class AppDelegate: FlutterAppDelegate {
         done()
       }
     },
-    finish: { NSApp.reply(toApplicationShouldTerminate: true) }
+    finish: { [weak self] in
+      self?.cleanupComplete = true
+      // 清理完成后再从 RunLoop 发起退出，避免模态循环阻塞 Flutter 消息队列。
+      RunLoop.main.perform { NSApp.terminate(nil) }
+    }
   )
 
   func configureMainLifecycle(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "nightcord/lifecycle", binaryMessenger: messenger)
     lifecycleChannel = channel
     channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "startUpdateHelper" {
+        guard let arguments = call.arguments as? [String: Any],
+          let configuration = arguments["configuration"] as? String, !configuration.isEmpty
+        else { result(FlutterError(code: "invalid_arguments", message: "Missing update configuration path", details: nil)); return }
+        NightcordUpdateLauncher.launch(configuration: URL(fileURLWithPath: configuration)) { launched in
+          switch launched {
+          case .success(let pid): result(Int(pid))
+          case .failure(let error):
+            let native = error as NSError
+            result(FlutterError(code: "launch_failed", message: native.localizedDescription,
+              details: ["domain": native.domain, "code": native.code]))
+          }
+        }
+        return
+      }
       if call.method == "quitForUpdate" {
         result(nil)
-        DispatchQueue.main.async { NSApp.terminate(nil) }
+        DispatchQueue.main.async { self?.termination.requestExit() }
         return
       }
       guard call.method == "ready" else { result(FlutterMethodNotImplemented); return }
       result(nil)
-      // AppKit must receive NSTerminateLater before its deferred reply.
       DispatchQueue.main.async { self?.termination.mainIsolateReady() }
     }
   }
 
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    if cleanupComplete { return .terminateNow }
     DispatchQueue.main.async { self.termination.requestExit() }
-    return .terminateLater
+    // 等待 Dart 关闭核心期间保留普通事件循环；terminateLater 会阻塞清理回调。
+    return .terminateCancel
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

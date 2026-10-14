@@ -46,6 +46,15 @@ function Assert-UpdateNotAborted($root, $nonce) {
         throw 'Client stopped waiting for the update'
     }
 }
+function Assert-UpdateTargetIdle($target, $excludedPid) {
+    $executable = Join-Path $target 'Nightcord Speak.exe'
+    foreach ($client in Get-Process -Name 'Nightcord Speak' -ErrorAction SilentlyContinue) {
+        if ($client.Id -ne $excludedPid -and [string]::Equals($client.Path, $executable, [StringComparison]::OrdinalIgnoreCase)) {
+            Write-UpdateTrace 'error' 'other-instance' ('pid={0} still uses the installation directory' -f $client.Id)
+            throw ('Another Nightcord Speak instance is running from this installation (pid={0}); close it before updating' -f $client.Id)
+        }
+    }
+}
 function Invoke-PortableReplacement($stage, $target, $backup, $changes) {
     foreach ($source in Get-ChildItem -LiteralPath $stage) {
         $destination = Join-Path $target $source.Name
@@ -105,6 +114,7 @@ try {
     $validated = $true
     Write-UpdateTrace 'info' 'validated' 'Package checksum, parent process and target validated'
     Assert-UpdateNotAborted $updateRoot $settings.nonce
+    Assert-UpdateTargetIdle $target $settings.parent_pid
     # Each retry owns fresh staging and backup paths, including elevation retries.
     $attempt = $settings.nonce + $(if ($Elevated) { '-elevated' } else { '' })
     $stage = Join-Path $updateRoot ('stage-' + $attempt)
@@ -164,6 +174,8 @@ try {
     }
     Write-UpdateTrace 'info' 'committed' 'Waiting for client process to exit'
     if (-not $parent.WaitForExit(60000)) { throw 'Application did not exit for the update' }
+    # Recheck after exit in case another instance started during preparation.
+    Assert-UpdateTargetIdle $target 0
     $exited = $true
     Write-UpdateTrace 'info' 'parent-exited' 'Beginning installation'
     if ($settings.installer) {
@@ -191,7 +203,7 @@ try {
     }
     # The original helper relaunches the client with the user's original token.
     Write-UpdateTrace 'info' 'installed' ('changed_components={0}' -f $changes.Count)
-    if (-not $Elevated) { Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Hidden }
+    if (-not $Elevated) { Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Normal }
     [System.IO.File]::WriteAllText((Get-UpdateSignal $updateRoot $settings.nonce 'complete'), 'ok')
     Write-UpdateTrace 'info' 'complete' ('relaunch_by={0}' -f $(if ($Elevated) { 'broker' } else { 'self' }))
 } catch {
@@ -210,7 +222,7 @@ try {
             $exited = $parent.HasExited
             if (Test-Path -LiteralPath (Get-UpdateSignal $updateRoot $settings.nonce 'error')) { throw 'Elevated update failed. See updater.log.' }
             if (-not (Test-Path -LiteralPath (Get-UpdateSignal $updateRoot $settings.nonce 'complete'))) { throw 'Elevated updater did not finish' }
-            Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Hidden
+            Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Normal
             Write-UpdateTrace 'info' 'relaunched' 'Client launched with original user token'
             return
         } catch {
@@ -240,7 +252,7 @@ try {
     }
     if ($exited -and -not $Elevated) {
         Write-UpdateTrace 'info' 'relaunch-recovery' 'Attempting to launch the recovered client'
-        Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Hidden
+        Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WorkingDirectory $target -WindowStyle Normal
         Add-Type -AssemblyName System.Windows.Forms
         $message = switch -Regex ($settings.language) {
             '^zh.*(Hant|TW|HK|MO)' { '更新失敗，已嘗試恢復原版本。請重新下載後重試。'; break }

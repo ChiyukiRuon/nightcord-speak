@@ -35,6 +35,9 @@ struct UpdaterTests {
       try files.createDirectory(at: download, withIntermediateDirectories: false)
       let package = download.appendingPathComponent("update.zip")
       try files.copyItem(at: archive, to: package)
+      // 与沙盒客户端下载的更新包一致，带上内核会拒绝执行的强制隔离标记。
+      let quarantine = Array("0086;00000000;Nightcord Speak;".utf8)
+      try require(setxattr(package.path, "com.apple.quarantine", quarantine, quarantine.count, 0, 0) == 0, "Fixture quarantine failed")
       let request: [String: Any] = [
         "parent_pid": 999999, "target": target.path, "package": package.path,
         "sha256": hash ?? digest, "version": requestedVersion ?? version,
@@ -45,6 +48,15 @@ struct UpdaterTests {
       try JSONSerialization.data(withJSONObject: request).write(to: configuration)
       return try UpdateTransaction(configuration: configuration, allowedTarget: target)
     }
+
+    let aborted = try fixture("aborted")
+    try aborted.prepare()
+    try aborted.request.nonce.write(to: aborted.root.appendingPathComponent("abort"), atomically: true, encoding: .utf8)
+    do { try aborted.replace(); throw NSError(domain: "Aborted update installed", code: 1) }
+    catch { try require((error as NSError).code == 10, "Abort was not honored before replacement") }
+    try require(files.fileExists(atPath: aborted.target.appendingPathComponent("original-marker").path), "Abort changed installed files")
+    try aborted.cleanStage()
+    print("Verified abort after readiness preserves the original application.")
 
     let rollback = try fixture("rollback")
     try rollback.prepare()
@@ -92,15 +104,21 @@ struct UpdaterTests {
     try success.prepare()
     try success.request.nonce.write(to: success.root.appendingPathComponent("commit"), atomically: true, encoding: .utf8)
     try success.replace()
+    let installedHelper = Process()
+    installedHelper.executableURL = success.target.appendingPathComponent("Contents/Helpers/NightcordUpdater.app/Contents/MacOS/NightcordUpdater")
+    installedHelper.standardError = FileHandle.nullDevice
+    var executable = true
+    do { try installedHelper.run(); installedHelper.waitUntilExit() } catch { executable = false }
+    try require(executable && installedHelper.terminationStatus == 0, "Quarantined replacement cannot be executed")
     try success.finish()
     try require(!files.fileExists(atPath: success.backup.path), "Successful update left backup")
     try require(try String(contentsOf: userFile, encoding: .utf8) == "keep", "User sounds changed")
     try require(!files.fileExists(atPath: success.root.path), "Successful update left temporary transaction files")
     let successLog = try String(contentsOf: URL(fileURLWithPath: success.request.log_file!), encoding: .utf8)
-    for stage in ["started", "checksum-verified", "ready", "committed", "parent-exited", "installed", "complete"] {
+    for stage in ["started", "checksum-verified", "quarantine-released", "ready", "committed", "parent-exited", "installed", "complete"] {
       try require(successLog.contains("stage=" + stage), "Missing persistent update diagnostic: " + stage)
     }
-    print("Verified successful update cleanup and user-sound preservation.")
+    print("Verified quarantine release, successful update cleanup and user-sound preservation.")
 
     let diagnostics = try fixture("command-diagnostics")
     failed = false

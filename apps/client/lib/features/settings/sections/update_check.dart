@@ -38,38 +38,47 @@ class UpdateCheck extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: tokens.space4),
-            OutlinedButton(
-              onPressed: controller.busy
-                  ? null
-                  : () async {
-                      if (controller.prepared != null) {
-                        await controller.install(
-                          Localizations.localeOf(context).toLanguageTag(),
-                          exitApplication ?? exitForUpdate,
-                        );
-                      } else if (controller.update != null) {
-                        await controller.download();
-                      } else {
-                        await controller.check();
-                      }
-                    },
-              child: Text(label),
-            ),
-            if (controller.failed) Text(l10n.updateError),
-            if (!controller.failed &&
-                controller.checked &&
-                controller.update == null)
-              Text(l10n.updateCurrent),
-            if (controller.update != null) ...[
-              if (!controller.busy && controller.prepared == null)
-                Text(l10n.updateAvailable(controller.update!.version)),
-              if (controller.activity == UpdateActivity.downloading) ...[
-                LinearProgressIndicator(value: controller.progress ?? 0),
-                TextButton(
-                  onPressed: controller.cancelDownload,
-                  child: Text(l10n.updateCancel),
+            Wrap(
+              spacing: tokens.space3,
+              runSpacing: tokens.space2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: controller.busy
+                      ? null
+                      : () async {
+                          if (controller.prepared != null) {
+                            await controller.install(
+                              Localizations.localeOf(context).toLanguageTag(),
+                              exitApplication ?? exitForUpdate,
+                            );
+                          } else if (controller.update != null) {
+                            await controller.download();
+                          } else {
+                            await controller.check();
+                          }
+                        },
+                  child: Text(label),
                 ),
+                if (controller.activity == UpdateActivity.downloading)
+                  TextButton(
+                    onPressed: controller.cancelDownload,
+                    child: Text(l10n.updateCancel),
+                  ),
+                if (controller.failed) Text(l10n.updateError),
+                if (!controller.failed &&
+                    controller.checked &&
+                    controller.update == null)
+                  Text(l10n.updateCurrent),
+                if (controller.update != null &&
+                    !controller.busy &&
+                    controller.prepared == null)
+                  Text(l10n.updateAvailable(controller.update!.version)),
               ],
+            ),
+            if (controller.activity == UpdateActivity.downloading) ...[
+              SizedBox(height: tokens.space3),
+              LinearProgressIndicator(value: controller.progress ?? 0),
             ],
           ],
         );

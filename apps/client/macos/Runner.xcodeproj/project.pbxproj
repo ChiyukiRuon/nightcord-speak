@@ -21,6 +21,8 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A734F10F2026101400000003 /* NightcordUpdateLaunchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A734F10F2026101400000004 /* NightcordUpdateLaunchProtocol.swift */; };
+		A734F10F2026101400000001 /* NightcordUpdateLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A734F10F2026101400000002 /* NightcordUpdateLauncher.swift */; };
 		39824139202C1EFAA5D7BFFC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5B9B646344AC35C6C91C050D /* InfoPlist.strings */; };
 		93CE84355B568EFF40CF3083 /* Menu.strings in Resources */ = {isa = PBXBuildFile; fileRef = DBDF246904CE78FFBF412F89 /* Menu.strings */; };
 		8E9A3E310908D3F2A9AECE9D /* NightcordMenuLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D04A96108BF83E7039CCE39 /* NightcordMenuLocalization.swift */; };
@@ -66,6 +68,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A734F10F2026101400000004 /* NightcordUpdateLaunchProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightcordUpdateLaunchProtocol.swift; sourceTree = "<group>"; };
+		A734F10F2026101400000002 /* NightcordUpdateLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightcordUpdateLauncher.swift; sourceTree = "<group>"; };
 		226529A27D8F639B225570F5 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ko"; path = "ko.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		E5CCF75B7AB0D831CBF87864 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ja"; path = "ja.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		BC0E0EA43FBD1FE631FE5352 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
@@ -185,6 +189,8 @@
 			isa = PBXGroup;
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
+				A734F10F2026101400000002 /* NightcordUpdateLauncher.swift */,
+				A734F10F2026101400000004 /* NightcordUpdateLaunchProtocol.swift */,
 				0D04A96108BF83E7039CCE39 /* NightcordMenuLocalization.swift */,
 				DBDF246904CE78FFBF412F89 /* Menu.strings */,
 				5B9B646344AC35C6C91C050D /* InfoPlist.strings */,
@@ -420,6 +426,8 @@
 				036C7F491FF848548C15974C /* NightcordSystemAudioDevice.swift in Sources */,
 				BAA143169ED34123AB62BE01 /* NightcordScreenPicker.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
+				A734F10F2026101400000001 /* NightcordUpdateLauncher.swift in Sources */,
+				A734F10F2026101400000003 /* NightcordUpdateLaunchProtocol.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

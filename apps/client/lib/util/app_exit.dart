@@ -3,11 +3,14 @@ import 'dart:ui' show AppExitType, AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../core/updates/update_log.dart';
+
 const _channel = MethodChannel('nightcord/lifecycle');
 
 /// Use the same cleanup path as a user closing the main window.
 Future<void> exitForUpdate() async {
-  if (defaultTargetPlatform == TargetPlatform.macOS) {
+  if (defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows) {
     await _channel.invokeMethod<void>('quitForUpdate');
   } else {
     final response = await ServicesBinding.instance.exitApplication(
@@ -27,6 +30,7 @@ Future<void> registerMainWindowExit(void Function() shutdown) async {
   _channel.setMethodCallHandler((call) async {
     if (call.method != 'shutdown') throw MissingPluginException();
     if (!stopped) {
+      updateLogger('info', 'main isolate shutdown started');
       shutdown();
       stopped = true;
     }

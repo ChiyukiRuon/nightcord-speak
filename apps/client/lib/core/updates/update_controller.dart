@@ -25,6 +25,7 @@ class UpdateController extends ChangeNotifier {
   PreparedUpdate? prepared;
   double? progress;
   bool _disposed = false;
+  bool _handedOff = false;
 
   bool get busy => activity != UpdateActivity.idle;
 
@@ -49,7 +50,7 @@ class UpdateController extends ChangeNotifier {
       await action();
       updateLogger(
         'info',
-        '${next.name} completed elapsed_ms=${timer.elapsedMilliseconds}',
+        '${next.name} ${_handedOff ? 'handed off; awaiting process exit' : 'completed'} elapsed_ms=${timer.elapsedMilliseconds}',
       );
     } on UpdateCancelled {
       // Cancellation is a user action, not a failed update.
@@ -69,7 +70,7 @@ class UpdateController extends ChangeNotifier {
         '${next.name} failed elapsed_ms=${timer.elapsedMilliseconds}: $error\n$stack',
       );
     } finally {
-      activity = UpdateActivity.idle;
+      if (!_handedOff) activity = UpdateActivity.idle;
       progress = null;
       _notify();
     }
@@ -98,6 +99,7 @@ class UpdateController extends ChangeNotifier {
         final package = prepared;
         if (package == null) return;
         await service.install(package, language);
+        _handedOff = true;
         updateLogger(
           'info',
           'helper committed; requesting clean application exit',

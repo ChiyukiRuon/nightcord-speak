@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nightcord_client/util/app_exit.dart';
+import 'package:nightcord_client/core/updates/update_windows.dart';
+import 'package:nightcord_client/core/updates/update_macos.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -59,5 +61,43 @@ void main() {
       fail('macOS channel was invoked');
     });
     await registerMainWindowExit(() => fail('shutdown was invoked'));
+  });
+
+  test('Windows update exits through the main native window', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    var requests = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'quitForUpdate');
+      requests++;
+      return null;
+    });
+    await exitForUpdate();
+    expect(requests, 1);
+  });
+
+  test(
+    'Windows passes helper paths intact to the native GUI launcher',
+    () async {
+      const script = "C:\\更新's path\\helper.ps1";
+      const configuration = "C:\\更新's path\\update.json";
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'startUpdateHelper');
+        expect(call.arguments, {
+          'script': script,
+          'configuration': configuration,
+        });
+        return 12345;
+      });
+      expect(await launchWindowsUpdateHelper(script, configuration), 12345);
+    },
+  );
+  test('macOS helper startup uses the native lifecycle channel', () async {
+    const configuration = '/tmp/更新路径/update.json';
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'startUpdateHelper');
+      expect(call.arguments, {'configuration': configuration});
+      return 23456;
+    });
+    expect(await launchMacOSUpdateHelper(configuration), 23456);
   });
 }

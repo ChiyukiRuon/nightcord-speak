@@ -88,6 +88,7 @@ final class UpdateTransaction {
   }
 
   func prepare() throws {
+    try assertNotAborted()
     log("info", "validate-package", "package=\(request.package)")
     let package = URL(fileURLWithPath: request.package).standardizedFileURL
     guard package.deletingLastPathComponent() == root,
@@ -128,6 +129,7 @@ final class UpdateTransaction {
         }
       }
     }
+    try releaseQuarantine(replacement)
     try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", replacement.path])
     #if arch(arm64)
     let architecture = "arm64"
@@ -137,22 +139,39 @@ final class UpdateTransaction {
     for relative in ["Contents/MacOS/Nightcord Speak", "Contents/Frameworks/libnightcord_ffi.dylib"] {
       try run("/usr/bin/lipo", [replacement.appendingPathComponent(relative).path, "-verify_arch", architecture])
     }
+    try assertNotAborted()
     try request.nonce.write(to: root.appendingPathComponent("ready"), atomically: true, encoding: .utf8)
     log("info", "ready", "Waiting for client commit")
+  }
+
+  /// 沙盒客户端写出的更新包带有强制隔离标记（0086），ditto 解压时会把它传播到
+  /// 每个文件；包内条目也可能自带该属性，所以仅用 --noqtn 解压并不够。留下的
+  /// 标记会让内核以 EPERM 拒绝执行新版本及其内嵌助手，codesign 校验发现不了。
+  func releaseQuarantine(_ bundle: URL) throws {
+    let descendants = files.enumerator(atPath: bundle.path)?.compactMap { $0 as? String } ?? []
+    var released = 0
+    for path in [bundle.path] + descendants.map({ bundle.appendingPathComponent($0).path }) {
+      if removexattr(path, "com.apple.quarantine", XATTR_NOFOLLOW) == 0 { released += 1 }
+      else if errno != ENOATTR { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+    }
+    log("info", "quarantine-released", "items=\(released)")
   }
 
   func replace() throws {
     let commitDeadline = Date().addingTimeInterval(30)
     while (try? String(contentsOf: root.appendingPathComponent("commit"), encoding: .utf8)) != request.nonce {
+      try assertNotAborted()
       guard Date() < commitDeadline else { throw NSError(domain: "NightcordUpdater", code: 9) }
       Thread.sleep(forTimeInterval: 0.1)
     }
     log("info", "committed", "Waiting for client process to exit")
     let deadline = Date().addingTimeInterval(60)
     while kill(request.parent_pid, 0) == 0 {
+      try assertNotAborted()
       guard Date() < deadline else { throw NSError(domain: "NightcordUpdater", code: 7) }
       Thread.sleep(forTimeInterval: 0.1)
     }
+    try assertNotAborted()
     parentExited = true
     log("info", "parent-exited", "backup=\(backup.path)")
     try files.moveItem(at: target, to: backup)
@@ -180,5 +199,12 @@ final class UpdateTransaction {
 
   func cleanStage() throws {
     if files.fileExists(atPath: stage.path) { try files.removeItem(at: stage) }
+  }
+
+  func assertNotAborted() throws {
+    if (try? String(contentsOf: root.appendingPathComponent("abort"), encoding: .utf8)) == request.nonce {
+      throw NSError(domain: "NightcordUpdater", code: 10,
+        userInfo: [NSLocalizedDescriptionKey: "Client aborted the update"])
+    }
   }
 }

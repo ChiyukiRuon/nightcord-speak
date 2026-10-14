@@ -57,6 +57,26 @@ Windows screenshot/DPI probes must set PerMonitorV2 awareness before measuring. 
 
 Desktop updates use the core log (`desktop update:` prefix) and persistent `updates/update-<attempt>.log` files below `coreLogDirectory()`. Helpers keep writing after core shutdown; Windows also preserves the Inno installer log alongside the helper trace. If persistent logging is unavailable, helpers fall back to the transaction directory; failed transactions remain available for recovery. Log phases, elapsed time, HTTP status, byte counts, helper PIDs, exit codes, elevation and rollback outcomes. Never log signed CDN URLs, configuration payloads, or user secrets. Diagnostic failures must not interrupt installation or rollback. Verify persistence and unavailable sinks with the isolated Windows smoke tool and macOS updater tests.
 
+Windows PowerShell can fail before script execution when launched with Dart's process APIs on this machine; a console-based PowerShell broker smoke does not reproduce the installed GUI environment. `launchWindowsUpdateHelper` calls the main runner's `nightcord/lifecycle` channel, which launches the hidden worker through `ShellExecuteExW` and returns its PID or a numeric Win32 error. Keep the worker independent of the client and preserve the readiness/commit handshake. `tool/windows_update_smoke.ps1` builds a console-free GUI probe using the same native launcher, checks paths with Unicode, spaces and apostrophes, and verifies installation after the probe exits. Do not use PowerShell `Start-Process -Wait` to wait for this probe: it also waits for the updater descendant and blocks the readiness/commit handshake; use the probe process's `WaitForExit` instead.
+
+Before publishing readiness and after the parent exits, the Windows helper must reject other processes running the target installation's executable. Waiting for only the requesting PID does not release DLLs held by another instance. Windows update exit posts `WM_CLOSE` to the main native window through `nightcord/lifecycle`, preserving the normal Dart cleanup callback. Close any application launched for deployment verification before handing control back to the user; a leftover hidden instance can block installation and rollback.
+
+macOS keeps the main app sandboxed. Launch the installer through the private `NightcordUpdateLauncher.xpc` service, not `open --args` or a direct sandboxed `NSWorkspace` call: ad-hoc-signed nested apps can be rejected by Launch Services before entry. The service validates the request's parent PID against its XPC caller and starts only its sealed sibling updater. Preserve separate signatures for the launcher and installer; re-sign only the outer app with its sandbox entitlements. Package both helpers and test the launch/ready/abort handshake from a sandboxed probe, alongside the standalone transaction tests. Direct executable or transaction tests alone miss the startup restriction.
+
+macOS shutdown must keep the ordinary run loop alive until the main isolate
+acknowledges core cleanup. Return `terminateCancel` while cleanup is pending,
+then schedule the final termination on `RunLoop.main` and return `terminateNow`.
+Do not call `NSApp.terminate` from a dispatch callback before asynchronous cleanup:
+its `terminateLater` modal loop can block the queued channel callback. The native
+exit probe reproduces this with the actual runner delegate; the Flutter update
+smoke entry exercises real core shutdown, XPC startup, replacement and restart
+using a disposable bundle with a sealed `Contents/Resources/fixture.zip`.
+After commit, keep the update controller busy until exit instead of enabling a
+second installation. Prefer Launch Services for restart; if it fails, launch the
+verified bundle executable and check that the new process remains running.
+
+Every file the sandboxed client writes, including the downloaded package, carries the hard sandbox quarantine (`com.apple.quarantine` flags `0086`). `ditto -x` propagates it to every extracted file, and AppleDouble entries stored in an archive restore it even with `--noqtn`. The kernel then rejects the replacement and its nested helpers with `EPERM` through Launch Services, `open` and direct exec alike, while `codesign --verify` still passes, so the failure surfaces only after the client has exited and the helper rolls back. Clear the attribute from the staged bundle before publishing readiness, and keep the updater tests' fixture package quarantined the same way. An SSH session without a GUI domain cannot use Launch Services (`OSLaunchdErrorDomain 125`); smoke runs there exercise only the direct-exec restart path.
+
 ## Release Maintenance
 
 Publishing requires explicit authorization. `release.yml` builds Windows, macOS, and Web on `v*` tags or manual dispatch with an existing version tag. Every job checks out the resolved tag revision; never package the dispatch branch under another tag's version. Ordinary Rust CI runs on PR/manual triggers. Gateway image publishing uses its own workflow/conditions.

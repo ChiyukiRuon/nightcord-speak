@@ -1,7 +1,7 @@
 ﻿param([switch]$Installer, [ValidateSet('None', 'Accept', 'Cancel', 'Fail')][string]$SimulateElevation = 'None')
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../../..')).Path
-$root = Join-Path $workspace ('run/windows-update-smoke-' + [Guid]::NewGuid().ToString('N'))
+$root = Join-Path $workspace ('run/windows-update-smoke-' + [Guid]::NewGuid().ToString('N') + " 中文's path")
 if (-not $root.StartsWith($workspace + '\run\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid smoke directory' }
 New-Item -ItemType Directory -Path $root | Out-Null
 $target = Join-Path $root 'portable client'
@@ -12,16 +12,31 @@ function Build-Stub([string]$path, [string]$label) {
     $source = @'
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 public class UpdateStub {
+  [StructLayout(LayoutKind.Sequential)]
+  struct StartupInfo {
+    public uint cb;
+    public IntPtr reserved, desktop, title;
+    public uint x, y, xSize, ySize, xChars, yChars, fill, flags;
+    public ushort showWindow, reservedSize;
+    public IntPtr reservedBytes, input, output, error;
+  }
+  [DllImport("kernel32.dll", EntryPoint="GetStartupInfoW")]
+  static extern void GetStartupInfo(out StartupInfo information);
   public static void Main() {
     File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "launched"), "LABEL");
+    StartupInfo information;
+    GetStartupInfo(out information);
+    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup-window-state"),
+      (information.flags & 1) != 0 && information.showWindow == 0 ? "hidden" : "normal");
     string marker = Environment.GetEnvironmentVariable("NIGHTCORD_UPDATE_SMOKE_WAIT");
     if (marker != null) while (!File.Exists(marker)) Thread.Sleep(50);
   }
 }
 '@
-    Add-Type -TypeDefinition ($source.Replace('LABEL', $label)) -OutputAssembly $path -OutputType ConsoleApplication
+    Add-Type -TypeDefinition ($source.Replace('LABEL', $label)) -OutputAssembly $path -OutputType WindowsApplication
 }
 Build-Stub (Join-Path $target 'Nightcord Speak.exe') 'old'
 Build-Stub (Join-Path $bundle 'Nightcord Speak.exe') 'new'
@@ -74,7 +89,29 @@ $settings = @{
     log_file = $helperLog;
 }
 $settings | ConvertTo-Json | Set-Content -LiteralPath $configuration -Encoding utf8
-$script = Join-Path $workspace 'apps/client/assets/updates/windows.ps1'
+$script = Join-Path $root "helper's script.ps1"
+[IO.File]::WriteAllText($script, [IO.File]::ReadAllText((Join-Path $workspace 'apps/client/assets/updates/windows.ps1')), [Text.UTF8Encoding]::new($true))
+$originalScript = $script
+. $script -Configuration $configuration
+$duplicateExit = Join-Path $root 'exit-duplicate'
+$env:NIGHTCORD_UPDATE_SMOKE_WAIT = $duplicateExit
+$unrelated = Start-Process -FilePath (Join-Path $bundle 'Nightcord Speak.exe') -WindowStyle Hidden -PassThru
+$duplicate = $null
+try {
+    Assert-UpdateTargetIdle $target $parent.Id
+    $duplicate = Start-Process -FilePath (Join-Path $target 'Nightcord Speak.exe') -WindowStyle Hidden -PassThru
+    $blocked = $false
+    try { Assert-UpdateTargetIdle $target $parent.Id }
+    catch { $blocked = $_.Exception.Message -match 'Another Nightcord Speak instance' }
+    if (-not $blocked) { throw 'A second instance from the target installation was not blocked' }
+    if ((Get-Content -LiteralPath (Join-Path $target 'data/flutter_assets/AssetManifest.bin') -Raw) -ne 'old') { throw 'Duplicate-instance check changed installed files' }
+    Write-Output 'Target duplicates are blocked; an instance from another directory is allowed.'
+} finally {
+    [IO.File]::WriteAllText($duplicateExit, 'exit')
+    $unrelated.WaitForExit(5000) | Out-Null
+    if ($duplicate) { $duplicate.WaitForExit(5000) | Out-Null }
+    $env:NIGHTCORD_UPDATE_SMOKE_WAIT = $marker
+}
 if ($SimulateElevation -ne 'None') {
     # Inject a denied write and consent result into a private helper copy; no UAC UI or real ACL changes.
     $fixtureScript = Join-Path $root 'elevation-fixture.ps1'
@@ -94,8 +131,24 @@ if ($SimulateElevation -ne 'None') {
     [IO.File]::WriteAllText($fixtureScript, $helper, [Text.UTF8Encoding]::new($true))
     $script = $fixtureScript
 }
-$worker = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ('"' + $script + '"'), '-Configuration', ('"' + $configuration + '"')) -WindowStyle Hidden -PassThru
+function Start-SmokeUpdateWorker {
+    # Use the production native launcher from a GUI process without a console.
+    $build = Join-Path $workspace 'apps/client/build/windows-update-probe'
+    & cmake -S (Join-Path $workspace 'apps/client/tool/windows_update_probe') -B $build > (Join-Path $root 'probe-configure.log')
+    if ($LASTEXITCODE -ne 0) { throw 'GUI probe configuration failed' }
+    & cmake --build $build --config Release > (Join-Path $root 'probe-build.log')
+    if ($LASTEXITCODE -ne 0) { throw 'GUI probe build failed' }
+    $report = Join-Path $root 'probe-result.txt'
+    $launcher = Start-Process -FilePath (Join-Path $build 'Release/windows-update-probe.exe') -ArgumentList @(('"' + $script + '"'), ('"' + $configuration + '"'), ('"' + $report + '"')) -WindowStyle Hidden -PassThru
+    if (-not $launcher.WaitForExit(20000)) { throw 'GUI launcher did not exit' }
+    if ($launcher.ExitCode -ne 0) { throw 'GUI update launcher failed' }
+    $launched = Get-Content -LiteralPath $report
+    if ([int]$launched[1] -ne 0) { throw 'Windows rejected the helper launch' }
+    return Get-Process -Id ([int]$launched[0])
+}
+$worker = $null
 try {
+    $worker = Start-SmokeUpdateWorker
     if ($SimulateElevation -in @('Cancel', 'Fail')) {
         if (-not $worker.WaitForExit(30000)) { throw 'Cancelled helper did not return' }
         if ($SimulateElevation -eq 'Cancel') {
@@ -112,8 +165,8 @@ try {
         # Retry the same package with a fresh attempt, without another download.
         $settings.nonce = [Guid]::NewGuid().ToString('N')
         $settings | ConvertTo-Json | Set-Content -LiteralPath $configuration -Encoding utf8
-        $script = Join-Path $workspace 'apps/client/assets/updates/windows.ps1'
-        $worker = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ('"' + $script + '"'), '-Configuration', ('"' + $configuration + '"')) -WindowStyle Hidden -PassThru
+        $script = $originalScript
+        $worker = Start-SmokeUpdateWorker
     }
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while (-not (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-ready')))) {
@@ -130,6 +183,7 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $root ($settings.nonce + '-complete')))) { throw (Get-Content -LiteralPath (Join-Path $root ($settings.nonce + '-updater.log')) -Raw) }
     Start-Sleep -Milliseconds 500
     if ((Get-Content -LiteralPath (Join-Path $target 'launched') -Raw) -ne 'new') { throw 'Updated executable did not restart' }
+    if ((Get-Content -LiteralPath (Join-Path $target 'startup-window-state') -Raw) -ne 'normal') { throw 'Updated application was relaunched hidden' }
     foreach ($name in @('nightcord_ffi.dll', 'flutter_windows.dll', 'data/flutter_assets/AssetManifest.bin')) {
         if ((Get-Content -LiteralPath (Join-Path $target $name) -Raw) -ne 'new') { throw 'Installed content mismatch' }
     }

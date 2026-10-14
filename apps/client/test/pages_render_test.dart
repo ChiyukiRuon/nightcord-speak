@@ -886,29 +886,29 @@ void main() {
     await tester.tap(find.text('通知'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
-    final enteringPosition = tester.getTopLeft(
-      find.byType(NotificationsSection),
-    );
+    final detailRoute = ModalRoute.of(
+      tester.element(find.byType(NotificationsSection)),
+    )!;
+    expect(detailRoute, isA<MaterialRouteTransitionMixin<void>>());
+    expect(detailRoute.animation!.value, inExclusiveRange(0, 1));
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsSection), findsOneWidget);
-    expect(
-      enteringPosition.dx,
-      greaterThan(tester.getTopLeft(find.byType(NotificationsSection)).dx),
-    );
+    expect(detailRoute.animation!.value, 1);
     expect(find.text('音频'), findsNothing);
     await tester.tap(find.byType(BackButton));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     expect(find.byType(NotificationsSection), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.byType(NotificationsSection)).dx,
-      greaterThan(0),
-    );
+    expect(detailRoute.animation!.value, inExclusiveRange(0, 1));
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsSection), findsNothing);
     await tester.tap(find.text('音频'));
     await tester.pumpAndSettle();
     expect(find.byType(AudioSection), findsOneWidget);
+    Navigator.of(tester.element(find.byType(AudioSection))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(AudioSection), findsNothing);
+    expect(find.text('通知'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

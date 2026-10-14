@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../design/tokens/app_motion.dart';
 import '../providers/providers.dart';
 import '../models/domain.dart';
 import '../l10n/app_localizations.dart';
@@ -12,6 +11,7 @@ class MobileShell extends StatelessWidget {
     required this.navigation,
     required this.content,
     required this.title,
+    this.navigationTitle,
     this.footer,
     this.banner,
     this.actions,
@@ -24,6 +24,7 @@ class MobileShell extends StatelessWidget {
   final Widget? footer;
   final Widget? banner;
   final String title;
+  final String? navigationTitle;
   final List<Widget>? actions;
   final bool showingDetail;
   final VoidCallback onBack;
@@ -34,12 +35,6 @@ class MobileShell extends StatelessWidget {
       if (!didPop && showingDetail) onBack();
     },
     child: Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: !showingDetail,
-        leading: showingDetail ? BackButton(onPressed: onBack) : null,
-        title: Text(title, overflow: TextOverflow.ellipsis),
-        actions: actions,
-      ),
       bottomNavigationBar: footer == null
           ? null
           : SafeArea(
@@ -49,41 +44,54 @@ class MobileShell extends StatelessWidget {
                 children: [const _TouchPushToTalk(), footer!],
               ),
             ),
-      body: Column(
-        children: [
-          ?banner,
-          Expanded(
-            child: ClipRect(
-              child: AnimatedSwitcher(
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : AppMotion.panel,
-                switchInCurve: AppMotion.enter,
-                switchOutCurve: AppMotion.enter,
-                layoutBuilder: (currentChild, previousChildren) => Stack(
-                  fit: StackFit.expand,
-                  children: [...previousChildren, ?currentChild],
-                ),
-                transitionBuilder: (child, animation) => SlideTransition(
-                  position: Tween<Offset>(
-                    begin: Offset(
-                      child.key == const ValueKey(true) ? 0.08 : -0.08,
-                      0,
-                    ),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  textDirection: Directionality.of(context),
-                  child: FadeTransition(opacity: animation, child: child),
-                ),
-                child: KeyedSubtree(
-                  key: ValueKey(showingDetail),
-                  child: showingDetail ? content : navigation,
-                ),
-              ),
+      body: Navigator(
+        onDidRemovePage: (page) {
+          if (page.key == const ValueKey('detail') && showingDetail) onBack();
+        },
+        pages: [
+          MaterialPage<void>(
+            key: const ValueKey('navigation'),
+            maintainState: false,
+            child: _page(
+              title: navigationTitle ?? title,
+              body: navigation,
+              leading: Navigator.of(context).canPop()
+                  ? BackButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    )
+                  : null,
             ),
           ),
+          if (showingDetail)
+            MaterialPage<void>(
+              key: const ValueKey('detail'),
+              child: _page(
+                title: title,
+                body: content,
+                leading: BackButton(onPressed: onBack),
+              ),
+            ),
         ],
       ),
+    ),
+  );
+
+  Widget _page({
+    required String title,
+    required Widget body,
+    Widget? leading,
+  }) => Scaffold(
+    appBar: AppBar(
+      automaticallyImplyLeading: false,
+      leading: leading,
+      title: Text(title, overflow: TextOverflow.ellipsis),
+      actions: actions,
+    ),
+    body: Column(
+      children: [
+        ?banner,
+        Expanded(child: body),
+      ],
     ),
   );
 }

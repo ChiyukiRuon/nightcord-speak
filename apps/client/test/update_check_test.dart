@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nightcord_client/core/updates/update_service.dart';
+import 'package:nightcord_client/core/updates/update_controller.dart';
 import 'package:nightcord_client/design/theme/app_theme.dart';
 import 'package:nightcord_client/design/tokens/app_palette.dart';
 import 'package:nightcord_client/features/settings/sections/update_check.dart';
@@ -83,6 +84,30 @@ class FakeUpdates implements UpdateService {
 }
 
 void main() {
+  test('committed update stays busy even when exit request returns', () async {
+    final service = FakeUpdates()
+      ..result = selectDesktopUpdate(
+        [release('v0.2.0', 'windows')],
+        '0.1.0',
+        'windows',
+      );
+    final controller = UpdateController(service);
+    await controller.check();
+    await controller.download();
+    var exits = 0;
+    await controller.install('en', () async {
+      exits++;
+    });
+    expect(controller.busy, isTrue);
+    expect(controller.failed, isFalse);
+    await controller.install('en', () async {
+      exits++;
+    });
+    expect(service.installations, 1);
+    expect(exits, 1);
+    controller.dispose();
+  });
+
   test(
     'versions compare numerically and order preview stages before final',
     () {

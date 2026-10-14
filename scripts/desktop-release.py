@@ -131,9 +131,15 @@ def package(root, version, build_number, platform, arch, revision):
         for relative in ("Contents/MacOS/NightcordUpdater", "Contents/Info.plist"):
             if not (helper / relative).is_file():
                 raise ValueError(f"Missing macOS updater component: {relative}")
+        launcher = bundle / "Contents/XPCServices/NightcordUpdateLauncher.xpc"
+        for relative in ("Contents/MacOS/NightcordUpdateLauncher", "Contents/Info.plist"):
+            if not (launcher / relative).is_file():
+                raise ValueError(f"Missing macOS update launch service: {relative}")
         native_arch = "arm64" if arch == "arm64" else "x86_64"
         for relative in ("Contents/MacOS/Nightcord Speak",
-                         "Contents/Frameworks/libnightcord_ffi.dylib"):
+                         "Contents/Frameworks/libnightcord_ffi.dylib",
+                         "Contents/Helpers/NightcordUpdater.app/Contents/MacOS/NightcordUpdater",
+                         "Contents/XPCServices/NightcordUpdateLauncher.xpc/Contents/MacOS/NightcordUpdateLauncher"):
             subprocess.run(["lipo", str(bundle / relative), "-verify_arch", native_arch],
                            check=True)
         # Rust is copied by an Xcode script phase; sign the complete final bundle.
