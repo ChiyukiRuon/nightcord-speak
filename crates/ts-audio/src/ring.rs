@@ -140,6 +140,12 @@ impl SampleProducer {
 }
 
 impl SampleConsumer {
+    /// 仅由消费线程丢弃积压，避免生产者与消费回调同时修改读指针。
+    pub fn discard(&self) {
+        let write = self.shared.write.load(Ordering::Acquire);
+        self.shared.read.store(write, Ordering::Release);
+    }
+
     /// How many samples are ready to read.
     #[must_use]
     pub fn available(&self) -> usize {

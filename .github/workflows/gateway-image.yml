@@ -22,6 +22,8 @@ on:
       - 'apps/client/assets/licenses/third_party.json'
       - 'crates/**'
       - 'vendor/tsclientlib/**'
+      - 'vendor/webrtc-apm/**'
+      - 'scripts/audio-build-requirements.txt'
       - 'scripts/gateway-docker-smoke.py'
   pull_request:
     paths:
@@ -41,6 +43,8 @@ on:
       - 'apps/client/assets/licenses/third_party.json'
       - 'crates/**'
       - 'vendor/tsclientlib/**'
+      - 'vendor/webrtc-apm/**'
+      - 'scripts/audio-build-requirements.txt'
       - 'scripts/gateway-docker-smoke.py'
 
 permissions:

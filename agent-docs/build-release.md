@@ -14,6 +14,8 @@ Rust is pinned in `rust-toolchain.toml`; Flutter is pinned in release/Pages conf
 
 Native audio requires CMake and a C/C++ toolchain. Linux needs `libasound2-dev` and `pkg-config`. Windows requires Visual Studio's C++ workload; on this workstation select installed VS 2019 BuildTools:
 
+Native voice also builds the original C++ WebRTC APM with C++20, Python, Meson and Ninja. Install the pinned tools with `python -m pip install -r scripts/audio-build-requirements.txt` (a local virtual environment is fine). Set `PYTHON` if the build should use a particular interpreter; Meson is invoked through that interpreter. The first build downloads SHA-256-pinned Abseil sources/build definitions from the upstream wrap. Offline builds must populate its package cache first. APM and Abseil are linked statically; no extra runtime DLL is required. Keep the native notices in `scripts/generate-about.py` synchronized with the vendored sources.
+
 ```powershell
 $env:CMAKE_GENERATOR = 'Visual Studio 16 2019'
 cargo build -p ts-ffi

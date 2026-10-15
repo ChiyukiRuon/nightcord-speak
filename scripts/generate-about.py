@@ -53,6 +53,14 @@ def generate():
                 ", ".join(package.get("authors", [])), package.get("repository"), *notices])),
         })
 
+    apm = ROOT / "vendor/webrtc-apm"
+    native_notices = [apm / "COPYING", apm / "ABSEIL-LICENSE", apm / "webrtc/PATENTS"]
+    native_notices.extend(sorted((apm / "webrtc").rglob("LICENSE")))
+    native_notices.append(apm / "webrtc/third_party/rnnoise/COPYING")
+    entries.append({"packages": ["WebRTC AudioProcessing 2.1", "Abseil 20240722.0"],
+                    "text": "\n\n".join(f"{p.relative_to(apm)}\n\n{p.read_text(encoding='utf-8')}"
+                                          for p in native_notices)})
+
     entries.append({"packages": ["Noto Sans / Noto Sans CJK"],
                     "text": (CLIENT / "assets/fonts/OFL.txt").read_text(encoding="utf-8")})
     entries.append({"packages": ["Nightcord Speak"], "text": "\n\n".join(

@@ -29,6 +29,14 @@ Microphone transmit gain includes a fixed +15 dB baseline in `ts_audio::micropho
 
 Speaker output includes a fixed +10 dB baseline at native device playback and browser output gain. Apply it once after mixing, multiplied by the user's existing output-volume fraction; keep zero volume and deafen silent. Gateway PCM remains unboosted to avoid applying compensation twice.
 
+Gain must not hard-clip before limiting. Native/gateway microphone gain and final native/browser output use linked-channel peak limiting at -1 dBFS, with 5 ms lookahead and 80 ms release. A zero gain or privacy reset discards delayed samples. Native output mute flushes the ring on its consumer callback, not by racing its read index from another thread.
+
+Native microphone audio passes through the original C++ WebRTC APM 2.1 noise suppressor in `ts-audio::denoise`, at moderate strength, before VAD and gain. Split each 20 ms stereo frame into two planar 10 ms blocks. Keep processing while VAD is closed so estimates remain continuous. AEC and AGC are disabled; there is no render reference, and gain belongs to the shared Rust path. Browser capture uses its browser NS/AEC, without a second gateway denoiser. The standalone C++ sources and license provenance are under `vendor/webrtc-apm`; its internal pointers never cross the public client FFI.
+
+`VoiceSendBuffer` retains at most 160 ms before voice activation and replays it chronologically when the gate opens. This may add up to that much startup playout buffering. Only the first replayed packet carries the resume flag. PTT/continuous/disabled detection bypass pre-roll. Policy generation changes invalidate history on mute, deafen, away, mode/algorithm changes and reconnect; device changes also reset filter history. Never replay history recorded across these boundaries.
+
+Non-48 kHz capture uses a 64-tap Blackman-windowed polyphase sinc filter with a rate-dependent anti-alias cutoff. Integer phase accumulation makes callback chunking independent and prevents numeric drift; filter delay is about 31 input samples. The 48 kHz path stays bit-exact. Share immutable coefficient tables between channels, never their sample histories.
+
 ## Screen Media Boundary
 
 TS6 signaling uses Rust commands/events; picture/audio use independent P2P WebRTC. The gateway does not relay screen media. TS3 lacks this capability; UI checks capabilities rather than protocol names.

@@ -61,6 +61,8 @@ pub struct Playback {
     /// callback is built once and must never block: writing a new gain has to be
     /// a store, not a rebuild of the stream.
     volume: Arc<AtomicU32>,
+    muted: Arc<AtomicBool>,
+    flush: Arc<AtomicBool>,
 }
 
 impl Playback {
@@ -95,6 +97,8 @@ impl Playback {
 
         let (producer, consumer) = SampleRing::channel(RING_SAMPLES);
         let volume = Arc::new(AtomicU32::new(clamp_gain(volume).to_bits()));
+        let muted = Arc::new(AtomicBool::new(false));
+        let flush = Arc::new(AtomicBool::new(false));
         let running = Arc::new(AtomicBool::new(true));
 
         let stream = match sample_format {
@@ -103,6 +107,8 @@ impl Playback {
                 &config,
                 consumer,
                 Arc::clone(&volume),
+                Arc::clone(&muted),
+                Arc::clone(&flush),
                 Arc::clone(&running),
             ),
             SampleFormat::I16 => build::<i16>(
@@ -110,6 +116,8 @@ impl Playback {
                 &config,
                 consumer,
                 Arc::clone(&volume),
+                Arc::clone(&muted),
+                Arc::clone(&flush),
                 Arc::clone(&running),
             ),
             SampleFormat::U16 => build::<u16>(
@@ -117,6 +125,8 @@ impl Playback {
                 &config,
                 consumer,
                 Arc::clone(&volume),
+                Arc::clone(&muted),
+                Arc::clone(&flush),
                 Arc::clone(&running),
             ),
             other => {
@@ -142,6 +152,8 @@ impl Playback {
             producer,
             running,
             volume,
+            muted,
+            flush,
             format: PlaybackFormat {
                 device_channels,
                 device_rate,
@@ -198,7 +210,15 @@ impl Playback {
 
     /// Discards queued audio, as after a device switch.
     pub fn clear(&self) {
-        self.producer.clear();
+        self.flush.store(true, Ordering::Release);
+    }
+
+    /// 静音时由消费回调清空队列及限幅延迟，解除静音不重放旧声音。
+    pub fn set_muted(&self, muted: bool) {
+        self.muted.store(muted, Ordering::Release);
+        if muted {
+            self.clear();
+        }
     }
 
     /// The device that was actually opened, and whether it is the one that was
@@ -282,6 +302,8 @@ fn build<T>(
     config: &StreamConfig,
     consumer: SampleConsumer,
     volume: Arc<AtomicU32>,
+    muted: Arc<AtomicBool>,
+    flush: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, AudioError>
 where
@@ -289,24 +311,37 @@ where
 {
     let channels = config.channels;
     let mut scratch: Vec<f32> = Vec::new();
+    let mut limiter = crate::limiter::PeakLimiter::default();
 
     device
         .build_output_stream(
             *config,
             move |data: &mut [T], _info| {
+                if flush.swap(false, Ordering::AcqRel) || muted.load(Ordering::Acquire) {
+                    consumer.discard();
+                    limiter.reset();
+                }
+                if muted.load(Ordering::Acquire) {
+                    data.fill(T::from_f32(0.0));
+                    return;
+                }
                 let gain = speaker_gain(f32::from_bits(volume.load(Ordering::Relaxed)));
                 // Reused across callbacks, so after the first this does not
                 // allocate. `clear` keeps the capacity.
                 scratch.clear();
-                scratch.resize(data.len(), 0.0);
+                let frames = data.len() / channels as usize;
+                scratch.resize(frames * PLAYBACK_CHANNELS as usize, 0.0);
 
                 // Whatever the ring cannot supply stays at zero, which the host
                 // has already prefilled as silence — an underrun is a gap, not
                 // a stale repeat.
                 let played = consumer.read(&mut scratch);
-                let interleaved = &scratch[..played];
+                // 混音及输出增益后再限幅；欠载时的静音也按设备时钟推进延迟和恢复。
+                scratch[played..].fill(0.0);
+                limiter.process(&mut scratch, PLAYBACK_CHANNELS, gain);
+                let interleaved = &scratch;
 
-                write_output(data, interleaved, channels, gain);
+                write_output(data, interleaved, channels, 1.0);
             },
             move |error| {
                 // Only a device that is actually gone ends the stream; an xrun

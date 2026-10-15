@@ -1,14 +1,18 @@
 # syntax=docker/dockerfile:1
 ARG RUST_VERSION=1.98.0
 FROM rust:${RUST_VERSION}-bookworm AS build
+COPY scripts/audio-build-requirements.txt /tmp/audio-build-requirements.txt
 
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && printf 'Acquire::Retries "3";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/80gateway-build \
     && apt-get update \
-    && apt-get install -y --no-install-recommends cmake libasound2-dev libssl-dev pkg-config \
+    && apt-get install -y --no-install-recommends cmake libasound2-dev libssl-dev pkg-config python3-venv \
+    && python3 -m venv /opt/apm-tools \
+    && /opt/apm-tools/bin/pip install --no-cache-dir -r /tmp/audio-build-requirements.txt \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
+ENV PATH="/opt/apm-tools/bin:${PATH}"
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY .cargo/config.toml .cargo/config.toml
 COPY crates/ crates/
@@ -16,6 +20,7 @@ COPY apps/cli/ apps/cli/
 COPY apps/gateway/ apps/gateway/
 COPY apps/client/pubspec.yaml apps/client/pubspec.yaml
 COPY vendor/tsclientlib/ vendor/tsclientlib/
+COPY vendor/webrtc-apm/ vendor/webrtc-apm/
 
 # Cargo does not initialize the nested declarations submodule itself.
 RUN test -f vendor/tsclientlib/utils/tsproto-structs/declarations/Versions.csv

@@ -148,6 +148,7 @@ pub(crate) struct RemoteVoice {
     /// Microphone gain, as a linear factor — the decibels the user chose in the
     /// same settings file the desktop uses.
     input_gain: f32,
+    send_buffer: ts_audio::send_buffer::VoiceSendBuffer,
     /// The last mixed frame's loudness, so `voice_status` can answer without
     /// waiting for the next push.
     last_level: f32,
@@ -171,6 +172,7 @@ impl RemoteVoice {
             // The same boosted baseline as the desktop; the worker applies
             // the user's relative gain immediately after construction.
             input_gain: ts_audio::microphone_gain(0.0),
+            send_buffer: ts_audio::send_buffer::VoiceSendBuffer::default(),
             last_level: 0.0,
             last_peak: 0.0,
             last_transmitting: false,
@@ -179,12 +181,14 @@ impl RemoteVoice {
 
     /// Missing browser frames must clear speech rather than retain the last word.
     pub(crate) fn mark_idle(&mut self) {
+        self.policy.reset();
+        self.send_buffer.reset();
         self.last_transmitting = false;
         self.last_level = 0.0;
         self.last_peak = 0.0;
     }
 
-    /// Gates and encodes one mixed frame; `None` means the gate is closed.
+    /// 门控并编码一帧；激活时可能先返回按时间排序的字头缓冲。
     ///
     /// Takes the frame mutably because the microphone gain is applied to it —
     /// after the gate, never before, so the level the sensitivity threshold is
@@ -193,7 +197,7 @@ impl RemoteVoice {
     pub(crate) fn encode_frame(
         &mut self,
         mixed: &mut [f32],
-    ) -> Result<Option<VoicePacket>, AudioError> {
+    ) -> Result<Vec<VoicePacket>, AudioError> {
         // The order matters and mirrors `VoiceEngine::measure`: the level is
         // recorded *before* the policy runs, or the meter lies in the modes
         // that keep the gate shut.
@@ -201,15 +205,21 @@ impl RemoteVoice {
         self.last_peak = ts_audio::peak(mixed);
         let transmitting = self.policy.should_transmit_frame(mixed, FRAME_MS);
         self.last_transmitting = transmitting;
-        if !transmitting {
-            return Ok(None);
-        }
-        ts_audio::apply_gain(mixed, self.input_gain);
-        let mut packet = self.encoder.encode(mixed)?;
-        // The first frame after silence is flagged, so the far end can tell
-        // "they started talking again" from "packets were lost".
-        packet.is_dtx_resume = self.policy.is_resume();
-        Ok(Some(packet))
+        let frames = self.send_buffer.prepare(
+            mixed.to_vec(),
+            &self.policy,
+            ts_audio::VOICE_CHANNELS,
+            self.input_gain,
+        );
+        frames
+            .into_iter()
+            .enumerate()
+            .map(|(index, frame)| {
+                let mut packet = self.encoder.encode(&frame)?;
+                packet.is_dtx_resume = self.policy.is_resume() && index == 0;
+                Ok(packet)
+            })
+            .collect()
     }
 
     /// The mode the browser asked for.
@@ -401,6 +411,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn activation_encodes_preroll_with_one_resume_and_contiguous_sequences() {
+        let mut voice = RemoteVoice::new(
+            SessionId::new(1),
+            VoiceActivationMode::VoiceActivation,
+            VoiceActivationSettings {
+                algorithm: ts_model::VadAlgorithm::Level,
+                sensitivity: 0.1,
+                attack_ms: 60,
+                ..VoiceActivationSettings::default()
+            },
+        )
+        .unwrap();
+        for _ in 0..2 {
+            assert!(
+                voice
+                    .encode_frame(&mut vec![0.12; FRAME_SAMPLES])
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        let packets = voice.encode_frame(&mut vec![0.12; FRAME_SAMPLES]).unwrap();
+        assert_eq!(packets.len(), 3);
+        for (index, packet) in packets.iter().enumerate() {
+            assert_eq!(packet.sequence as usize, index);
+            assert_eq!(packet.is_dtx_resume, index == 0);
+            assert!(!packet.payload.is_empty());
+        }
+        voice.set_input_muted(true);
+        assert!(
+            voice
+                .encode_frame(&mut vec![0.8; FRAME_SAMPLES])
+                .unwrap()
+                .is_empty()
+        );
+        voice.set_input_muted(false);
+        voice.set_mode(VoiceActivationMode::Continuous);
+        let packets = voice.encode_frame(&mut vec![0.12; FRAME_SAMPLES]).unwrap();
+        assert_eq!(packets.len(), 1);
+        assert!(packets[0].is_dtx_resume);
+    }
+
+    #[test]
     fn browser_bursts_keep_every_frame_in_order() {
         let mut input = InputFrames::default();
         let mut out = vec![0.0; FRAME_SAMPLES];
@@ -476,7 +528,8 @@ mod tests {
                 voice
                     .encode_frame(&mut vec![0.0; FRAME_SAMPLES])
                     .expect("frame")
-                    .is_some()
+                    .len()
+                    == 1
             );
         }
         assert!(voice.levels().2);

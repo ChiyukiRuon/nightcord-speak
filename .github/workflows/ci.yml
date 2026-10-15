@@ -34,8 +34,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install WebRTC APM build tools
+        run: python -m pip install -r scripts/audio-build-requirements.txt
+
       - name: Test desktop release helpers
         run: python -m unittest discover -s scripts/tests -p 'test_desktop_release.py'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test browser voice worklets
+        run: node --test scripts/tests/voice-worklet.test.cjs
 
       - uses: Swatinem/rust-cache@v2
 
@@ -70,6 +79,12 @@ jobs:
 
       - name: Install pinned Rust toolchain
         run: rustup show
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install WebRTC APM build tools
+        run: python -m pip install -r scripts/audio-build-requirements.txt
 
       - uses: Swatinem/rust-cache@v2
 

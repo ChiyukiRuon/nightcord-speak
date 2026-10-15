@@ -77,18 +77,15 @@ pub fn gain_from_db(db: f32) -> f32 {
     10f32.powf(db / 20.0)
 }
 
-/// Scales a frame in place, clipping rather than wrapping.
-///
-/// Unity returns untouched — the default setting spends no work and leaves the
-/// samples bit-for-bit as the microphone produced them. The clamp is what makes
-/// a large positive gain sound loud instead of producing infinities the encoder
-/// would have to guess at.
+/// 只应用线性增益；保留超过满刻度的浮点值，交给最终限幅器处理。
+/// 不能先硬截断，否则后面的限幅器无法恢复波形。
 pub fn apply_gain(frame: &mut [f32], gain: f32) {
     if gain == 1.0 {
         return;
     }
     for sample in frame {
-        *sample = (*sample * gain).clamp(-1.0, 1.0);
+        let scaled = *sample * gain;
+        *sample = if scaled.is_finite() { scaled } else { 0.0 };
     }
 }
 
@@ -126,6 +123,7 @@ pub struct TransmitPolicy {
     /// Whether the *current* frame resumes after silence — sent when the
     /// previous one was not.
     resume: bool,
+    generation: u64,
 }
 
 impl TransmitPolicy {
@@ -142,6 +140,7 @@ impl TransmitPolicy {
             ptt_held: false,
             transmitted_last: false,
             resume: false,
+            generation: 0,
         }
     }
 
@@ -311,10 +310,26 @@ impl TransmitPolicy {
 
     /// Forgets all timing, as after a reconnect.
     pub fn reset(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.smart_vad.reset();
         self.gate.reset();
         self.transmitted_last = false;
         self.resume = false;
+    }
+
+    /// 需要丢弃字头缓冲时递增。
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// 麦克风增益之前使用的激活设置。
+    pub const fn settings(&self) -> &VoiceActivationSettings {
+        self.gate.settings()
+    }
+
+    /// 屏蔽输出是否同时关闭麦克风发送。
+    pub const fn output_muted(&self) -> bool {
+        self.output_muted
     }
 }
 
@@ -342,6 +357,8 @@ pub struct VoiceEngine {
     /// applied while frames are encoded, on the worker task, never inside a
     /// device callback.
     input_gain: f32,
+    send_buffer: crate::send_buffer::VoiceSendBuffer,
+    denoiser: crate::denoise::NoiseSuppressor,
     /// Scratch for rendering one frame to stereo before queueing it.
     frame_stereo: Vec<f32>,
     /// Scratch for downmixing a captured stereo frame, for the gate and the
@@ -540,6 +557,8 @@ impl VoiceEngine {
             // Unity until told otherwise, which is what every build before the
             // gain existed did.
             input_gain: microphone_gain(0.0),
+            send_buffer: crate::send_buffer::VoiceSendBuffer::default(),
+            denoiser: crate::denoise::NoiseSuppressor::new()?,
             frame_stereo: vec![0.0; PLAYBACK_SAMPLES],
             frame_mono: vec![0.0; FRAME_SAMPLES],
             last_level: 0.0,
@@ -615,6 +634,7 @@ impl VoiceEngine {
         input: Option<&str>,
         output: Option<&str>,
     ) -> Result<(), AudioError> {
+        self.reset();
         let input_failed = match Capture::open(input) {
             Ok(capture) => {
                 self.input_device = Some(OpenDevice::from(capture.device()));
@@ -629,6 +649,7 @@ impl VoiceEngine {
 
         match Playback::open_with_volume(output, self.output_volume) {
             Ok(playback) => {
+                playback.set_muted(self.output_muted());
                 self.output_device = Some(OpenDevice::from(playback.device()));
                 self.playback = Some(Arc::new(playback));
             }
@@ -649,6 +670,7 @@ impl VoiceEngine {
     pub fn close_devices(&mut self) {
         self.capture = None;
         self.playback = None;
+        self.reset();
     }
 
     /// Whether a microphone is open.
@@ -690,12 +712,16 @@ impl VoiceEngine {
 
     /// Switches how transmission is triggered.
     pub fn set_mode(&mut self, mode: VoiceActivationMode) {
+        let generation = self.policy.generation();
         self.policy.set_mode(mode);
+        self.reset_processing_if_changed(generation);
     }
 
     /// Mutes or unmutes the microphone.
     pub fn set_input_muted(&mut self, muted: bool) {
+        let generation = self.policy.generation();
         self.policy.set_input_muted(muted);
+        self.reset_processing_if_changed(generation);
     }
 
     /// Mutes or unmutes the speakers.
@@ -703,8 +729,13 @@ impl VoiceEngine {
     /// Takes effect immediately for audio already in flight, because the sink
     /// reads the same switch.
     pub fn set_output_muted(&mut self, muted: bool) {
+        let generation = self.policy.generation();
         self.output_muted.store(muted, Ordering::Relaxed);
         self.policy.set_output_muted(muted);
+        self.reset_processing_if_changed(generation);
+        if let Some(playback) = &self.playback {
+            playback.set_muted(muted);
+        }
     }
 
     /// Whether the speakers are muted.
@@ -719,7 +750,9 @@ impl VoiceEngine {
     /// session, and the speakers keep playing — an away client still hears the
     /// room it walked out of.
     pub fn set_away(&mut self, away: bool) {
+        let generation = self.policy.generation();
         self.policy.set_away(away);
+        self.reset_processing_if_changed(generation);
     }
 
     /// Whether we are marked away.
@@ -735,7 +768,19 @@ impl VoiceEngine {
 
     /// Retunes voice activation.
     pub fn set_settings(&mut self, settings: VoiceActivationSettings) {
+        let generation = self.policy.generation();
         self.policy.set_settings(settings);
+        self.reset_processing_if_changed(generation);
+    }
+
+    /// 隐私/模式边界同时清空降噪器的重叠历史，不能仅清空字头缓冲。
+    fn reset_processing_if_changed(&mut self, previous: u64) {
+        if previous != self.policy.generation() {
+            self.send_buffer.reset();
+            if let Err(error) = self.denoiser.reset() {
+                tracing::warn!(%error, "could not reset WebRTC APM after a transmit policy change");
+            }
+        }
     }
 
     /// Replaces the capture device, keeping playback as it is.
@@ -745,6 +790,9 @@ impl VoiceEngine {
     /// Returns the device error, leaving the previous device in place.
     pub fn set_input_device(&mut self, id: Option<&str>) -> Result<(), AudioError> {
         let capture = Capture::open(id)?;
+        self.denoiser.reset()?;
+        self.send_buffer.reset();
+        self.policy.reset();
         self.capture = Some(capture);
         Ok(())
     }
@@ -758,6 +806,7 @@ impl VoiceEngine {
     /// Returns the device error, leaving the previous device in place.
     pub fn set_output_device(&mut self, id: Option<&str>) -> Result<(), AudioError> {
         let playback = Playback::open_with_volume(id, self.output_volume)?;
+        playback.set_muted(self.output_muted());
         self.playback = Some(Arc::new(playback));
         Ok(())
     }
@@ -819,6 +868,12 @@ impl VoiceEngine {
                 continue;
             }
 
+            if let Err(error) = self.denoiser.process(&mut frame) {
+                tracing::warn!(%error, "could not denoise a voice frame");
+                first_error.get_or_insert(error);
+                continue;
+            }
+
             // Moved out of `self` for the length of the iteration rather than
             // borrowed: `measure` needs the engine mutably, and the buffer it
             // would be borrowing is engine state. `mem::take` moves the
@@ -833,17 +888,21 @@ impl VoiceEngine {
             // different things for different material.
             downmix(&frame, &mut mono);
 
-            if self.measure(&mono) {
+            self.measure(&mono);
+            let resume = self.policy.is_resume();
+            let ready =
+                self.send_buffer
+                    .prepare(frame, &self.policy, PLAYBACK_CHANNELS, self.input_gain);
+            for (index, frame) in ready.into_iter().enumerate() {
                 // After the gate, never before: the gain is what other people
                 // hear, and the levels above are what the sensitivity slider is
                 // compared against. Applying it earlier would make turning the
                 // gain down close the gate — one control silently moving the
                 // other's threshold.
-                apply_gain(&mut frame, self.input_gain);
 
                 match self.encoder.encode(&frame) {
                     Ok(mut packet) => {
-                        packet.is_dtx_resume = self.policy.is_resume();
+                        packet.is_dtx_resume = resume && index == 0;
                         packets.push(packet);
                     }
                     Err(error) => {
@@ -934,6 +993,10 @@ impl VoiceEngine {
     pub fn reset(&mut self) {
         self.encoder.reset();
         self.policy.reset();
+        self.send_buffer.reset();
+        if let Err(error) = self.denoiser.reset() {
+            tracing::warn!(%error, "could not reset WebRTC APM");
+        }
     }
 
     /// The encoder's next sequence number, for diagnostics.
@@ -1534,18 +1597,17 @@ mod tests {
     }
 
     #[test]
-    fn a_gain_scales_the_frame_and_a_loud_one_clips() {
+    fn gain_preserves_overrange_samples_for_the_limiter() {
         let mut frame = vec![0.25, -0.25];
         apply_gain(&mut frame, gain_from_db(6.0));
         assert!((frame[0] - 0.5).abs() < 0.01);
         assert!((frame[1] + 0.5).abs() < 0.01);
 
-        // +10 dB on material that is already loud: louder, and bounded. The
-        // clamp is what keeps a boosted signal from becoming infinity.
+        // 增益后保留波形，不能在限幅之前把峰值截成平顶。
         let mut loud = vec![0.9, -0.9];
         apply_gain(&mut loud, gain_from_db(MAX_GAIN_DB));
-        assert!((loud[0] - 1.0).abs() < f32::EPSILON);
-        assert!((loud[1] + 1.0).abs() < f32::EPSILON);
+        assert!(loud[0] > 2.8);
+        assert_eq!(loud[1], -loud[0]);
     }
 
     #[test]

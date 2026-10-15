@@ -30,6 +30,11 @@ macOS 应用应放在当前用户可写的本地目录中。普通版本只提�
 正式网页部署步骤见 [DEPLOY.md](DEPLOY.md)，包含 Docker Compose 网关、HTTPS／WSS
 与 Cloudflare Pages／自托管网页。
 
+源码运行网关或桌面端需要 CMake、支持 C++20 的编译器和 Python；先运行
+`python -m pip install -r scripts/audio-build-requirements.txt` 安装 WebRTC APM 构建工具。
+首次构建会下载并校验固定版本的 Abseil，最终静态链接，无需额外分发 APM 动态库。
+Linux 还需要 `libasound2-dev`、`libssl-dev` 和 `pkg-config`；Docker 构建会自动准备依赖。
+
 在仓库根目录启动网关（默认免 Token，仅监听本机）：
 
 ```bash
@@ -68,5 +73,7 @@ docker compose -f docker-compose.yaml -f docker-compose.build.yaml up -d --build
 ## 许可
 
 MIT OR Apache-2.0
+
+Nightcord 是游戏《初音未来：缤纷舞台》中虚构的语音聊天软件。本项目不主张对游戏《初音未来：缤纷舞台》及其相关的美术、效等资源享有版权或其他知识产权；相关权利归各自权利所有。本项目与 SEGA、ColorfulPalette、Nuverse 无任何隶属、合作或授权关系，亦不代表上述公司的立场。
 
 > `vendor/tsclientlib` 遵循其自身的 MIT OR Apache-2.0 许可

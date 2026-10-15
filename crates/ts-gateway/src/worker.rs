@@ -282,23 +282,24 @@ impl Worker {
 
         let encoded = voice.encode_frame(&mut self.mixed);
         match encoded {
-            Ok(Some(packet)) => {
-                let bytes = packet.payload.len();
-                let outcome = self.send_packet(session, packet).await;
-                if outcome.is_ok() && !self.voice_sent_logged {
-                    self.voice_sent_logged = true;
-                    tracing::info!(session = %session, bytes, "voice: first packet sent to the session");
-                }
-                if let Err(error) = outcome {
-                    if !self.voice_failed {
-                        self.voice_failed = true;
-                        self.send(FfiEvent::failed("voice", Some(session), error));
+            Ok(packets) => {
+                for packet in packets {
+                    let bytes = packet.payload.len();
+                    let outcome = self.send_packet(session, packet).await;
+                    if outcome.is_ok() && !self.voice_sent_logged {
+                        self.voice_sent_logged = true;
+                        tracing::info!(session = %session, bytes, "voice: first packet sent to the session");
                     }
-                } else {
-                    self.voice_failed = false;
+                    if let Err(error) = outcome {
+                        if !self.voice_failed {
+                            self.voice_failed = true;
+                            self.send(FfiEvent::failed("voice", Some(session), error));
+                        }
+                    } else {
+                        self.voice_failed = false;
+                    }
                 }
             }
-            Ok(None) => {}
             Err(error) => {
                 if !self.voice_failed {
                     self.voice_failed = true;

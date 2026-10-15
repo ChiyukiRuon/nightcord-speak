@@ -3246,6 +3246,7 @@ name = "ts-audio"
 version = "0.1.0"
 dependencies = [
  "audiopus",
+ "cc",
  "cpal",
  "earshot",
  "symphonia",

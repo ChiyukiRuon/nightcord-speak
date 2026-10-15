@@ -60,6 +60,11 @@ jobs:
           submodules: recursive
       - name: Install audio build dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config cmake
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install WebRTC APM build tools
+        run: python -m pip install -r scripts/audio-build-requirements.txt
       # rustup honors rust-toolchain.toml; do not override it with stable.
       - name: Install pinned Rust toolchain
         run: rustup show
@@ -91,6 +96,8 @@ jobs:
           python-version: '3.12'
       - name: Install pinned Rust toolchain
         run: rustup show
+      - name: Install WebRTC APM build tools
+        run: python -m pip install -r scripts/audio-build-requirements.txt
       - uses: Swatinem/rust-cache@v2
         with:
           key: desktop-${{ matrix.platform }}-${{ matrix.arch }}
