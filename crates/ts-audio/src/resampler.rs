@@ -1,119 +1,112 @@
-//! Sample-rate conversion towards the codec's 48 kHz.
-//!
-//! Capture devices are not obliged to run at 48 kHz — 44.1 kHz is common on
-//! desktop, and phones pick whatever the platform gives them — while Opus at
-//! this frame size only accepts 48 kHz. Something has to convert, and it has to
-//! be here rather than in the caller.
+//! ???????????????????? 48 kHz?
 
 use crate::format::SAMPLE_RATE;
+use std::{f64::consts::PI, sync::Arc};
 
-/// Converts mono `f32` audio from an arbitrary rate to [`SAMPLE_RATE`].
-///
-/// Linear interpolation, deliberately: a windowed-sinc filter would be more
-/// faithful, but the input is speech that is about to be lossily compressed at
-/// 24 kbps, and interpolation error is far below the codec's own noise floor.
-///
-/// State is carried between calls, so a stream can be resampled frame by frame
-/// without a click at every boundary.
+const TAPS: usize = 64;
+const PHASES: usize = 1024;
+
+/// 64 ?? Blackman ? sinc?48 kHz ???????
+/// ?????? 31 ?????????????????????
 #[derive(Debug, Clone)]
 pub struct Resampler {
-    /// Input samples consumed per output sample.
-    step: f64,
-    /// Read position inside the current chunk, as an offset into a virtual
-    /// buffer of `[previous, input...]`.
-    position: f64,
-    /// Last sample of the previous chunk, for interpolating across the seam.
-    previous: f32,
+    from: u32,
+    phase: u64,
+    history: [f32; TAPS],
+    cursor: usize,
+    coefficients: Arc<Vec<[f32; TAPS]>>,
     primed: bool,
     passthrough: bool,
 }
 
 impl Resampler {
-    /// A resampler converting from `from` Hz.
     #[must_use]
     pub fn new(from: u32) -> Self {
-        let passthrough = from == SAMPLE_RATE || from == 0;
+        let from = if from == 0 { SAMPLE_RATE } else { from };
+        let passthrough = from == SAMPLE_RATE;
+        let mut coefficients = Vec::new();
+        if !passthrough {
+            // ?????? Nyquist ???????????????????
+            let cutoff = 0.94 * (f64::from(SAMPLE_RATE) / f64::from(from)).min(1.0);
+            for phase in 0..=PHASES {
+                let fraction = phase as f64 / PHASES as f64;
+                let mut taps = [0.0; TAPS];
+                for (index, tap) in taps.iter_mut().enumerate() {
+                    let x = index as f64 - 31.0 + fraction;
+                    let sinc = if x.abs() < 1e-12 {
+                        cutoff
+                    } else {
+                        (PI * cutoff * x).sin() / (PI * x)
+                    };
+                    let window = 0.42 - 0.5 * (2.0 * PI * index as f64 / (TAPS - 1) as f64).cos()
+                        + 0.08 * (4.0 * PI * index as f64 / (TAPS - 1) as f64).cos();
+                    *tap = (sinc * window) as f32;
+                }
+                let sum: f32 = taps.iter().sum();
+                for tap in &mut taps {
+                    *tap /= sum;
+                }
+                coefficients.push(taps);
+            }
+        }
         Self {
-            step: if from == 0 {
-                1.0
-            } else {
-                f64::from(from) / f64::from(SAMPLE_RATE)
-            },
-            position: 0.0,
-            previous: 0.0,
+            from,
+            phase: 0,
+            history: [0.0; TAPS],
+            cursor: 0,
+            coefficients: Arc::new(coefficients),
             primed: false,
             passthrough,
         }
     }
 
-    /// Whether the input already matches the output rate.
-    ///
-    /// Worth checking, because it lets the caller skip the copy entirely.
     #[must_use]
     pub const fn is_passthrough(&self) -> bool {
         self.passthrough
     }
 
-    /// The rate this resampler was built for.
     #[must_use]
-    pub fn input_rate(&self) -> u32 {
-        if self.passthrough {
-            SAMPLE_RATE
-        } else {
-            (self.step * f64::from(SAMPLE_RATE)).round() as u32
-        }
+    pub const fn input_rate(&self) -> u32 {
+        self.from
     }
 
-    /// Appends the resampled form of `input` to `output`.
-    ///
-    /// `output` is appended to rather than cleared, so a caller can accumulate
-    /// several chunks into one frame.
+    /// ??????????????????????????????????
     pub fn process(&mut self, input: &[f32], output: &mut Vec<f32>) {
-        if input.is_empty() {
-            return;
-        }
         if self.passthrough {
             output.extend_from_slice(input);
             return;
         }
-
-        if !self.primed {
-            // Nothing precedes the first sample, so start on it rather than
-            // fading in from zero.
-            self.previous = input[0];
-            self.primed = true;
+        for &sample in input {
+            let sample = if sample.is_finite() { sample } else { 0.0 };
+            if !self.primed {
+                self.history.fill(sample);
+                self.primed = true;
+            }
+            self.history[self.cursor] = sample;
+            while self.phase < u64::from(SAMPLE_RATE) {
+                let position = self.phase as f64 * PHASES as f64 / f64::from(SAMPLE_RATE);
+                let phase = position as usize;
+                let fraction = (position - phase as f64) as f32;
+                let mut value = 0.0;
+                for tap in 0..TAPS {
+                    let a = self.coefficients[phase][tap];
+                    let b = self.coefficients[phase + 1][tap];
+                    value +=
+                        self.history[(self.cursor + TAPS - tap) % TAPS] * (a + (b - a) * fraction);
+                }
+                output.push(value);
+                self.phase += u64::from(self.from);
+            }
+            self.phase -= u64::from(SAMPLE_RATE);
+            self.cursor = (self.cursor + 1) % TAPS;
         }
-
-        // The chunk behaves as if `previous` sat in front of it, so the read
-        // position can interpolate across the boundary between chunks. Index 0
-        // is `previous`; index i is `input[i - 1]`.
-        let virtual_len = input.len() + 1;
-
-        while (self.position as usize) + 1 < virtual_len {
-            let index = self.position as usize;
-            let fraction = (self.position - index as f64) as f32;
-
-            let a = if index == 0 {
-                self.previous
-            } else {
-                input[index - 1]
-            };
-            let b = input[index];
-
-            output.push(a + (b - a) * fraction);
-            self.position += self.step;
-        }
-
-        // Re-express the position against the next chunk, whose virtual index 0
-        // is this chunk's last sample.
-        self.position -= input.len() as f64;
-        self.previous = *input.last().expect("checked non-empty above");
     }
 
-    /// Forgets the carried state, as after switching devices.
+    /// ??????????????????
     pub fn reset(&mut self) {
-        self.position = 0.0;
-        self.previous = 0.0;
+        self.phase = 0;
+        self.cursor = 0;
+        self.history.fill(0.0);
         self.primed = false;
     }
 }
@@ -121,6 +114,38 @@ impl Resampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sine(rate: u32, hz: f32) -> Vec<f32> {
+        (0..rate)
+            .map(|i| (2.0 * std::f32::consts::PI * hz * i as f32 / rate as f32).sin() * 0.5)
+            .collect()
+    }
+
+    #[test]
+    fn downsampling_rejects_out_of_band_energy_and_preserves_voice_band() {
+        for (hz, minimum, maximum) in [(1000.0, 0.34, 0.36), (30000.0, 0.0, 0.002)] {
+            let mut out = Vec::new();
+            Resampler::new(96000).process(&sine(96000, hz), &mut out);
+            let level = crate::rms(&out[1000..]);
+            assert!(
+                (minimum..=maximum).contains(&level),
+                "{hz} Hz output RMS: {level}"
+            );
+        }
+    }
+
+    #[test]
+    fn arbitrary_callback_boundaries_preserve_a_nonconstant_waveform() {
+        let input = sine(44100, 5371.0);
+        let mut whole = Vec::new();
+        Resampler::new(44100).process(&input, &mut whole);
+        let mut resampler = Resampler::new(44100);
+        let mut chunked = Vec::new();
+        for chunk in input.chunks(137) {
+            resampler.process(chunk, &mut chunked);
+        }
+        assert_eq!(whole, chunked);
+    }
 
     /// One second of a constant signal at `rate`.
     fn constant(rate: u32, value: f32) -> Vec<f32> {

@@ -293,12 +293,10 @@ impl FrameAssembler {
         device_channels: u16,
         sender: SyncSender<Vec<f32>>,
     ) -> Self {
+        let resampler = Resampler::new(device_rate);
         Self {
-            // Two instances rather than one with a channel count: a resampler's
-            // state is a single previous sample, which is exactly the per-
-            // channel state that must not be shared. `Resampler` is not `Clone`
-            // for the same reason, so they are built side by side from the rate.
-            resamplers: [Resampler::new(device_rate), Resampler::new(device_rate)],
+            // 系数表可以共享，左右声道的历史采样与分数相位必须各自维护。
+            resamplers: [resampler.clone(), resampler],
             device_channels,
             sender,
             planar: [
