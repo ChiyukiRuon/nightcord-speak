@@ -74,7 +74,8 @@ class NightcordAudio {
       this.playback = new AudioWorkletNode(context, 'pcm-playback', { outputChannelCount: [2] });
       this.gain = context.createGain();
       this.volume(this.outputVolume);
-      this.playback.connect(this.gain).connect(context.destination);
+      this.limiter = new AudioWorkletNode(context, 'pcm-limiter', { outputChannelCount: [2] });
+      this.playback.connect(this.gain).connect(this.limiter).connect(context.destination);
       this.capture.port.onmessage = event => {
         if (generation !== this.generation) return;
         const frame = event.data;
@@ -113,8 +114,9 @@ class NightcordAudio {
     this.source?.disconnect();
     this.silent?.disconnect();
     this.gain?.disconnect();
+    this.limiter?.disconnect();
     this.context?.close().catch(() => {});
-    this.context = this.stream = this.capture = this.playback = this.gain = this.source = this.silent = null;
+    this.context = this.stream = this.capture = this.playback = this.gain = this.limiter = this.source = this.silent = null;
     this.level = this.peak = 0;
   }
 
@@ -138,6 +140,7 @@ class NightcordAudio {
   volume(value) {
     this.outputVolume = Math.max(0, Math.min(2, value));
     if (this.gain) this.gain.gain.value = this.muted ? 0 : this.outputVolume * NightcordAudio.speakerBaseGain;
+    if (this.muted || this.outputVolume === 0) this.limiter?.port.postMessage({ reset: true });
   }
   test() {
     const context = this.context;

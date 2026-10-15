@@ -628,7 +628,8 @@ async function startVoiceOnce() {
   // 与产品网页和原生播放一致，扬声器固定补偿 +10 dB。
   const speakerGain = context.createGain();
   speakerGain.gain.value = 10 ** (10 / 20);
-  playback.connect(speakerGain).connect(context.destination);
+  const limiter = new AudioWorkletNode(context, 'pcm-limiter', { outputChannelCount: [2] });
+  playback.connect(speakerGain).connect(limiter).connect(context.destination);
 
   state.audio = { context, capture, playback, stream, micLive: true };
 

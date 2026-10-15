@@ -124,3 +124,60 @@ class PcmPlayback extends AudioWorkletProcessor {
 
 registerProcessor('pcm-capture', PcmCapture);
 registerProcessor('pcm-playback', PcmPlayback);
+
+// ?????????????????????????? 5 ms ???
+class PcmLimiter extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.delay = new Float32Array(480);
+    this.peaks = new Float64Array(241);
+    this.positions = new Float64Array(241);
+    this.release = Math.exp(-1 / (0.080 * sampleRate));
+    this.reset();
+    this.port.onmessage = () => this.reset();
+  }
+
+  reset() {
+    this.delay.fill(0);
+    this.position = 0;
+    this.head = 0;
+    this.count = 0;
+    this.gain = 1;
+  }
+
+  process(inputs, outputs) {
+    const out = outputs[0];
+    if (!out || !out[0]) return true;
+    const input = inputs[0] || [];
+    for (let i = 0; i < out[0].length; i++) {
+      const l = input[0]?.[i] || 0;
+      const r = input[1]?.[i] ?? l;
+      const left = Number.isFinite(l) ? l : 0;
+      const right = Number.isFinite(r) ? r : 0;
+      const peak = Math.max(Math.abs(left), Math.abs(right));
+      const oldest = this.position - 240;
+      while (this.count && this.positions[this.head] < oldest) {
+        this.head = (this.head + 1) % 241;
+        this.count--;
+      }
+      const required = peak > 0.8912509 ? 0.8912509 / peak : 1;
+      const clock = this.position / 240;
+      const constraint = required + clock;
+      while (this.count && this.peaks[(this.head + this.count - 1) % 241] >= constraint) this.count--;
+      const tail = (this.head + this.count) % 241;
+      this.peaks[tail] = constraint;
+      this.positions[tail] = this.position;
+      this.count++;
+      const target = Math.max(0, Math.min(1, this.peaks[this.head] - clock + 1));
+      this.gain = Math.min(target, 1 - (1 - this.gain) * this.release);
+      const slot = (this.position % 240) * 2;
+      out[0][i] = Math.max(-0.8912509, Math.min(0.8912509, this.delay[slot] * this.gain));
+      if (out[1]) out[1][i] = Math.max(-0.8912509, Math.min(0.8912509, this.delay[slot + 1] * this.gain));
+      this.delay[slot] = left;
+      this.delay[slot + 1] = right;
+      this.position++;
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-limiter', PcmLimiter);
